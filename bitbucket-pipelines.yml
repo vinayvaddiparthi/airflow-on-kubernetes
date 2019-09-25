@@ -1,0 +1,11 @@
+pipelines:
+  default:
+    - step:
+        name: build
+        image: atlassian/pipelines-awscli
+        script:
+          - $(aws ecr get-login --no-include-email --region ca-central-1)
+          - docker build -t ${DOCKER_REPOSITORY}:bitbucket-${BITBUCKET_BUILD_NUMBER} .
+          - docker push ${DOCKER_REPOSITORY}:bitbucket-${BITBUCKET_BUILD_NUMBER}
+        services:
+          - docker
