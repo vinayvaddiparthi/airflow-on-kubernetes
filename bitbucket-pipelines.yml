@@ -9,3 +9,19 @@ pipelines:
           - docker push ${DOCKER_REPOSITORY}:bitbucket-${BITBUCKET_BUILD_NUMBER}
         services:
           - docker
+    - step:
+        name: deploy-prod
+        image: pgag/kubectl-jsonnet
+        deployment: production
+        script:
+          - echo ${KUBE_CA} | base64 -d > ~/.kube-ca.crt
+          - kubectl config set-cluster kubernetes --server=${KUBE_URL} --certificate-authority=~/.kube-ca.crt
+          - kubectl config set-credentials bitbucket --token=${KUBE_TOKEN}
+          - kubectl config set-context kubernetes --cluster=kubernetes --user=bitbucket --namespace=${KUBE_NAMESPACE}
+          - |
+              jsonnet -J /ksonnet-lib k8s/airflow.jsonnet \
+                -V DOCKER_REPOSITORY \
+                -V BITBUCKET_BUILD_NUMBER \
+                -V WEBSERVER_SECRET_KEY \
+                -V BITBUCKET_DEPLOYMENT_ENVIRONMENT \
+                -V FERNET_KEY | kubectl apply -f -
