@@ -33,10 +33,11 @@ local params = import "params.libsonnet";
         },
       },
       spec: {
+        serviceAccountName: "airflow-scheduler",
         containers: [
           {
             name: "airflow",
-            image: params.image,
+            image: params.image.repo + ":" + params.image.tag,
             command: ["airflow", "scheduler"],
             envFrom: [
               {

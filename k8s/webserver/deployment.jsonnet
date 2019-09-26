@@ -33,7 +33,7 @@ local params = import "../params.libsonnet";
         containers: [
           {
             name: "airflow",
-            image: params.image,
+            image: params.image.repo + ":" + params.image.tag,
             command: ["airflow", "webserver"],
             readinessProbe: {
               periodSeconds: 10,
