@@ -7,7 +7,7 @@ local params = import "../params.libsonnet";
     name: "airflow-production-webserver",
     labels: {
       app: "airflow",
-      env: "production",
+      env: params.env,
       component: "webserver",
     },
     namespace: "airflow",
@@ -25,7 +25,7 @@ local params = import "../params.libsonnet";
       metadata: {
         labels: {
           app: "airflow",
-          env: "production",
+          env: params.env,
           component: "webserver",
         },
       },

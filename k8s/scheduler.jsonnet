@@ -20,7 +20,7 @@ local params = import "params.libsonnet";
     selector: {
       matchLabels: {
         app: "airflow",
-        env: "production",
+        env: params.env,
         component: "scheduler",
       },
     },
@@ -28,7 +28,7 @@ local params = import "params.libsonnet";
       metadata: {
         labels: {
           app: "airflow",
-          env: "production",
+          env: params.env,
           component: "scheduler",
         },
       },

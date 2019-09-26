@@ -15,7 +15,7 @@ local params = import "../params.libsonnet";
   spec: {
     selector: {
       app: "airflow",
-      env: "production",
+      env: params.env,
       component: "webserver",
     },
     ports: [
