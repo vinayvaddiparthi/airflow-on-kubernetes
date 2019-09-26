@@ -14,11 +14,12 @@ pipelines:
         image: pgag/kubectl-jsonnet
         deployment: production
         script:
-          - echo ${KUBE_CA_PEM_BASE64} | base64 -d > .kube-ca.crt
-          - kubectl config set-cluster kubernetes --server=${KUBE_URL} --certificate-authority=.kube-ca.crt
-          - kubectl config set-credentials bitbucket --token=${KUBE_TOKEN}
-          - kubectl config set-context kubernetes --cluster=kubernetes --user=bitbucket --namespace=${KUBE_NAMESPACE}
-          - kubectl config use-context kubernetes
+          - |
+              echo ${KUBE_CA_PEM_BASE64} | base64 -d > .kube-ca.crt && \
+              kubectl config set-cluster kubernetes --server=${KUBE_URL} --certificate-authority=.kube-ca.crt && \
+              kubectl config set-credentials bitbucket --token=${KUBE_TOKEN} && \
+              kubectl config set-context kubernetes --cluster=kubernetes --user=bitbucket --namespace=${KUBE_NAMESPACE} && \
+              kubectl config use-context kubernetes
           - |
               jsonnet -J /ksonnet-lib k8s/airflow.jsonnet \
                 -V DOCKER_REPOSITORY \
