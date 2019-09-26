@@ -1,7 +1,7 @@
 pipelines:
   default:
     - step:
-        name: build
+        name: Build and push docker image
         image: atlassian/pipelines-awscli
         script:
           - $(aws ecr get-login --no-include-email --region ca-central-1)
@@ -10,14 +10,15 @@ pipelines:
         services:
           - docker
     - step:
-        name: deploy-prod
+        name: Deploy to production
         image: pgag/kubectl-jsonnet
         deployment: production
         script:
-          - echo ${KUBE_CA} | base64 -d > ~/.kube-ca.crt
-          - kubectl config set-cluster kubernetes --server=${KUBE_URL} --certificate-authority=~/.kube-ca.crt
+          - echo ${KUBE_CA_PEM_BASE64} | base64 -d > .kube-ca.crt
+          - kubectl config set-cluster kubernetes --server=${KUBE_URL} --certificate-authority=.kube-ca.crt
           - kubectl config set-credentials bitbucket --token=${KUBE_TOKEN}
           - kubectl config set-context kubernetes --cluster=kubernetes --user=bitbucket --namespace=${KUBE_NAMESPACE}
+          - kubectl config use-context kubernetes
           - |
               jsonnet -J /ksonnet-lib k8s/airflow.jsonnet \
                 -V DOCKER_REPOSITORY \
