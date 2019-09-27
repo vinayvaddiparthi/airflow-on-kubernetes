@@ -4,7 +4,7 @@ local params = import "params.libsonnet";
   apiVersion: "v1",
   kind: "Secret",
   metadata: {
-    name: "airflow-production",
+    name: params.app + "-" + params.env,
     namespace: "airflow",
     labels: {
       app: "airflow",
