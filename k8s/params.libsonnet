@@ -1,5 +1,5 @@
 {
-    app: "airflow"
+    app: "airflow",
     env: std.extVar("BITBUCKET_DEPLOYMENT_ENVIRONMENT"),
 
     image: {

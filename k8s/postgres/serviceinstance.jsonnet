@@ -7,7 +7,7 @@ local params = import "../params.libsonnet";
     "name": params.app + "-" + params.env + "-" + "postgres",
     "namespace": "airflow",
     "labels": {
-      "app": "airflow",
+      "app": params.app,
       "env": params.env,
       "component": "postgres"
     }
@@ -16,7 +16,7 @@ local params = import "../params.libsonnet";
     "clusterServiceClassExternalName": "rdspostgresql",
     "clusterServicePlanExternalName": "production",
     "parameters": {
-      "AccessCidr": params.postgres.AccessCidr,
+      "AccessCidr": params.postgres.accessCidr,
       "DBInstanceClass": params.postgres.instanceType,
     }
   }
