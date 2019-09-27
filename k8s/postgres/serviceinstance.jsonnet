@@ -9,7 +9,7 @@ local params = import "../params.libsonnet";
     "labels": {
       "app": "airflow",
       "env": params.env,
-      "component": "db"
+      "component": "postgres"
     }
   },
   "spec": {
