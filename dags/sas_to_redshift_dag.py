@@ -4,8 +4,8 @@ from airflow import DAG
 from airflow.operators.postgres_operator import PostgresOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from dags.common.operator_query import QueryOperator
-from dags.common.s3_copy_operator import S3CopyOperator
+from common.operator_query import QueryOperator
+from common.s3_copy_operator import S3CopyOperator
 
 default_args = {
     "owner": "tc",
