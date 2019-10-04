@@ -240,7 +240,7 @@ local airflowCfg = {
       delete_worker_pods:true,
       worker_pods_creation_batch_size:1,
       namespace:"airflow",
-      airflow_configmap:"airflow-production",
+      airflow_configmap:"airflow" + "-" + params.env,
       dags_in_image:true,
       #dags_volume_subpath:null,
       #dags_volume_claim:null,
@@ -248,7 +248,7 @@ local airflowCfg = {
       #logs_volume_claim:null,
       #dags_volume_host:null,
       #env_from_configmap_ref:null,
-      env_from_secret_ref:"airflow-" + params.env + ",airflow-" + params.env + "-postgres",
+      env_from_secret_ref:"airflow" + "-" + params.env + "," + "airflow" + "-" + params.env + "-" + "postgres",
       #git_repo:null,
       #git_branch:null,
       #git_subpath:null,
@@ -390,7 +390,7 @@ local webserverConfigPy = |||
   apiVersion: "v1",
   kind: "ConfigMap",
   metadata: {
-    name: "airflow-production",
+    name: "airflow" + "-" + params.env,
     labels: {
       app: "airflow",
       env: params.env,
