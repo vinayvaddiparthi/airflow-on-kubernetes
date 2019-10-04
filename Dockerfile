@@ -7,7 +7,7 @@ ENV TERM linux
 # Airflow
 ARG AIRFLOW_VERSION=1.10.5
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
-ARG AIRFLOW_DEPS="kubernetes,redshift,presto"
+ARG AIRFLOW_DEPS="kubernetes,redshift,presto,s3"
 ARG PYTHON_DEPS=""
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
 
