@@ -5,10 +5,10 @@ local airflowCfg = {
     core:{ 
       dags_folder:"/usr/local/airflow/dags",
       base_log_folder:"/usr/local/airflow/logs",
-      remote_logging:false,
+      remote_logging:true,
       #remote_log_conn_id:null,
-      #remote_base_log_folder:null,
-      encrypt_s3_logs:false,
+      #emote_base_log_folder:null,
+      encrypt_s3_logs:true,
       logging_level:"INFO",
       fab_logging_level:"WARN",
       #logging_config_class:"airflow.config_templates.airflow_local_settings.DEFAULT_LOGGING_CONFIG",
@@ -247,8 +247,8 @@ local airflowCfg = {
       #logs_volume_subpath:null,
       #logs_volume_claim:null,
       #dags_volume_host:null,
-      #env_from_configmap_ref:null,
-      env_from_secret_ref:"airflow" + "-" + params.env + "," + "airflow" + "-" + params.env + "-" + "postgres",
+      env_from_configmap_ref:params.app + "-" + params.env + "-" + "env",
+      env_from_secret_ref:params.app + "-" + params.env + "," + params.app + "-" + params.env + "-" + "postgres",
       #git_repo:null,
       #git_branch:null,
       #git_subpath:null,
@@ -280,7 +280,7 @@ local airflowCfg = {
 
     },
     kubernetes_environment_variables:{ 
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://$(MASTER_USERNAME):$(MASTER_PASSWORD)@$(ENDPOINT_ADDRESS):$(PORT)/$(DB_NAME)"
+
     },
     kubernetes_secrets:{ 
 
@@ -386,13 +386,14 @@ local webserverConfigPy = |||
   #    { 'name': 'MyOpenID', 'url': 'https://www.myopenid.com' }]
 |||;
 
+[
 {
   apiVersion: "v1",
   kind: "ConfigMap",
   metadata: {
-    name: "airflow" + "-" + params.env,
+    name: params.app + "-" + params.env,
     labels: {
-      app: "airflow",
+      app: params.app,
       env: params.env,
     },
     namespace: "airflow",
@@ -401,4 +402,22 @@ local webserverConfigPy = |||
     "airflow.cfg": std.manifestIni(airflowCfg),
     "webserver_config.py": webserverConfigPy,
   },
-}
+},
+{
+  apiVersion: "v1",
+  kind: "ConfigMap",
+  metadata: {
+    name: params.app + "-" + params.env + "-" + "env",
+    labels: {
+      app: params.app,
+      env: params.env,
+    },
+    namespace: "airflow",
+  },
+  data: {
+    AIRFLOW_CONN_S3_LOGS: "s3://$(BUCKET_NAME)",
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://$(MASTER_USERNAME):$(MASTER_PASSWORD)@$(ENDPOINT_ADDRESS):$(PORT)/$(DB_NAME)",
+    AIRFLOW__CORE__REMOTE_LOG_CONN_ID: "s3_logs",
+  },
+},
+]

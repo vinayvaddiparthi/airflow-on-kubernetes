@@ -4,9 +4,9 @@ local params = import "params.libsonnet";
   apiVersion: "apps/v1",
   kind: "Deployment",
   metadata: {
-    name: "airflow-production-scheduler",
+    name: params.app + "-" + params.env + "-" + "scheduler",
     labels: {
-      app: "airflow",
+      app: params.app,
       env: params.env,
       component: "scheduler",
     },
@@ -27,13 +27,13 @@ local params = import "params.libsonnet";
     template: {
       metadata: {
         labels: {
-          app: "airflow",
+          app: params.app,
           env: params.env,
           component: "scheduler",
         },
       },
       spec: {
-        serviceAccountName: "airflow-scheduler",
+        serviceAccountName: params.app + "-" + "scheduler",
         containers: [
           {
             name: "airflow",
@@ -42,20 +42,23 @@ local params = import "params.libsonnet";
             envFrom: [
               {
                 secretRef: {
-                  name: "airflow-production-postgres"
+                  name: params.app + "-" + params.env + "-" + "postgres"
                 },
-                prefix: "AIRFLOWDB_"
               },
               {
                 secretRef: {
-                  name: "airflow-production"
+                  name: params.app + "-" + params.env + "-" + "s3"
                 },
               },
-            ],
-            env: [
               {
-                name: "AIRFLOW__CORE__SQL_ALCHEMY_CONN",
-                value: "postgresql+psycopg2://$(AIRFLOWDB_MASTER_USERNAME):$(AIRFLOWDB_MASTER_PASSWORD)@$(AIRFLOWDB_ENDPOINT_ADDRESS):$(AIRFLOWDB_PORT)/$(AIRFLOWDB_DB_NAME)"
+                secretRef: {
+                  name: params.app + "-" + params.env
+                },
+              },
+              {
+                configMapRef: {
+                  name: params.app + "-" + params.env + "-" + "env"
+                },
               },
             ],
             volumeMounts: [
@@ -71,7 +74,7 @@ local params = import "params.libsonnet";
           {
             name: "config-volume",
             configMap: {
-              name: "airflow-production",
+              name: params.app + "-" + params.env,
             },
           },
         ],
