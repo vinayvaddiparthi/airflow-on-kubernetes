@@ -247,7 +247,7 @@ local airflowCfg = {
       #logs_volume_subpath:null,
       #logs_volume_claim:null,
       #dags_volume_host:null,
-      env_from_configmap_ref:params.app + "-" + params.env + "-" + "env",
+      #env_from_configmap_ref:params.app + "-" + params.env + "-" + "env",
       env_from_secret_ref:params.app + "-" + params.env + "," + params.app + "-" + params.env + "-" + "postgres",
       #git_repo:null,
       #git_branch:null,
@@ -279,8 +279,9 @@ local airflowCfg = {
     kubernetes_node_selectors:{ 
 
     },
-    kubernetes_environment_variables:{ 
-
+    kubernetes_environment_variables:{
+      AIRFLOW_CONN_S3_LOGS: "s3://$(BUCKET_NAME)",
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://$(MASTER_USERNAME):$(MASTER_PASSWORD)@$(ENDPOINT_ADDRESS):$(PORT)/$(DB_NAME)",
     },
     kubernetes_secrets:{ 
 
@@ -386,7 +387,6 @@ local webserverConfigPy = |||
   #    { 'name': 'MyOpenID', 'url': 'https://www.myopenid.com' }]
 |||;
 
-[
 {
   apiVersion: "v1",
   kind: "ConfigMap",
@@ -402,22 +402,4 @@ local webserverConfigPy = |||
     "airflow.cfg": std.manifestIni(airflowCfg),
     "webserver_config.py": webserverConfigPy,
   },
-},
-{
-  apiVersion: "v1",
-  kind: "ConfigMap",
-  metadata: {
-    name: params.app + "-" + params.env + "-" + "env",
-    labels: {
-      app: params.app,
-      env: params.env,
-    },
-    namespace: "airflow",
-  },
-  data: {
-    AIRFLOW_CONN_S3_LOGS: "s3://$(BUCKET_NAME)",
-    AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://$(MASTER_USERNAME):$(MASTER_PASSWORD)@$(ENDPOINT_ADDRESS):$(PORT)/$(DB_NAME)",
-    AIRFLOW__CORE__REMOTE_LOG_CONN_ID: "s3_logs",
-  },
-},
-]
+}

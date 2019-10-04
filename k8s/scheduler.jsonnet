@@ -55,11 +55,16 @@ local params = import "params.libsonnet";
                   name: params.app + "-" + params.env
                 },
               },
+            ],
+            env: [
               {
-                configMapRef: {
-                  name: params.app + "-" + params.env + "-" + "env"
-                },
+                name: "AIRFLOW_CONN_S3_LOGS",
+                value: "s3://$(BUCKET_NAME)"
               },
+                {
+                name: "AIRFLOW__CORE__SQL_ALCHEMY_CONN",
+                value: "postgresql+psycopg2://$(MASTER_USERNAME):$(MASTER_PASSWORD)@$(ENDPOINT_ADDRESS):$(PORT)/$(DB_NAME)"
+              }
             ],
             volumeMounts: [
               {
