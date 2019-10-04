@@ -240,7 +240,7 @@ local airflowCfg = {
       worker_container_image_pull_policy:"IfNotPresent",
       delete_worker_pods:true,
       worker_pods_creation_batch_size:1,
-      namespace:"airflow-tasks",
+      namespace:"airflow",
       airflow_configmap:"airflow-production",
       dags_in_image:true,
       #dags_volume_subpath:null,
