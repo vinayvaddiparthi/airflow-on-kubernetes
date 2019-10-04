@@ -1,4 +1,4 @@
-local params = import "params.libsonnet";
+local params = import "../params.libsonnet";
 
 {
   "apiVersion": "servicecatalog.k8s.io/v1beta1",
