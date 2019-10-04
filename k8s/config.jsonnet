@@ -53,7 +53,6 @@ local airflowCfg = {
       worker_precheck:false,
       dag_discovery_safe_mode:true,
       default_task_retries:0,
-
     },
     cli:{ 
       api_client:"airflow.api.client.local_client",
@@ -281,10 +280,14 @@ local airflowCfg = {
 
     },
     kubernetes_environment_variables:{ 
-
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://$(AIRFLOWDB_MASTER_USERNAME):$(AIRFLOWDB_MASTER_PASSWORD)@$(AIRFLOWDB_ENDPOINT_ADDRESS):$(AIRFLOWDB_PORT)/$(AIRFLOWDB_DB_NAME)"
     },
     kubernetes_secrets:{ 
-
+      AIRFLOWDB_MASTER_USERNAME: "airflow" + "-" + params.env + "-" + "postgres" + "=" + "MASTER_USERNAME",
+      AIRFLOWDB_MASTER_PASSWORD: "airflow" + "-" + params.env + "-" + "postgres" + "=" + "MASTER_PASSWORD",
+      AIRFLOWDB_ENDPOINT_ADDRESS: "airflow" + "-" + params.env + "-" + "postgres" + "=" + "ENDPOINT_ADDRESS",
+      AIRFLOWDB_PORT: "airflow" + "-" + params.env + "-" + "postgres" + "=" + "PORT",
+      AIRFLOWDB_DB_NAME: "airflow" + "-" + params.env + "-" + "postgres" + "=" + "DB_NAME",
     },
     kubernetes_labels:{ 
 
