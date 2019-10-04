@@ -248,7 +248,7 @@ local airflowCfg = {
       #logs_volume_claim:null,
       #dags_volume_host:null,
       #env_from_configmap_ref:null,
-      env_from_secret_ref:"airflow-production",
+      env_from_secret_ref:"airflow-" + params.env + ",airflow-" + params.env + "-postgres",
       #git_repo:null,
       #git_branch:null,
       #git_subpath:null,
@@ -280,14 +280,10 @@ local airflowCfg = {
 
     },
     kubernetes_environment_variables:{ 
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://$(AIRFLOWDB_MASTER_USERNAME):$(AIRFLOWDB_MASTER_PASSWORD)@$(AIRFLOWDB_ENDPOINT_ADDRESS):$(AIRFLOWDB_PORT)/$(AIRFLOWDB_DB_NAME)"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://$(MASTER_USERNAME):$(MASTER_PASSWORD)@$(ENDPOINT_ADDRESS):$(PORT)/$(DB_NAME)"
     },
     kubernetes_secrets:{ 
-      AIRFLOWDB_MASTER_USERNAME: "airflow" + "-" + params.env + "-" + "postgres" + "=" + "MASTER_USERNAME",
-      AIRFLOWDB_MASTER_PASSWORD: "airflow" + "-" + params.env + "-" + "postgres" + "=" + "MASTER_PASSWORD",
-      AIRFLOWDB_ENDPOINT_ADDRESS: "airflow" + "-" + params.env + "-" + "postgres" + "=" + "ENDPOINT_ADDRESS",
-      AIRFLOWDB_PORT: "airflow" + "-" + params.env + "-" + "postgres" + "=" + "PORT",
-      AIRFLOWDB_DB_NAME: "airflow" + "-" + params.env + "-" + "postgres" + "=" + "DB_NAME",
+
     },
     kubernetes_labels:{ 
 
