@@ -3,7 +3,7 @@ from typing import Set, Optional
 
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
-from sqlalchemy import create_engine, select, text, column
+from sqlalchemy import create_engine, select, text, column, and_
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, TableClause, ClauseElement
 
@@ -122,8 +122,26 @@ def ctas_to_snowflake(sobject: str):
         except Exception:
             max_date = datetime.datetime.fromtimestamp(0).__str__()
 
+
+        cols_ = tx.execute(Select(
+            [column("column_name"), column("data_type")],
+            from_obj=text('"information_schema"."columns"'),
+            whereclause=and_([
+                column("table_schema") == text("sfni"),
+                column("table_name") == text(sobject)]
+            )
+        )).fetchall()
+
+        cast_cols = []
+        for col_ in cols_:
+            if col_[1] == "varchar":
+                cast_cols.append(f"CAST({col_[0]} AS VARCHAR(6291456)) {col_[0]}")
+            else:
+                cast_cols.append(col_[0])
+
         stmt = text(f'''
-        insert into "snowflake_sfni"."public"."{sobject}" select * from "glue"."sfni"."{sobject}"
+        insert into "snowflake_sfni"."public"."{sobject}" select {",".join(cast_cols)}
+        from "glue"."sfni"."{sobject}"
         where systemmodstamp > cast(:max_date as timestamp)
         ''').bindparams(max_date=max_date)
 
