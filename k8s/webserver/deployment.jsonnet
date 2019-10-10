@@ -13,7 +13,13 @@ local params = import "../params.libsonnet";
     namespace: "airflow",
   },
   spec: {
-    replicas: 2,
+    replicas: 3,
+    strategy: {
+      type: "RollingUpdate",
+      rollingUpdate: {
+        maxUnavailable: 1,
+      },
+    },
     selector: {
       matchLabels: {
         app: params.app,
