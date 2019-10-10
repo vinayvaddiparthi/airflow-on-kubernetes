@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, select, text, column, and_
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, TableClause, ClauseElement
 
-from .salesforce_import_extras.sobjects import sobjects
+from salesforce_import_extras.sobjects import sobjects
 
 
 def chunks(l, n):
