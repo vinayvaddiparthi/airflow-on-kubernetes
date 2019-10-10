@@ -145,10 +145,10 @@ def ctas_to_snowflake(catalog: str, sobject: str):
 
         cast_cols = []
         for col_ in cols_:
-            if col_[1] == "varchar":
-                cast_cols.append(f"CAST({col_[0]} AS VARCHAR(6291456)) {col_[0]}")
+            if col_[1].lower() == "varchar":
+                cast_cols.append(f'CAST("{col_[0]}" AS VARCHAR(6291456)) "{col_[0]}"')
             else:
-                cast_cols.append(col_[0])
+                cast_cols.append(f'"col_[0]"')
 
         stmt = text(
             f"""
