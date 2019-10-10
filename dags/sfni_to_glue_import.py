@@ -149,5 +149,5 @@ with DAG(
             op_kwargs={
                 "sobject": t
             },
-            pool="sfni_pool"
+            pool="snowflake_pool"
         )
