@@ -167,7 +167,7 @@ for catalog in sobjects.keys():
         start_date=datetime.datetime(2019, 10, 9),
         schedule_interval=None,
     ) as dag:
-        for t in sobjects:
+        for t in sobjects[catalog]:
             dag << PythonOperator(
                 task_id=f"glue__{t}",
                 python_callable=ctas_to_glue,
