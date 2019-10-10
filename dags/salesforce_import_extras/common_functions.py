@@ -1,13 +1,9 @@
 import datetime
 from typing import Set, Optional
 
-from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
 from sqlalchemy import create_engine, select, text, column, and_
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, TableClause, ClauseElement
-
-from salesforce_import_extras.sobjects import sobjects
 
 
 def chunks(l, n):
@@ -113,7 +109,9 @@ def ctas_to_glue(catalog: str, sobject: str):
 
 
 def ctas_to_snowflake(catalog: str, sobject: str):
-    engine = create_engine(f"presto://presto-production-internal.presto.svc:8080/{catalog}")
+    engine = create_engine(
+        f"presto://presto-production-internal.presto.svc:8080/{catalog}"
+    )
 
     with engine.begin() as tx:
         tx.execute(
@@ -159,23 +157,3 @@ def ctas_to_snowflake(catalog: str, sobject: str):
         ).bindparams(max_date=max_date)
 
         tx.execute(stmt).fetchall()
-
-
-for catalog in sobjects.keys():
-    with DAG(
-        f"{catalog}_to_glue_import",
-        start_date=datetime.datetime(2019, 10, 9),
-        schedule_interval=None,
-    ) as dag:
-        for t in sobjects[catalog]:
-            dag << PythonOperator(
-                task_id=f"glue__{t}",
-                python_callable=ctas_to_glue,
-                op_kwargs={"catalog": catalog, "sobject": t},
-                pool=f"{catalog}_pool",
-            ) >> PythonOperator(
-                task_id=f"snowflake__{t}",
-                python_callable=ctas_to_snowflake,
-                op_kwargs={"catalog": catalog, "sobject": t},
-                pool="snowflake_pool",
-            )
