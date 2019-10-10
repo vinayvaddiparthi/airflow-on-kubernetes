@@ -126,9 +126,9 @@ def ctas_to_snowflake(sobject: str):
         cols_ = tx.execute(Select(
             [column("column_name"), column("data_type")],
             from_obj=text('"information_schema"."columns"'),
-            whereclause=and_([
-                column("table_schema") == text("sfni"),
-                column("table_name") == text(sobject)]
+            whereclause=and_(
+                column("table_schema") == text(f"'sfni'"),
+                column("table_name") == text(f"'{sobject}'")
             )
         )).fetchall()
 
