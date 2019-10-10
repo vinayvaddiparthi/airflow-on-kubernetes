@@ -16,7 +16,7 @@ local params = import "../params.libsonnet";
       "alb.ingress.kubernetes.io/certificate-arn": "arn:aws:acm:ca-central-1:810110616880:certificate/b14b320c-2578-4ea6-ba7b-b3beb3576b4f",
       "alb.ingress.kubernetes.io/inbound-cidrs": "184.95.225.32/27",
       "alb.ingress.kubernetes.io/scheme": "internet-facing",
-      "alb.ingress.kubernetes.io/target-type": "ip",
+      "alb.ingress.kubernetes.io/target-type": "instance",
       "alb.ingress.kubernetes.io/healthcheck-path": "/api/experimental/test",
     },
   },

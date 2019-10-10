@@ -18,6 +18,7 @@ local params = import "../params.libsonnet";
       env: params.env,
       component: "webserver",
     },
+    type: "NodePort",
     ports: [
       {
         protocol: "TCP",
