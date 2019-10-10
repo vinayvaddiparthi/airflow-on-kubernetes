@@ -105,6 +105,31 @@ def ctas_to_glue(sobject: str):
         tx.execute(stmt).fetchall()
 
 
+def ctas_to_snowflake(sobject: str):
+    engine = create_engine(
+        "presto://presto-production-internal.presto.svc:8080/sfni",
+    )
+
+    with engine.begin() as tx:
+        tx.execute(f'''
+        create table if not exists "snowflake_sfni"."public".{sobject} as select * from "glue"."sfni"."{sobject}"
+        with no data
+        ''').fetchall()
+
+        try:
+            max_date = tx.execute(f'select max(systemmodstamp) from "snowflake_sfni"."public"."{sobject}"').fetchall()[0][0]
+            max_date = datetime.datetime.fromisoformat(max_date).__str__()
+        except Exception:
+            max_date = datetime.datetime.fromtimestamp(0).__str__()
+
+        stmt = text(f'''
+        insert into "snowflake_sfni"."public"."{sobject}" select * from "glue"."sfni"."{sobject}"
+        where systemmodstamp > cast(:max_date as timestamp)
+        ''').bindparams(max_date=max_date)
+
+        tx.execute(stmt).fetchall()
+
+
 with DAG(
         "sfni_to_glue_import",
         start_date=datetime.datetime(2019,10,9),
@@ -112,8 +137,15 @@ with DAG(
 ) as dag:
     for t in tables:
         dag << PythonOperator(
-            task_id=t,
+            task_id=f"glue__{t}",
             python_callable=ctas_to_glue,
+            op_kwargs={
+                "sobject": t
+            },
+            pool="sfni_pool"
+        ) >> PythonOperator(
+            task_id=f"snowflake__{t}",
+            python_callable=ctas_to_snowflake,
             op_kwargs={
                 "sobject": t
             },
