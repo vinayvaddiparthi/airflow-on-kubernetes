@@ -1,4 +1,4 @@
-import datetime
+import pendulum
 
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -11,8 +11,10 @@ sfdc_instance = "sfoi"
 
 with DAG(
     f"{sfdc_instance}_to_glue_import",
-    start_date=datetime.datetime(2019, 10, 9),
-    schedule_interval=None,
+    start_date=pendulum.datetime(
+        2019, 10, 11, tzinfo=pendulum.timezone("America/Toronto")
+    ),
+    schedule_interval="5 3 * * *",
 ) as dag:
     for t in sobjects[sfdc_instance]:
         dag << PythonOperator(
