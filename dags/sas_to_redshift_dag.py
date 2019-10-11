@@ -4,8 +4,8 @@ from airflow import DAG
 from airflow.operators.postgres_operator import PostgresOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from common.operator_query import QueryOperator
-from common.s3_copy_operator import S3CopyOperator
+from sas_to_redshift_dag_extras.operator_query import QueryOperator
+from sas_to_redshift_dag_extras.s3_copy_operator import S3CopyOperator
 
 default_args = {
     "owner": "tc",
@@ -107,6 +107,8 @@ task_tli_2 = S3CopyOperator(
     dag=dag,
 )
 
-task_tli_1 >> task_tli_2 >> check_drop("tli_categorized") >> swap_table("tli_categorized")
+task_tli_1 >> task_tli_2 >> check_drop("tli_categorized") >> swap_table(
+    "tli_categorized"
+)
 for sobject in sobjects:
     copy_table(sobject) >> check_drop(sobject) >> swap_table(sobject)

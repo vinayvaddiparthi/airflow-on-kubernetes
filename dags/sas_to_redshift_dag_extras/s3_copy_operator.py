@@ -10,16 +10,16 @@ class S3CopyOperator(BaseOperator):
     ui_fgcolor = "#5e6266"
 
     def __init__(
-            self,
-            task_id: str,
-            schema: str,
-            table: str,
-            path: str,
-            delimiter: str,
-            postgres_conn_id: str,
-            s3_conn_id: str,
-            *args,
-            **kwargs,
+        self,
+        task_id: str,
+        schema: str,
+        table: str,
+        path: str,
+        delimiter: str,
+        postgres_conn_id: str,
+        s3_conn_id: str,
+        *args,
+        **kwargs,
     ):
         super().__init__(task_id=task_id, *args, **kwargs)
         self.schema = schema
