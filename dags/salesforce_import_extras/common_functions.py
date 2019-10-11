@@ -161,7 +161,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
 
 
 def create_snowflake_materialized_view(conn: str, sfdc_instance: str, sobject: str):
-    engine: Engine = SnowflakeHook(conn).get_sqlalchemy_engine()
+    engine: Engine = SnowflakeHook(snowflake_conn_id=conn).get_sqlalchemy_engine()
 
     with engine.begin() as tx:
         tx.execute(
