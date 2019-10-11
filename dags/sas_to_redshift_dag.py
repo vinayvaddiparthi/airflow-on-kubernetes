@@ -14,7 +14,7 @@ default_args = {
     "retries": 0,
 }
 
-dag = DAG("sas_to_redshift_dag", schedule_interval="@daily", default_args=default_args)
+dag = DAG("sas_to_redshift_dag", schedule_interval="0 8 * * *", default_args=default_args)
 
 sobjects = [
     "account_owner",
