@@ -13,9 +13,9 @@ from salesforce_import_extras.common_functions import (
 instance = "sfni"
 
 with DAG(
-    f"{instance}_to_glue_import",
+    f"{instance}_import",
     start_date=pendulum.datetime(
-        2019, 10, 11, tzinfo=pendulum.timezone("America/Toronto")
+        2019, 10, 12, tzinfo=pendulum.timezone("America/Toronto")
     ),
     schedule_interval="5 4 * * *",
 ) as dag:

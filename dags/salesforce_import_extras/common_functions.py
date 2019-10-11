@@ -117,7 +117,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create table if not exists "sf_salesforce"."{sfdc_instance}"."{sobject}" as select *
+        create table if not exists "sf_salesforce"."{sfdc_instance}"."{sobject}_raw" as select *
         from "glue"."{sfdc_instance}"."{sobject}"
         with no data
         """
@@ -125,7 +125,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
 
         try:
             max_date = tx.execute(
-                f'select max(systemmodstamp) from "sf_salesforce"."{sfdc_instance}"."{sobject}"'
+                f'select max(systemmodstamp) from "sf_salesforce"."{sfdc_instance}"."{sobject}_raw"'
             ).fetchall()[0][0]
             max_date = datetime.datetime.fromisoformat(max_date).__str__()
         except Exception:
@@ -151,7 +151,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
 
         stmt = text(
             f"""
-        insert into "sf_salesforce"."{sfdc_instance}"."{sobject}" select {", ".join(cast_cols)}
+        insert into "sf_salesforce"."{sfdc_instance}"."{sobject}_raw" select {", ".join(cast_cols)}
         from "glue"."{sfdc_instance}"."{sobject}"
         where systemmodstamp > cast(:max_date as timestamp)
         """
@@ -166,11 +166,11 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: str):
     with engine.begin() as tx:
         tx.execute(
             f'''
-        create or replace table salesforce.{sfdc_instance}_summary.{sobject}
-        as select distinct t0.* from salesforce.{sfdc_instance}.{sobject} t0
+        create or replace table salesforce.{sfdc_instance}.{sobject}
+        as select distinct t0.* from salesforce.{sfdc_instance}.{sobject}_raw t0
         join (
             select id, max(systemmodstamp) as max_date
-            from salesforce.{sfdc_instance}.{sobject}
+            from salesforce.{sfdc_instance}.{sobject}_raw
             group by id
             ) t1 on t0.id = t1.id and t0.systemmodstamp = t1.max_date
         '''

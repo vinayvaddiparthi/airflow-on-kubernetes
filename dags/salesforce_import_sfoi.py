@@ -10,9 +10,9 @@ from salesforce_import_extras.common_functions import ctas_to_glue, ctas_to_snow
 instance = "sfoi"
 
 with DAG(
-    f"{instance}_to_glue_import",
+    f"{instance}_import",
     start_date=pendulum.datetime(
-        2019, 10, 11, tzinfo=pendulum.timezone("America/Toronto")
+        2019, 10, 12, tzinfo=pendulum.timezone("America/Toronto")
     ),
     schedule_interval="5 3 * * *",
 ) as dag:
