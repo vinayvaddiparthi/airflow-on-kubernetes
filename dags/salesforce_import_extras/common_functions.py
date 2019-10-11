@@ -160,18 +160,18 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
         tx.execute(stmt).fetchall()
 
 
-def create_snowflake_materialized_view(conn: str, sfdc_instance: str, sobject: str):
+def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: str):
     engine: Engine = SnowflakeHook(snowflake_conn_id=conn).get_sqlalchemy_engine()
 
     with engine.begin() as tx:
         tx.execute(
-            f"""
-        create or replace materialized view "salesforce"."{sfdc_instance}_summary"."{sobject}"
-        as select distinct * from "salesforce"."{sfdc_instance}"."{sobject}" t0
+            f'''
+        create or replace table salesforce.{sfdc_instance}_summary.{sobject}
+        as select distinct t0.* from salesforce.{sfdc_instance}.{sobject} t0
         join (
             select id, max(systemmodstamp) as max_date
-            from "salesforce"."{sfdc_instance}"."{sobject}" t1
+            from salesforce.{sfdc_instance}.{sobject}
             group by id
-            ) on "t0"."id" = "t1"."id" and "t0"."systemmodstamp" = "t1"."max_date"
-        """
+            ) t1 on t0.id = t1.id and t0.systemmodstamp = t1.max_date
+        '''
         ).fetchall()
