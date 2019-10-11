@@ -248,7 +248,7 @@ local airflowCfg = {
       #logs_volume_claim:null,
       #dags_volume_host:null,
       #env_from_configmap_ref:params.app + "-" + params.env + "-" + "env",
-      env_from_secret_ref:params.app + "-" + params.env + "," + params.app + "-" + params.env + "-" + "postgres",
+      env_from_secret_ref:params.app + "-" + params.env + "," + params.app + "-" + params.env + "-" + "postgres" + "," + params.app + "-" + params.env + "-" + "s3",
       #git_repo:null,
       #git_branch:null,
       #git_subpath:null,
@@ -280,7 +280,7 @@ local airflowCfg = {
 
     },
     kubernetes_environment_variables:{
-      AIRFLOW_CONN_S3_LOGS: "s3://$(BUCKET_NAME)",
+      AIRFLOW_CONN_S3_LOGS: "s3://$(S3_AWS_ACCESS_KEY_ID):$(S3_AWS_SECRET_ACCESS_KEY)@$(BUCKET_NAME)",
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://$(MASTER_USERNAME):$(MASTER_PASSWORD)@$(ENDPOINT_ADDRESS):$(PORT)/$(DB_NAME)",
     },
     kubernetes_secrets:{ 
