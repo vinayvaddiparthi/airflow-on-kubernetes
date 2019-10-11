@@ -8,7 +8,7 @@ local airflowCfg = {
       remote_logging:true,
       remote_log_conn_id:"s3_logs",
       #remote_base_log_folder:"s3://",
-      encrypt_s3_logs:false,
+      encrypt_s3_logs:true,
       logging_level:"INFO",
       fab_logging_level:"WARN",
       #logging_config_class:"airflow.config_templates.airflow_local_settings.DEFAULT_LOGGING_CONFIG",
