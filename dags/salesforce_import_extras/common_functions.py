@@ -77,22 +77,22 @@ def format_wide_table_select(
 # ]
 
 
-def ctas_to_glue(catalog: str, sobject: str):
+def ctas_to_glue(sfdc_instance: str, sobject: str):
     engine = create_engine(
-        f"presto://presto-production-internal.presto.svc:8080/{catalog}"
+        f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
     )
 
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create table if not exists "glue"."{catalog}".{sobject} as select * from "{catalog}"."salesforce"."{sobject}"
+        create table if not exists "glue"."{sfdc_instance}".{sobject} as select * from "{sfdc_instance}"."salesforce"."{sobject}"
         with no data
         """
         ).fetchall()
 
         try:
             max_date = tx.execute(
-                f"select max(systemmodstamp) from glue.{catalog}.{sobject}"
+                f"select max(systemmodstamp) from glue.{sfdc_instance}.{sobject}"
             ).fetchall()[0][0]
             max_date = datetime.datetime.fromisoformat(max_date).__str__()
         except Exception:
@@ -100,7 +100,7 @@ def ctas_to_glue(catalog: str, sobject: str):
 
         stmt = text(
             f"""
-        insert into "glue"."{catalog}".{sobject} select * from "{catalog}"."salesforce"."{sobject}"
+        insert into "glue"."{sfdc_instance}".{sobject} select * from "{sfdc_instance}"."salesforce"."{sobject}"
         where systemmodstamp > cast(:max_date as timestamp)
         """
         ).bindparams(max_date=max_date)
@@ -108,23 +108,23 @@ def ctas_to_glue(catalog: str, sobject: str):
         tx.execute(stmt).fetchall()
 
 
-def ctas_to_snowflake(catalog: str, sobject: str):
+def ctas_to_snowflake(sfdc_instance: str, sobject: str):
     engine = create_engine(
-        f"presto://presto-production-internal.presto.svc:8080/{catalog}"
+        f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
     )
 
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create table if not exists "snowflake_{catalog}"."public".{sobject} as select *
-        from "glue"."{catalog}"."{sobject}"
+        create table if not exists "sf_salesforce"."{sfdc_instance}".{sobject} as select *
+        from "glue"."{sfdc_instance}"."{sobject}"
         with no data
         """
         ).fetchall()
 
         try:
             max_date = tx.execute(
-                f'select max(systemmodstamp) from "snowflake_{catalog}"."public"."{sobject}"'
+                f'select max(systemmodstamp) from "sf_salesforce"."{sfdc_instance}"."{sobject}"'
             ).fetchall()[0][0]
             max_date = datetime.datetime.fromisoformat(max_date).__str__()
         except Exception:
@@ -135,7 +135,7 @@ def ctas_to_snowflake(catalog: str, sobject: str):
                 [column("column_name"), column("data_type")],
                 from_obj=text('"information_schema"."columns"'),
                 whereclause=and_(
-                    column("table_schema") == text(f"'{catalog}'"),
+                    column("table_schema") == text(f"'{sfdc_instance}'"),
                     column("table_name") == text(f"'{sobject}'"),
                 ),
             )
@@ -150,10 +150,17 @@ def ctas_to_snowflake(catalog: str, sobject: str):
 
         stmt = text(
             f"""
-        insert into "snowflake_{catalog}"."public"."{sobject}" select {",".join(cast_cols)}
-        from "glue"."{catalog}"."{sobject}"
+        insert into "sf_salesforce"."{sfdc_instance}"."{sobject}" select {", ".join(cast_cols)}
+        from "glue"."{sfdc_instance}"."{sobject}"
         where systemmodstamp > cast(:max_date as timestamp)
         """
         ).bindparams(max_date=max_date)
 
         tx.execute(stmt).fetchall()
+
+
+def compact_snowflake(sfdc_instance: str, sobject: str):
+    engine = create_engine(
+        f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
+    )
+
