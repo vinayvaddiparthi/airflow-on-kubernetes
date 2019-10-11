@@ -80,7 +80,11 @@ local params = import "../params.libsonnet";
                 {
                 name: "AIRFLOW__CORE__SQL_ALCHEMY_CONN",
                 value: "postgresql+psycopg2://$(MASTER_USERNAME):$(MASTER_PASSWORD)@$(ENDPOINT_ADDRESS):$(PORT)/$(DB_NAME)"
-              }
+              },
+              {
+                name: "AIRFLOW__CORE__REMOTE_BASE_LOG_FOLDER",
+                value: "s3://$(BUCKET_NAME)/logs",
+              },
             ],
             ports: [
               { containerPort: 8080 },

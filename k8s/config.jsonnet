@@ -7,8 +7,8 @@ local airflowCfg = {
       base_log_folder:"/usr/local/airflow/logs",
       remote_logging:true,
       remote_log_conn_id:"s3_logs",
-      remote_base_log_folder:"logs",
-      encrypt_s3_logs:true,
+      #remote_base_log_folder:"s3://",
+      encrypt_s3_logs:false,
       logging_level:"INFO",
       fab_logging_level:"WARN",
       #logging_config_class:"airflow.config_templates.airflow_local_settings.DEFAULT_LOGGING_CONFIG",
@@ -282,6 +282,7 @@ local airflowCfg = {
     kubernetes_environment_variables:{
       AIRFLOW_CONN_S3_LOGS: "s3://$(S3_AWS_ACCESS_KEY_ID):$(S3_AWS_SECRET_ACCESS_KEY)@$(BUCKET_NAME)",
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://$(MASTER_USERNAME):$(MASTER_PASSWORD)@$(ENDPOINT_ADDRESS):$(PORT)/$(DB_NAME)",
+      AIRFLOW__CORE__REMOTE_BASE_LOG_FOLDER: "s3://$(BUCKET_NAME)/logs",
     },
     kubernetes_secrets:{ 
 
