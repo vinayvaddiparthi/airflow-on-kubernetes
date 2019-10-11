@@ -4,8 +4,11 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 
 from salesforce_import_extras.sobjects import sobjects
-from salesforce_import_extras.common_functions import ctas_to_glue, ctas_to_snowflake
-
+from salesforce_import_extras.common_functions import (
+    ctas_to_glue,
+    ctas_to_snowflake,
+    create_snowflake_materialized_view,
+)
 
 instance = "sfni"
 
@@ -27,4 +30,12 @@ with DAG(
             python_callable=ctas_to_snowflake,
             op_kwargs={"sfdc_instance": instance, "sobject": t},
             pool="snowflake_pool",
+        ) >> PythonOperator(
+            task_id=f"snowflake_summary__{t}",
+            python_callable=create_snowflake_materialized_view,
+            op_kwargs={
+                "conn": "snowflake_default",
+                "sfdc_instance": instance,
+                "sobject": t,
+            },
         )

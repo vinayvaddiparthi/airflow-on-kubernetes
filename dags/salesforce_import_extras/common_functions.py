@@ -1,6 +1,7 @@
 import datetime
 from typing import Set, Optional
 
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from sqlalchemy import create_engine, select, text, column, and_
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, TableClause, ClauseElement
@@ -159,8 +160,18 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
         tx.execute(stmt).fetchall()
 
 
-def compact_snowflake(sfdc_instance: str, sobject: str):
-    engine = create_engine(
-        f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
-    )
+def create_snowflake_materialized_view(conn: str, sfdc_instance: str, sobject: str):
+    engine: Engine = SnowflakeHook(conn).get_sqlalchemy_engine()
 
+    with engine.begin() as tx:
+        tx.execute(
+            f"""
+        create or replace materialized view "salesforce"."{sfdc_instance}_summary"."{sobject}"
+        as select distinct * from "salesforce"."{sfdc_instance}"."{sobject}" t0
+        join (
+            select id, max(systemmodstamp) as max_date
+            from "salesforce"."{sfdc_instance}"."{sobject}" t1
+            group by id
+            ) on "t0"."id" = "t1"."id" and "t0"."systemmodstamp" = "t1"."max_date"
+        """
+        ).fetchall()
