@@ -92,7 +92,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: str):
 
         try:
             max_date = tx.execute(
-                f"select max(systemmodstamp) from glue.{sfdc_instance}.{sobject}"
+                f'select max(systemmodstamp) from "glue"."{sfdc_instance}"."{sobject}"'
             ).fetchall()[0][0]
             max_date = datetime.datetime.fromisoformat(max_date).__str__()
         except Exception:
@@ -100,7 +100,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: str):
 
         stmt = text(
             f"""
-        insert into "glue"."{sfdc_instance}".{sobject} select * from "{sfdc_instance}"."salesforce"."{sobject}"
+        insert into "glue"."{sfdc_instance}"."{sobject}" select * from "{sfdc_instance}"."salesforce"."{sobject}"
         where systemmodstamp > cast(:max_date as timestamp)
         """
         ).bindparams(max_date=max_date)
@@ -116,7 +116,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create table if not exists "sf_salesforce"."{sfdc_instance}".{sobject} as select *
+        create table if not exists "sf_salesforce"."{sfdc_instance}"."{sobject}" as select *
         from "glue"."{sfdc_instance}"."{sobject}"
         with no data
         """
