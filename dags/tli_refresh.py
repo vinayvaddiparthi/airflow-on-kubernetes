@@ -4,8 +4,11 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 
 from salesforce_import_extras.sobjects import sobjects
-from salesforce_import_extras.common_functions import ctas_to_glue, ctas_to_snowflake, \
-    create_sf_summary_table
+from salesforce_import_extras.common_functions import (
+    ctas_to_glue,
+    ctas_to_snowflake,
+    create_sf_summary_table,
+)
 
 instance = "sfoi"
 
@@ -15,6 +18,7 @@ with DAG(
         2019, 10, 11, tzinfo=pendulum.timezone("America/Toronto")
     ),
     schedule_interval="20,50 * * * *",
+    catchup=False,
 ) as dag:
     for t in ["c2g__codatransactionlineitem__c"]:
         dag << PythonOperator(

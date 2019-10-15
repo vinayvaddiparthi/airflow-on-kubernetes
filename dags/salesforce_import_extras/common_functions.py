@@ -165,7 +165,7 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: str):
 
     with engine.begin() as tx:
         tx.execute(
-            f'''
+            f"""
         create or replace table salesforce.{sfdc_instance}.{sobject}
         as select distinct t0.* from salesforce.{sfdc_instance}_raw.{sobject} t0
         join (
@@ -173,5 +173,5 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: str):
             from salesforce.{sfdc_instance}_raw.{sobject}
             group by id
             ) t1 on t0.id = t1.id and t0.systemmodstamp = t1.max_date
-        '''
+        """
         ).fetchall()
