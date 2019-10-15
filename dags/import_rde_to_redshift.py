@@ -27,7 +27,7 @@ with DAG(
             op_args=[
                 f"""
                 insert into glue2.risk_decision_engine.{table}
-                select t1.* from risk_decision_engine."risk-decision-engine".{table} t1
+                select t1.* from rde."risk-decision-engine".{table} t1
                 left join glue2.risk_decision_engine.{table} t2 on t1.account_uuid = t2.account_uuid and t1.created_date = t2.created_date
                 where t2.account_uuid is null and t2.created_date is null
                 """
@@ -38,6 +38,7 @@ with DAG(
             postgres_conn_id="redshift_tc_dw",
         ) >> PostgresOperator(
             task_id=f"rs_insert_{table}",
+            postgres_conn_id="redshift_tc_dw",
             sql=f"""
                 insert into rde.{table}
                 select * from risk_decision_engine.{table}
@@ -56,7 +57,7 @@ with DAG(
             op_args=[
                 f"""
                 insert into glue2.risk_decision_engine.{table}
-                select t1.* from risk_decision_engine."risk-decision-engine".{table} t1
+                select t1.* from rde."risk-decision-engine".{table} t1
                 left join glue2.risk_decision_engine.{table} t2 on t1.pricing_uuid = t2.pricing_uuid
                 where t2.pricing_uuid is null
                 """
@@ -67,6 +68,7 @@ with DAG(
             postgres_conn_id="redshift_tc_dw",
         ) >> PostgresOperator(
             task_id=f"rs_insert_{table}",
+            postgres_conn_id="redshift_tc_dw",
             sql=f"""
                 insert into rde.{table}
                 select * from risk_decision_engine.{table}
