@@ -10,7 +10,7 @@ from sqlalchemy.sql import Select
 def ctas_to_glue(sfdc_instance: str, sobject: Dict):
     sobject_name = sobject["name"]
 
-    engine = create_engine(f"presto://presto-internal.presto.svc:8080/{sfdc_instance}")
+    engine = create_engine(f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}")
 
     try:
         selectable = sobject["selectable"]["callable"](
