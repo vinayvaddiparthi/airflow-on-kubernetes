@@ -16,7 +16,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
         selectable = sobject["selectable"]["callable"](
             sobject_name=sobject_name,
             engine=engine,
-            **(sobject["selectable"].get("kwargs"), {}),
+            **(sobject["selectable"].get("kwargs", {})),
         ).__str__()
     except KeyError:
         selectable = f'select * from "{sfdc_instance}"."salesforce"."{sobject_name}"'
