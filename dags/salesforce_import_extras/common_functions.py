@@ -1,99 +1,37 @@
 import datetime
-from typing import Set, Optional
+from typing import Optional, Dict
 
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from sqlalchemy import create_engine, select, text, column, and_
+from sqlalchemy import create_engine, text, column, and_
 from sqlalchemy.engine import Engine
-from sqlalchemy.sql import Select, TableClause, ClauseElement
+from sqlalchemy.sql import Select
 
 
-def chunks(l, n):
-    """Yield successive n-sized chunks from l."""
-    for i in range(0, len(l), n):
-        yield l[i : i + n]
+def ctas_to_glue(sfdc_instance: str, sobject: Dict):
+    sobject_name = sobject["name"]
 
+    engine = create_engine(f"presto://presto-internal.presto.svc:8080/{sfdc_instance}")
 
-def format_wide_table_select(
-    table_name: str,
-    engine: Engine,
-    excluded_fields: Optional[Set[str]] = None,
-    conditions: Optional[ClauseElement] = None,
-):
-    excluded_fields = excluded_fields or set()
-
-    with engine.begin() as tx:
-        stmt = Select(
-            columns=[column("column_name")],
-            from_obj=text("information_schema.columns"),
-            whereclause=text(f"table_name = '{table_name}'"),
-        )
-
-        column_chunks = [
-            x
-            for x in chunks(
-                [
-                    column(x[0])
-                    for x in tx.execute(stmt)
-                    if x[0] not in {"id"}.union(excluded_fields)
-                ],
-                100,
-            )
-        ]
-
-        tables = [
-            select(
-                [column("id")] + cols_,
-                from_obj=TableClause(table_name, *([column("id")] + cols_)),
-                whereclause=conditions,
-            )
-            for cols_ in column_chunks
-        ]
-
-        for i, table in enumerate(tables):
-            table.schema = "salesforce"
-            tables[i] = table.alias(f"t{i}")
-
-        stmt = tables[0]
-
-        for i in range(1, len(tables)):
-            stmt = stmt.join(tables[i], tables[0].c.id == tables[i].c.id)
-
-        stmt = select(
-            [tables[0].c.id]
-            + [
-                col
-                for table_ in tables
-                for col in table_.c
-                if col.name not in {"id"}.union(excluded_fields)
-            ],
-            from_obj=stmt,
-        )
-
-        return stmt
-
-
-# wide_tables = [
-#     {"name": "opportunity", "condition": None},
-#     {"name": "pricing__c", "condition": None},
-# ]
-
-
-def ctas_to_glue(sfdc_instance: str, sobject: str):
-    engine = create_engine(
-        f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
-    )
+    try:
+        selectable = sobject["selectable"]["callable"](
+            sobject_name=sobject_name,
+            engine=engine,
+            **(sobject["selectable"].get("kwargs"), {}),
+        ).__str__()
+    except KeyError:
+        selectable = f'select * from "{sfdc_instance}"."salesforce"."{sobject_name}"'
 
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create table if not exists "glue"."{sfdc_instance}".{sobject} as select * from "{sfdc_instance}"."salesforce"."{sobject}"
+        create table if not exists "glue"."{sfdc_instance}"."{sobject_name}" as {selectable}
         with no data
         """
         ).fetchall()
 
         try:
             max_date = tx.execute(
-                f'select max(systemmodstamp) from "glue"."{sfdc_instance}"."{sobject}"'
+                f'select max(systemmodstamp) from "glue"."{sfdc_instance}"."{sobject_name}"'
             ).fetchall()[0][0]
             max_date = datetime.datetime.fromisoformat(max_date).__str__()
         except Exception:
@@ -101,7 +39,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: str):
 
         stmt = text(
             f"""
-        insert into "glue"."{sfdc_instance}"."{sobject}" select * from "{sfdc_instance}"."salesforce"."{sobject}"
+        insert into "glue"."{sfdc_instance}"."{sobject_name}" {selectable}
         where systemmodstamp > cast(:max_date as timestamp)
         """
         ).bindparams(max_date=max_date)
@@ -109,7 +47,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: str):
         tx.execute(stmt).fetchall()
 
 
-def ctas_to_snowflake(sfdc_instance: str, sobject: str):
+def ctas_to_snowflake(sfdc_instance: str, sobject_name: str):
     engine = create_engine(
         f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
     )
@@ -117,15 +55,15 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create table if not exists "sf_salesforce"."{sfdc_instance}_raw"."{sobject}" as select *
-        from "glue"."{sfdc_instance}"."{sobject}"
+        create table if not exists "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" as select *
+        from "glue"."{sfdc_instance}"."{sobject_name}"
         with no data
         """
         ).fetchall()
 
         try:
             max_date = tx.execute(
-                f'select max(systemmodstamp) from "sf_salesforce"."{sfdc_instance}_raw"."{sobject}"'
+                f'select max(systemmodstamp) from "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}"'
             ).fetchall()[0][0]
             max_date = datetime.datetime.fromisoformat(max_date).__str__()
         except Exception:
@@ -137,7 +75,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
                 from_obj=text('"information_schema"."columns"'),
                 whereclause=and_(
                     column("table_schema") == text(f"'{sfdc_instance}'"),
-                    column("table_name") == text(f"'{sobject}'"),
+                    column("table_name") == text(f"'{sobject_name}'"),
                 ),
             )
         ).fetchall()
@@ -151,8 +89,8 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
 
         stmt = text(
             f"""
-        insert into "sf_salesforce"."{sfdc_instance}_raw"."{sobject}" select {", ".join(cast_cols)}
-        from "glue"."{sfdc_instance}"."{sobject}"
+        insert into "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" select {", ".join(cast_cols)}
+        from "glue"."{sfdc_instance}"."{sobject_name}"
         where systemmodstamp > cast(:max_date as timestamp)
         """
         ).bindparams(max_date=max_date)
@@ -160,17 +98,17 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: str):
         tx.execute(stmt).fetchall()
 
 
-def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: str):
+def create_sf_summary_table(conn: str, sfdc_instance: str, sobject_name: str):
     engine: Engine = SnowflakeHook(snowflake_conn_id=conn).get_sqlalchemy_engine()
 
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create or replace table salesforce.{sfdc_instance}.{sobject}
-        as select distinct t0.* from salesforce.{sfdc_instance}_raw.{sobject} t0
+        create or replace table salesforce.{sfdc_instance}.{sobject_name}
+        as select distinct t0.* from salesforce.{sfdc_instance}_raw.{sobject_name} t0
         join (
             select id, max(systemmodstamp) as max_date
-            from salesforce.{sfdc_instance}_raw.{sobject}
+            from salesforce.{sfdc_instance}_raw.{sobject_name}
             group by id
             ) t1 on t0.id = t1.id and t0.systemmodstamp = t1.max_date
         """

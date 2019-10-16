@@ -10,7 +10,7 @@ sobjects = [
         "name": "account",
         "selectable": {
             "callable": format_wide_table_select,
-            "kwargs": {"condition": text("test_account__c = false")}
+            "kwargs": {"condition": text("test_account__c = false")},
         },
     },
     {"name": "account_balance__c"},
