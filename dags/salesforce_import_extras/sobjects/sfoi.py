@@ -1,4 +1,5 @@
 from sqlalchemy import text
+from sqlalchemy.sql import Select
 
 from salesforce_import_extras.formatters import format_wide_table_select
 
@@ -382,13 +383,23 @@ sobjects = [
     {"name": "collections_cycle__c"},
     {"name": "collections_file__c"},
     {"name": "collections_issue__c"},
+    {"name": "collections_issue__history", "last_modified_field": "createddate"},
     {"name": "collections_likelihood__c"},
     # {"name": "colordefinition"},
     {"name": "commission__c"},
     {"name": "community"},
     {"name": "connect_source_service__c"},
     # {"name": "connectedapplication"},
-    # {"name": "contact"},
+    {
+        "name": "contact",
+        "selectable": {
+            "callable": lambda table, engine: Select(
+                columns=[text("*")],
+                from_obj=text(f'"sfoi"."{table}"'),
+                whereclause=text("systemmodstamp != cast('2018-07-16' as date)"),
+            )
+        },
+    },
     {"name": "contactrequest"},
     {"name": "contentasset"},
     # {"name": "contentbody"},
@@ -798,6 +809,7 @@ sobjects = [
     {"name": "pricebook2"},
     {"name": "pricebookentry"},
     {"name": "pricing__c", "selectable": {"callable": format_wide_table_select}},
+    {"name": "pricingsupplementary__c"},
     {"name": "pricing_category__c"},
     {"name": "pricing_details__c"},
     {"name": "pricing_document_type__c"},

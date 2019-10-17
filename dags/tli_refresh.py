@@ -19,24 +19,24 @@ with DAG(
     schedule_interval="20,50 * * * *",
     catchup=False,
 ) as dag:
-    for t in ["c2g__codatransactionlineitem__c"]:
+    for sobject in [{"name": "c2g__codatransactionlineitem__c"}]:
         dag << PythonOperator(
-            task_id=f"glue__{t}",
+            task_id=f'glue__{sobject["name"]}',
             python_callable=ctas_to_glue,
-            op_kwargs={"sfdc_instance": instance, "sobject_name": t},
+            op_kwargs={"sfdc_instance": instance, "sobject": sobject},
             pool=f"{instance}_pool",
         ) >> PythonOperator(
-            task_id=f"snowflake__{t}",
+            task_id=f'snowflake__{sobject["name"]}',
             python_callable=ctas_to_snowflake,
-            op_kwargs={"sfdc_instance": instance, "sobject_name": t},
+            op_kwargs={"sfdc_instance": instance, "sobject": sobject},
             pool="snowflake_pool",
         ) >> PythonOperator(
-            task_id=f"snowflake_summary__{t}",
+            task_id=f'snowflake_summary__{sobject["name"]}',
             python_callable=create_sf_summary_table,
             op_kwargs={
                 "conn": "snowflake_default",
                 "sfdc_instance": instance,
-                "sobject_name": t,
+                "sobject": sobject,
             },
             pool="snowflake_pool",
         )

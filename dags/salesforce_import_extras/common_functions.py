@@ -1,5 +1,5 @@
 import datetime
-from typing import Optional, Dict
+from typing import Dict
 
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from sqlalchemy import create_engine, text, column, and_
@@ -9,6 +9,7 @@ from sqlalchemy.sql import Select
 
 def ctas_to_glue(sfdc_instance: str, sobject: Dict):
     sobject_name = sobject["name"]
+    last_modified_field = sobject.get("last_modified_field", "systemmodstamp")
 
     engine = create_engine(
         f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
@@ -33,7 +34,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
 
         try:
             max_date = tx.execute(
-                f'select max(systemmodstamp) from "glue"."{sfdc_instance}"."{sobject_name}"'
+                f'select max({last_modified_field}) from "glue"."{sfdc_instance}"."{sobject_name}"'
             ).fetchall()[0][0]
             max_date = datetime.datetime.fromisoformat(max_date).__str__()
         except Exception:
@@ -42,14 +43,17 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
         stmt = text(
             f"""
         insert into "glue"."{sfdc_instance}"."{sobject_name}" {selectable}
-        where systemmodstamp > cast(:max_date as timestamp)
+        where {last_modified_field} > cast(:max_date as timestamp)
         """
         ).bindparams(max_date=max_date)
 
         tx.execute(stmt).fetchall()
 
 
-def ctas_to_snowflake(sfdc_instance: str, sobject_name: str):
+def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
+    sobject_name = sobject["name"]
+    last_modified_field = sobject.get("last_modified_field", "systemmodstamp")
+
     engine = create_engine(
         f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
     )
@@ -65,7 +69,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject_name: str):
 
         try:
             max_date = tx.execute(
-                f'select max(systemmodstamp) from "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}"'
+                f'select max({last_modified_field}) from "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}"'
             ).fetchall()[0][0]
             max_date = datetime.datetime.fromisoformat(max_date).__str__()
         except Exception:
@@ -82,25 +86,28 @@ def ctas_to_snowflake(sfdc_instance: str, sobject_name: str):
             )
         ).fetchall()
 
-        cast_cols = []
+        columns_to_cast = []
         for col_ in cols_:
             if col_[1].lower() == "varchar":
-                cast_cols.append(f'CAST("{col_[0]}" AS VARCHAR(6291456)) "{col_[0]}"')
+                columns_to_cast.append(f'CAST("{col_[0]}" AS VARCHAR(6291456)) "{col_[0]}"')
             else:
-                cast_cols.append(f'"{col_[0]}"')
+                columns_to_cast.append(f'"{col_[0]}"')
 
         stmt = text(
             f"""
-        insert into "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" select {", ".join(cast_cols)}
+        insert into "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" select {", ".join(columns_to_cast)}
         from "glue"."{sfdc_instance}"."{sobject_name}"
-        where systemmodstamp > cast(:max_date as timestamp)
+        where {last_modified_field} > cast(:max_date as timestamp)
         """
         ).bindparams(max_date=max_date)
 
         tx.execute(stmt).fetchall()
 
 
-def create_sf_summary_table(conn: str, sfdc_instance: str, sobject_name: str):
+def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
+    sobject_name = sobject["name"]
+    last_modified_field = sobject.get("last_modified_field", "systemmodstamp")
+
     engine: Engine = SnowflakeHook(snowflake_conn_id=conn).get_sqlalchemy_engine()
 
     with engine.begin() as tx:
@@ -109,9 +116,9 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject_name: str):
         create or replace table salesforce.{sfdc_instance}.{sobject_name}
         as select distinct t0.* from salesforce.{sfdc_instance}_raw.{sobject_name} t0
         join (
-            select id, max(systemmodstamp) as max_date
+            select id, max({last_modified_field}) as max_date
             from salesforce.{sfdc_instance}_raw.{sobject_name}
             group by id
-            ) t1 on t0.id = t1.id and t0.systemmodstamp = t1.max_date
+            ) t1 on t0.id = t1.id and t0.{last_modified_field} = t1.max_date
         """
         ).fetchall()

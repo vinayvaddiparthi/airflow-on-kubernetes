@@ -29,7 +29,7 @@ with DAG(
         ) >> PythonOperator(
             task_id=f'snowflake__{sobject["name"]}',
             python_callable=ctas_to_snowflake,
-            op_kwargs={"sfdc_instance": instance, "sobject_name": sobject["name"]},
+            op_kwargs={"sfdc_instance": instance, "sobject": sobject},
             pool="snowflake_pool",
         ) >> PythonOperator(
             task_id=f'snowflake_summary__{sobject["name"]}',
@@ -37,7 +37,7 @@ with DAG(
             op_kwargs={
                 "conn": "snowflake_default",
                 "sfdc_instance": instance,
-                "sobject_name": sobject["name"],
+                "sobject": sobject,
             },
             pool="snowflake_pool",
         )
