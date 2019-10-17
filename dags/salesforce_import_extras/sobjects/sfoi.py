@@ -396,7 +396,9 @@ sobjects = [
             "callable": lambda table, engine: Select(
                 columns=[text("*")],
                 from_obj=text(f'"sfoi"."{table}"'),
-                whereclause=text("cast(systemmodstamp as date) != cast('2018-07-16' as date)"),
+                whereclause=text(
+                    "cast(systemmodstamp as date) != cast('2018-07-16' as date)"
+                ),
             )
         },
     },

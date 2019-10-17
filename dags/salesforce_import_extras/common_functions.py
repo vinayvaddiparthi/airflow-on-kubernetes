@@ -2,7 +2,7 @@ import datetime
 from typing import Dict
 
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from sqlalchemy import create_engine, text, column, and_
+from sqlalchemy import create_engine, text, column, and_, func, TIMESTAMP, cast, VARCHAR
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select
 
@@ -30,21 +30,28 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create table if not exists "glue"."{sfdc_instance}"."{sobject_name}" as {selectable}
-        with no data
+        CREATE TABLE IF NOT EXISTS "glue"."{sfdc_instance}"."{sobject_name}" AS {selectable}
+        WITH NO DATA
         """
         ).fetchall()
 
         try:
             max_date = tx.execute(
-                f'select max({last_modified_field}) from "glue"."{sfdc_instance}"."{sobject_name}"'
+                Select(
+                    columns=[func.max(text(last_modified_field))],
+                    from_obj=text(f'"glue"."{sfdc_instance}"."{sobject_name}"'),
+                )
             ).fetchall()[0][0]
             max_date = datetime.datetime.fromisoformat(max_date).__str__()
         except Exception:
             max_date = datetime.datetime.fromtimestamp(0).__str__()
 
+        range_limited_selectable = selectable.where(
+            text(last_modified_field) > cast(text(":max_date"), TIMESTAMP)
+        )
+
         stmt = text(
-            f'insert into "glue"."{sfdc_instance}"."{sobject_name}" {selectable.where(text(f"{last_modified_field} > cast(:max_date as timestamp)"))}'
+            f'INSERT INTO "glue"."{sfdc_instance}"."{sobject_name}" {range_limited_selectable}'
         ).bindparams(max_date=max_date)
 
         tx.execute(stmt).fetchall()
@@ -58,12 +65,15 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
     )
 
+    selectable: Select = Select(
+        [text("*")], from_obj=f'"glue"."{sfdc_instance}"."{sobject_name}"'
+    )
+
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create table if not exists "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" as select *
-        from "glue"."{sfdc_instance}"."{sobject_name}"
-        with no data
+        CREATE TABLE IF NOT EXISTS "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" AS {selectable}
+        WITH NO DATA
         """
         ).fetchall()
 
@@ -79,28 +89,27 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
             Select(
                 [column("column_name"), column("data_type")],
                 from_obj=text('"information_schema"."columns"'),
-                whereclause=and_(
-                    column("table_schema") == text(f"'{sfdc_instance}'"),
-                    column("table_name") == text(f"'{sobject_name}'"),
-                ),
             )
+            .where(column("table_schema") == text(sfdc_instance))
+            .where(column("table_name") == text(sobject_name))
         ).fetchall()
 
         columns_to_cast = []
         for col_ in cols_:
             if col_[1].lower() == "varchar":
-                columns_to_cast.append(
-                    f'CAST("{col_[0]}" AS VARCHAR(6291456)) "{col_[0]}"'
+                columns_to_cast.append(cast(text(col_[0]), VARCHAR(6291456))).label(
+                    col_[0]
                 )
             else:
-                columns_to_cast.append(f'"{col_[0]}"')
+                columns_to_cast.append(text(col_[0]))
+
+        selectable: Select = Select(
+            [columns_to_cast],
+            from_obj=text(f'"glue"."{sfdc_instance}"."{sobject_name}"'),
+        ).where(text(last_modified_field) > cast(text(":max_date"), TIMESTAMP))
 
         stmt = text(
-            f"""
-        insert into "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" select {", ".join(columns_to_cast)}
-        from "glue"."{sfdc_instance}"."{sobject_name}"
-        where {last_modified_field} > cast(:max_date as timestamp)
-        """
+            f'INSERT INTO "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" {selectable}'
         ).bindparams(max_date=max_date)
 
         tx.execute(stmt).fetchall()
@@ -115,7 +124,7 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create or replace table "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}"
+        CREATE OR REPLACE TABLE "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}"
         as select distinct t0.* from "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}" t0
         join (
             select id, max({last_modified_field}) as max_date
