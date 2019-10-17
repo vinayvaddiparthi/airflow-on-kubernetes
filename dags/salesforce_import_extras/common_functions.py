@@ -24,7 +24,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
     except KeyError:
         selectable: Select = Select(
             columns=[text("*")],
-            from_obj=text('"{sfdc_instance}"."salesforce"."{sobject_name}"'),
+            from_obj=text(f'"{sfdc_instance}"."salesforce"."{sobject_name}"'),
         )
 
     with engine.begin() as tx:
