@@ -16,13 +16,16 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
     )
 
     try:
-        selectable = sobject["selectable"]["callable"](
+        selectable: Select = sobject["selectable"]["callable"](
             table=sobject_name,
             engine=engine,
             **(sobject["selectable"].get("kwargs", {})),
-        ).__str__()
+        )
     except KeyError:
-        selectable = Select(columns=[text("*")], from_obj=text('"{sfdc_instance}"."salesforce"."{sobject_name}"'))
+        selectable: Select = Select(
+            columns=[text("*")],
+            from_obj=text('"{sfdc_instance}"."salesforce"."{sobject_name}"'),
+        )
 
     with engine.begin() as tx:
         tx.execute(
@@ -41,10 +44,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
             max_date = datetime.datetime.fromtimestamp(0).__str__()
 
         stmt = text(
-            f"""
-        insert into "glue"."{sfdc_instance}"."{sobject_name}" {selectable}
-        where {last_modified_field} > cast(:max_date as timestamp)
-        """
+            f'insert into "glue"."{sfdc_instance}"."{sobject_name}" {selectable.where(text(f"{last_modified_field} > cast(:max_date as timestamp)"))}'
         ).bindparams(max_date=max_date)
 
         tx.execute(stmt).fetchall()
@@ -89,7 +89,9 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         columns_to_cast = []
         for col_ in cols_:
             if col_[1].lower() == "varchar":
-                columns_to_cast.append(f'CAST("{col_[0]}" AS VARCHAR(6291456)) "{col_[0]}"')
+                columns_to_cast.append(
+                    f'CAST("{col_[0]}" AS VARCHAR(6291456)) "{col_[0]}"'
+                )
             else:
                 columns_to_cast.append(f'"{col_[0]}"')
 
