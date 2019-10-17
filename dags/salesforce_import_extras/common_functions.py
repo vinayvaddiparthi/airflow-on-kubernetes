@@ -95,8 +95,8 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
                 [column("column_name"), column("data_type")],
                 from_obj=text('"information_schema"."columns"'),
             )
-            .where(column("table_schema") == text(sfdc_instance))
-            .where(column("table_name") == text(sobject_name))
+            .where(column("table_schema") == text(f"'{sfdc_instance}'"))
+            .where(column("table_name") == text(f"'{sobject_name}'"))
         ).fetchall()
 
         columns_to_cast = []
