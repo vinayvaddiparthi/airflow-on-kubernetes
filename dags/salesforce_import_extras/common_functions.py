@@ -99,17 +99,17 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
             .where(column("table_name") == text(f"'{sobject_name}'"))
         ).fetchall()
 
-        columns_to_cast = []
+        processed_columns = []
         for col_ in cols_:
             if col_[1].lower() == "varchar":
-                columns_to_cast.append(cast(text(col_[0]), VARCHAR(6291456))).label(
-                    col_[0]
+                processed_columns.append(
+                    cast(column(col_[0]), VARCHAR(6291456)).label(col_[0])
                 )
             else:
-                columns_to_cast.append(text(col_[0]))
+                processed_columns.append(column(col_[0]))
 
         selectable: Select = Select(
-            [columns_to_cast],
+            processed_columns,
             from_obj=text(f'"glue"."{sfdc_instance}"."{sobject_name}"'),
         ).where(text(last_modified_field) > cast(text(":max_date"), TIMESTAMP))
 
