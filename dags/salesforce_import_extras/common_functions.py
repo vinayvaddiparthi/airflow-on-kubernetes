@@ -38,7 +38,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
         try:
             max_date = tx.execute(
                 Select(
-                    columns=[func.max(text(last_modified_field))],
+                    columns=[func.max(column(last_modified_field))],
                     from_obj=text(f'"glue"."{sfdc_instance}"."{sobject_name}"'),
                 )
             ).fetchall()[0][0]
@@ -47,7 +47,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
             max_date = datetime.datetime.fromtimestamp(0).__str__()
 
         range_limited_selectable = selectable.where(
-            text(last_modified_field) > cast(text(":max_date"), TIMESTAMP)
+            column(last_modified_field) > cast(text(":max_date"), TIMESTAMP)
         )
 
         stmt = text(
@@ -66,7 +66,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
     )
 
     selectable: Select = Select(
-        [text("*")], from_obj=f'"glue"."{sfdc_instance}"."{sobject_name}"'
+        [text("*")], from_obj=text(f'"glue"."{sfdc_instance}"."{sobject_name}"')
     )
 
     with engine.begin() as tx:
@@ -79,7 +79,12 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
 
         try:
             max_date = tx.execute(
-                f'select max({last_modified_field}) from "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}"'
+                Select(
+                    func.max(column(last_modified_field)),
+                    from_obj=text(
+                        '"sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}"'
+                    ),
+                )
             ).fetchall()[0][0]
             max_date = datetime.datetime.fromisoformat(max_date).__str__()
         except Exception:
