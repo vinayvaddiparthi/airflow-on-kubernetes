@@ -80,9 +80,9 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         try:
             max_date = tx.execute(
                 Select(
-                    func.max(column(last_modified_field)),
+                    columns=[func.max(column(last_modified_field))],
                     from_obj=text(
-                        '"sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}"'
+                        f'"sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}"'
                     ),
                 )
             ).fetchall()[0][0]
