@@ -17,7 +17,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
 
     try:
         selectable = sobject["selectable"]["callable"](
-            sobject_name=sobject_name,
+            table=sobject_name,
             engine=engine,
             **(sobject["selectable"].get("kwargs", {})),
         ).__str__()

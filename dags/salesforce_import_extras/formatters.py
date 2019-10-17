@@ -6,7 +6,7 @@ from sqlalchemy.sql import ClauseElement, Select, TableClause
 
 
 def format_wide_table_select(
-    sobject_name: str, engine: Engine, condition: Optional[ClauseElement] = None
+    table: str, engine: Engine, condition: Optional[ClauseElement] = None
 ):
     def chunks(l, n):
         """Yield successive n-sized chunks from l."""
@@ -17,7 +17,7 @@ def format_wide_table_select(
         stmt = Select(
             columns=[column("column_name")],
             from_obj=text("information_schema.columns"),
-            whereclause=text(f"table_name = '{sobject_name}'"),
+            whereclause=text(f"table_name = '{table}'"),
         )
 
         column_chunks = [
@@ -30,7 +30,7 @@ def format_wide_table_select(
         tables = [
             select(
                 [column("id")] + cols_,
-                from_obj=TableClause(sobject_name, *([column("id")] + cols_)),
+                from_obj=TableClause(table, *([column("id")] + cols_)),
                 whereclause=condition,
             )
             for cols_ in column_chunks
