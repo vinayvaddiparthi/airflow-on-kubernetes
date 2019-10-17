@@ -22,7 +22,7 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
             **(sobject["selectable"].get("kwargs", {})),
         ).__str__()
     except KeyError:
-        selectable = f'select * from "{sfdc_instance}"."salesforce"."{sobject_name}"'
+        selectable = Select(columns=[text("*")], from_obj=text('"{sfdc_instance}"."salesforce"."{sobject_name}"'))
 
     with engine.begin() as tx:
         tx.execute(
@@ -113,11 +113,11 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
     with engine.begin() as tx:
         tx.execute(
             f"""
-        create or replace table salesforce.{sfdc_instance}.{sobject_name}
-        as select distinct t0.* from salesforce.{sfdc_instance}_raw.{sobject_name} t0
+        create or replace table "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}"
+        as select distinct t0.* from "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}" t0
         join (
             select id, max({last_modified_field}) as max_date
-            from salesforce.{sfdc_instance}_raw.{sobject_name}
+            from "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}"
             group by id
             ) t1 on t0.id = t1.id and t0.{last_modified_field} = t1.max_date
         """
