@@ -1,4 +1,4 @@
-from sqlalchemy import text, DATE, column, cast
+from sqlalchemy import text, DATE, column, cast, literal
 from sqlalchemy.sql import Select
 
 from salesforce_import_extras.formatters import format_wide_table_select
@@ -396,7 +396,7 @@ sobjects = [
             "callable": lambda table, engine: Select(
                 columns=[text("*")], from_obj=text(f'"sfoi"."{table}"')
             ).where(
-                cast(column("systemmodstamp"), DATE) != cast(text("2018-07-16"), DATE)
+                cast(column("systemmodstamp"), DATE) != cast(literal("'2018-07-16'"), DATE)
             )
         },
     },
