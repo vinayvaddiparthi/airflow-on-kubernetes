@@ -16,7 +16,7 @@ with DAG(
     start_date=pendulum.datetime(
         2019, 10, 11, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    schedule_interval="20,50 * * * *",
+    schedule_interval="10,50 8-18 * * 1-5",
     catchup=False,
 ) as dag:
     for sobject in [{"name": "c2g__codatransactionlineitem__c"}]:
