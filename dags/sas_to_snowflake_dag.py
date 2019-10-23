@@ -16,7 +16,7 @@ default_args = {
 }
 
 with DAG(
-        "sas_to_snowflake_dag", schedule_interval="0 9 * * *", default_args=default_args
+    "sas_to_snowflake_dag", schedule_interval="0 9 * * *", default_args=default_args
 ) as dag:
     sobjects = [
         "account_owner",
@@ -35,7 +35,6 @@ with DAG(
     aws_hook = AwsHook(aws_conn_id="s3_conn_id")
     aws_credentials = aws_hook.get_credentials()
 
-
     def copy_to_snowflake(name, **kwargs):
         sql_copy = f"""COPY INTO {name}_new 
                                 FROM S3://tc-datalake/sas/external_tables/{name}/{name}.txt 
@@ -51,14 +50,14 @@ with DAG(
             warehouse="ETL",
             database="SAS",
             schema="public",
-            ocsp_fail_open=False)
+            ocsp_fail_open=False,
+        )
 
         with con.cursor() as cs:
             print(f"Copy to {name}_new table")
             cs.execute(f"drop table if exists {name}_new")
             cs.execute(f"create table {name}_new like {name}")
             cs.execute(sql_copy)
-
 
     def copy_tli_to_snowflake(part, **kwargs):
         sql_copy = f"""COPY INTO tli_categorized_new 
@@ -75,13 +74,15 @@ with DAG(
             warehouse="ETL",
             database="SAS",
             schema="public",
-            ocsp_fail_open=False)
+            ocsp_fail_open=False,
+        )
 
         with con.cursor() as cs:
             print(f"Copy to tli_categorized_new table, part; {part}")
-            cs.execute(f"create table if not exists tli_categorized_new like tli_categorized")
+            cs.execute(
+                f"create table if not exists tli_categorized_new like tli_categorized"
+            )
             cs.execute(sql_copy)
-
 
     def check_and_swap(name, **kwargs):
         con = snowflake.connector.connect(
@@ -91,7 +92,8 @@ with DAG(
             warehouse="ETL",
             database="SAS",
             schema="public",
-            ocsp_fail_open=False)
+            ocsp_fail_open=False,
+        )
 
         with con.cursor() as cs:
             print(f"Check {name} tables")
@@ -111,40 +113,41 @@ with DAG(
                 print(f"Record drop alert on [{name}]: {count_old} -> {count_new}")
                 raise
 
-
     task_tli_1 = PythonOperator(
         task_id=f"snowflake_copy_tli_1",
         python_callable=copy_tli_to_snowflake,
-        op_kwargs={'part': 1},
+        op_kwargs={"part": 1},
         provide_context=True,
-        trigger_rule=TriggerRule.NONE_FAILED
+        trigger_rule=TriggerRule.NONE_FAILED,
     )
 
     task_tli_2 = PythonOperator(
         task_id=f"snowflake_copy_tli_2",
         python_callable=copy_tli_to_snowflake,
-        op_kwargs={'part': 2},
+        op_kwargs={"part": 2},
         provide_context=True,
-        trigger_rule=TriggerRule.NONE_FAILED
+        trigger_rule=TriggerRule.NONE_FAILED,
     )
 
     dag << task_tli_1 >> task_tli_2 >> PythonOperator(
         task_id=f"snowflake_check_and_swap_tli_categorized",
         python_callable=check_and_swap,
-        op_kwargs={'name': 'tli_categorized'},
+        op_kwargs={"name": "tli_categorized"},
         provide_context=True,
-        trigger_rule=TriggerRule.NONE_FAILED)
+        trigger_rule=TriggerRule.NONE_FAILED,
+    )
 
     for sobject in sobjects:
         dag << PythonOperator(
             task_id=f"snowflake_copy_{sobject}",
             python_callable=copy_to_snowflake,
-            op_kwargs={'name': sobject},
+            op_kwargs={"name": sobject},
             provide_context=True,
-            trigger_rule=TriggerRule.NONE_FAILED
+            trigger_rule=TriggerRule.NONE_FAILED,
         ) >> PythonOperator(
             task_id=f"snowflake_check_and_swap_{sobject}",
             python_callable=check_and_swap,
-            op_kwargs={'name': sobject},
+            op_kwargs={"name": sobject},
             provide_context=True,
-            trigger_rule=TriggerRule.NONE_FAILED)
+            trigger_rule=TriggerRule.NONE_FAILED,
+        )
