@@ -30,7 +30,7 @@ with DAG(
         "total_balance",
     ]
 
-    snowflake_hook = BaseHook.get_connection("snowflake_conn")
+    snowflake_hook = BaseHook.get_connection("snowflake_default")
     redshift_hook = PostgresHook(postgres_conn_id="redshift_tc_dw")
     aws_hook = AwsHook(aws_conn_id="s3_conn_id")
     aws_credentials = aws_hook.get_credentials()
