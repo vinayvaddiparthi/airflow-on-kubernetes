@@ -3,8 +3,7 @@ from datetime import datetime
 import snowflake.connector
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
-from airflow.hooks.base_hook import BaseHook
-from airflow.hooks.postgres_hook import PostgresHook
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
@@ -30,8 +29,7 @@ with DAG(
         "total_balance",
     ]
 
-    snowflake_hook = BaseHook.get_connection("snowflake_default")
-    redshift_hook = PostgresHook(postgres_conn_id="redshift_tc_dw")
+    snowflake_hook = SnowflakeHook(snowflake_conn_id='snowflake_sas')
     aws_hook = AwsHook(aws_conn_id="s3_conn_id")
     aws_credentials = aws_hook.get_credentials()
 
