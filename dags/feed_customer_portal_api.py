@@ -41,8 +41,7 @@ def slack_on_fail(context):
     return SlackWebhookOperator(
         task_id="slack_fail",
         http_conn_id="slack_tc_data_channel",
-        username="airflow",
-        message=f"Task failed: ctas__{schema}__{table} in {{ dag.dag_id }} DagRun: {{ dag_run }}",
+        message=f"<!here> {context['ti']}",
     ).execute(context=context)
 
 
