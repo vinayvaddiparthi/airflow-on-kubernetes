@@ -1,5 +1,8 @@
 import pendulum
 from airflow import DAG
+from airflow.contrib.operators.slack_webhook_operator import SlackWebhookOperator
+from airflow.hooks.base_hook import BaseHook
+from airflow.models import DagRun
 from airflow.operators.postgres_operator import PostgresOperator
 from airflow.operators.python_operator import PythonOperator
 from sqlalchemy import create_engine, column, text, VARCHAR, cast
@@ -7,7 +10,9 @@ from sqlalchemy.sql import Select
 
 
 def generate_ctas(schema: str, table: str):
-    engine = create_engine("presto://presto-production-internal.presto.svc:8080/sf_csportal")
+    engine = create_engine(
+        "presto://presto-production-internal.presto.svc:8080/sf_csportal"
+    )
 
     with engine.begin() as tx:
         cols_ = tx.execute(
@@ -52,4 +57,11 @@ with DAG(
             task_id=f"ctas__{schema}__{table}",
             python_callable=generate_ctas,
             op_kwargs={"schema": schema, "table": table},
+            on_failure_callback=lambda: SlackWebhookOperator(
+                task_id="slack_fail",
+                http_conn_id="slack_tc_data_channel",
+                webhook_token=BaseHook.get_connection("slack_tc_data_channel").password,
+                username="airflow",
+                message=f"Task failed: ctas__{schema}__{table} in {{ dag.dag_id }} DagRun: {{ dag_run }}",
+            ).execute(context=None),
         )
