@@ -60,7 +60,6 @@ with DAG(
             on_failure_callback=lambda: SlackWebhookOperator(
                 task_id="slack_fail",
                 http_conn_id="slack_tc_data_channel",
-                webhook_token=BaseHook.get_connection("slack_tc_data_channel").password,
                 username="airflow",
                 message=f"Task failed: ctas__{schema}__{table} in {{ dag.dag_id }} DagRun: {{ dag_run }}",
             ).execute(context=None),
