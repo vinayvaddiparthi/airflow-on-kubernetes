@@ -37,6 +37,15 @@ def generate_ctas(schema: str, table: str):
         tx.execute(stmt).fetchall()
 
 
+def slack_on_fail(context):
+    return SlackWebhookOperator(
+        task_id="slack_fail",
+        http_conn_id="slack_tc_data_channel",
+        username="airflow",
+        message=f"Task failed: ctas__{schema}__{table} in {{ dag.dag_id }} DagRun: {{ dag_run }}",
+    ).execute(context=context)
+
+
 with DAG(
     "feed_customer_portal",
     start_date=pendulum.datetime(
@@ -57,10 +66,5 @@ with DAG(
             task_id=f"ctas__{schema}__{table}",
             python_callable=generate_ctas,
             op_kwargs={"schema": schema, "table": table},
-            on_failure_callback=lambda: SlackWebhookOperator(
-                task_id="slack_fail",
-                http_conn_id="slack_tc_data_channel",
-                username="airflow",
-                message=f"Task failed: ctas__{schema}__{table} in {{ dag.dag_id }} DagRun: {{ dag_run }}",
-            ).execute(context=None),
+            on_failure_callback=slack_on_fail,
         )
