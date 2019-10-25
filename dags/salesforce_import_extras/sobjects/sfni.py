@@ -261,6 +261,7 @@ sobjects = [
     # {"name": "openactivity"},
     {"name": "opportunity"},
     {"name": "opportunityhistory"},
+    {"name": "opportunityfieldhistory"},
     {"name": "opportunity__hd"},
     {"name": "opportunity_contact_role__c"},
     # {"name": "opportunity_record_type_setting__mdt"},
