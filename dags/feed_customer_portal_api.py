@@ -7,7 +7,7 @@ from sqlalchemy.sql import Select
 
 
 def generate_ctas(schema: str, table: str):
-    engine = create_engine("presto://presto-production-internal.presto.svc:8080")
+    engine = create_engine("presto://presto-production-internal.presto.svc:8080/sf_csportal")
 
     with engine.begin() as tx:
         cols_ = tx.execute(
