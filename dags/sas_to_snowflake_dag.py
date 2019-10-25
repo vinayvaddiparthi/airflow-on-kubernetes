@@ -58,12 +58,12 @@ with DAG(
             cs.execute(sql_copy)
 
     def copy_tli_to_snowflake(part, **kwargs):
-        sql_copy = f"""COPY INTO tli_categorized_new 
-                                FROM S3://tc-datalake/sas/external_tables/tli/tli_categorized{part}.txt 
-                                CREDENTIALS = (
-                                    aws_key_id='{aws_credentials.access_key}',
-                                    aws_secret_key='{aws_credentials.secret_key}')
-                                    FILE_FORMAT=(field_delimiter='|', FIELD_OPTIONALLY_ENCLOSED_BY = '"')"""
+        sql_copy = f"""COPY INTO tli_categorized_new
+        FROM S3://tc-datalake/sas/external_tables/tli/tli_categorized{part}.txt
+        CREDENTIALS = (
+        aws_key_id='{aws_credentials.access_key}',
+        aws_secret_key='{aws_credentials.secret_key}')
+        FILE_FORMAT=(field_delimiter='|', FIELD_OPTIONALLY_ENCLOSED_BY = '"')"""
 
         con = snowflake.connector.connect(
             user=snowflake_hook.login,
