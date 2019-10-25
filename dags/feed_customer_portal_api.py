@@ -61,6 +61,7 @@ with DAG(
             task_id=f"drop__{table}",
             postgres_conn_id="postgres_csportal_prod",
             sql=f"DROP TABLE {table}",
+            on_failure_callback=slack_on_fail,
         ) >> PythonOperator(
             task_id=f"ctas__{schema}__{table}",
             python_callable=generate_ctas,
