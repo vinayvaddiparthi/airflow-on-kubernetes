@@ -71,7 +71,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
 
     with engine.begin() as tx:
         tx.execute(
-            f"""
+        f"""
         CREATE TABLE IF NOT EXISTS "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" AS {selectable}
         WITH NO DATA
         """
@@ -93,7 +93,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         cols_ = tx.execute(
             Select(
                 [column("column_name"), column("data_type")],
-                from_obj=text('"information_schema"."columns"'),
+                from_obj=text('"glue"."information_schema"."columns"'),
             )
             .where(column("table_schema") == text(f"'{sfdc_instance}'"))
             .where(column("table_name") == text(f"'{sobject_name}'"))
