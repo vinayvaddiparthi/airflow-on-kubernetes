@@ -93,7 +93,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         cols_ = tx.execute(
             Select(
                 [column("column_name"), column("data_type")],
-                from_obj=text('"glue"."information_schema"."columns"'),
+                from_obj=text(f'"information_schema"."columns"'),
             )
             .where(column("table_schema") == text(f"'{sfdc_instance}'"))
             .where(column("table_name") == text(f"'{sobject_name}'"))
@@ -101,12 +101,9 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
 
         processed_columns = []
         for col_ in cols_:
-            if col_[1].lower() == "varchar":
-                processed_columns.append(
-                    cast(column(col_[0]), VARCHAR(6291456)).label(col_[0])
-                )
-            else:
-                processed_columns.append(column(col_[0]))
+            processed_columns.append(
+                text(f'CAST("{column(col_[0])}" AS {col_[1]}) AS "{column(col_[0])}"')
+            )
 
         selectable: Select = Select(
             processed_columns,
