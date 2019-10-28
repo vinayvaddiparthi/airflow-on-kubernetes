@@ -1,5 +1,6 @@
 sobjects = [
     {"name": "acceptedeventrelation"},
+    {"name": "account"},
     {"name": "account_product_eligibility__c"},
     {"name": "accountcleaninfo"},
     {"name": "accountcontactrelation"},
