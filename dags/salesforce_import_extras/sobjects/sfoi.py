@@ -1092,7 +1092,7 @@ sobjects = [
     # {"name": "recentlyviewed"},
     {"name": "record_assignment__c"},
     {"name": "record_pool__c"},
-    {"name": "recordaction"},
+    # {"name": "recordaction"},
     {"name": "recordtype"},
     {"name": "recordtypelocalization"},
     {"name": "red_flag_tracking__c"},

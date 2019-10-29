@@ -339,7 +339,7 @@ sobjects = [
     {"name": "quotelineitem"},
     # {"name": "quotetemplaterichtextdata"},
     # {"name": "recentlyviewed"},
-    {"name": "recordaction"},
+    # {"name": "recordaction"},
     {"name": "recordtype"},
     {"name": "recordtypelocalization"},
     {"name": "reference_data__c"},
