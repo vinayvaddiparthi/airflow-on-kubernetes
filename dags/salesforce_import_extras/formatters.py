@@ -1,7 +1,7 @@
 from typing import Optional
 
 from sqlalchemy import column, text, select
-from sqlalchemy.engine import Engine, create_engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.sql import ClauseElement, Select, TableClause
 
 
@@ -15,19 +15,15 @@ def format_wide_table_select(
 
     with engine.begin() as tx:
         stmt = Select(
-            columns=[column("column_name"), column("data_type")],
+            columns=[column("column_name")],
             from_obj=text("information_schema.columns"),
             whereclause=text(f"table_name = '{table}'"),
         )
 
-        information_schema = tx.execute(stmt).fetchall()
-
-        type_map = {x[0]: x[1] for x in information_schema}
-
         column_chunks = [
             x
             for x in chunks(
-                [column(x[0]) for x in information_schema if x[0] != "id"], 256
+                [column(x[0]) for x in tx.execute(stmt) if x[0] != "id"], 256
             )
         ]
 
@@ -51,7 +47,7 @@ def format_wide_table_select(
 
         stmt = select(
             [tables[0].c.id]
-            + [text(f'CAST({col} AS {type_map[col.name]}) AS {col.name}') for table_ in tables for col in table_.c if col.name != "id"],
+            + [col for table_ in tables for col in table_.c if col.name != "id"],
             from_obj=stmt,
         )
 
