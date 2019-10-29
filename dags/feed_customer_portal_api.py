@@ -1,8 +1,6 @@
 import pendulum
 from airflow import DAG
 from airflow.contrib.operators.slack_webhook_operator import SlackWebhookOperator
-from airflow.hooks.base_hook import BaseHook
-from airflow.models import DagRun
 from airflow.operators.postgres_operator import PostgresOperator
 from airflow.operators.python_operator import PythonOperator
 from sqlalchemy import create_engine, column, text, VARCHAR, cast
