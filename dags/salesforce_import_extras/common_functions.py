@@ -100,9 +100,12 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         ).fetchall()
 
         processed_columns = []
-        for col_ in cols_:
+        for name_, type_ in cols_:
+            if type_ == "varchar":
+                type_ = "varchar(16777216)"
+
             processed_columns.append(
-                text(f'CAST("{column(col_[0])}" AS {col_[1]}) AS "{column(col_[0])}"')
+                text(f'CAST("{column(name_)}" AS {type_}) AS "{column(name_)}"')
             )
 
         selectable: Select = Select(
