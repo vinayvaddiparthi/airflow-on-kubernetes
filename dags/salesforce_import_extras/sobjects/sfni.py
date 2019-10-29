@@ -326,7 +326,7 @@ sobjects = [
     {"name": "product2"},
     {"name": "product__c"},
     {"name": "product_summary__c"},
-    {"name": "profile"},
+    # {"name": "profile"},
     # {"name": "publisher"},
     {"name": "pushtopic"},
     {"name": "queueroutingconfig"},

@@ -1065,7 +1065,7 @@ sobjects = [
     {"name": "processnode"},
     {"name": "processor__c"},
     {"name": "product2"},
-    {"name": "profile"},
+    # {"name": "profile"},
     {"name": "profitability__c"},
     {"name": "project__c"},
     {"name": "project_charter__c"},
