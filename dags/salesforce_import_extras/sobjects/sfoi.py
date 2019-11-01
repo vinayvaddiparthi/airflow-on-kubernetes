@@ -1,4 +1,4 @@
-from sqlalchemy import text, DATE, column, cast, literal, null
+from sqlalchemy import text, DATE, column, cast, literal, null, VARCHAR
 from sqlalchemy.sql import Select
 
 from salesforce_import_extras.formatters import format_wide_table_select
@@ -540,7 +540,7 @@ sobjects = [
                     column("qbdialer__lastcalltime__c"),
                     column("notes__c"),
                     column("preferred_method_of_contact__c"),
-                    null().label("moneris_missed_deposit_eligible__c"),
+                    cast(null(), VARCHAR(1300)).label("moneris_missed_deposit_eligible__c"),
                     column("middle_name__c"),
                     column("same_contact_as_account__c"),
                     column("qbdialer__responsetime__c"),
