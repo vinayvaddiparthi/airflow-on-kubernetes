@@ -93,7 +93,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         cols_ = tx.execute(
             Select(
                 [column("column_name"), column("data_type")],
-                from_obj=text(f'"information_schema"."columns"'),
+                from_obj=text(f'"glue"."information_schema"."columns"'),
             )
             .where(column("table_schema") == text(f"'{sfdc_instance}'"))
             .where(column("table_name") == text(f"'{sobject_name}'"))
