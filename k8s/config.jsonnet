@@ -182,7 +182,7 @@ local airflowCfg = {
       statsd_port:8125,
       statsd_prefix:"airflow",
       statsd_allow_list:null,
-      max_threads:2,
+      max_threads:8,
       authenticate:false,
       use_job_schedule:true,
 
