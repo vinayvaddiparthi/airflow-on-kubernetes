@@ -540,7 +540,9 @@ sobjects = [
                     column("qbdialer__lastcalltime__c"),
                     column("notes__c"),
                     column("preferred_method_of_contact__c"),
-                    cast(null(), VARCHAR(1300)).label("moneris_missed_deposit_eligible__c"),
+                    cast(null(), VARCHAR(1300)).label(
+                        "moneris_missed_deposit_eligible__c"
+                    ),
                     column("middle_name__c"),
                     column("same_contact_as_account__c"),
                     column("qbdialer__responsetime__c"),

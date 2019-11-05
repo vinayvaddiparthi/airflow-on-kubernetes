@@ -3,11 +3,7 @@ import pendulum
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 
-from salesforce_import_extras.common_functions import (
-    ctas_to_glue,
-    ctas_to_snowflake,
-    create_sf_summary_table,
-)
+from import_sfdc import ctas_to_glue, ctas_to_snowflake, create_sf_summary_table
 
 instance = "sfoi"
 
