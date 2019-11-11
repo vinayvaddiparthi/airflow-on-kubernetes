@@ -256,6 +256,7 @@ sobjects = [
             "kwargs": {"condition": text("test_account__c = false")},
         },
     },
+    {"name": "accounthistory"},
     {"name": "account_balance__c"},
     {"name": "account_balance__history", "last_modified_field": "createddate"},
     {"name": "account_sales_note__c"},
@@ -862,6 +863,7 @@ sobjects = [
     {"name": "community"},
     {"name": "connect_source_service__c"},
     {"name": "contact", "selectable": {"callable": contact_callable}},
+    {"name": "contacthistory"},
     {"name": "contactrequest"},
     {"name": "contentasset"},
     {"name": "contentdistribution"},
@@ -1178,6 +1180,7 @@ sobjects = [
     {"name": "landlord_fee_structure__history", "last_modified_field": "createddate"},
     {"name": "latest_created_opp_snapshot__c"},
     {"name": "lead"},
+    {"name": "leadhistory"},
     {"name": "lead_assignment_industry_priority__c"},
     {
         "name": "lead_assignment_industry_priority__history",
