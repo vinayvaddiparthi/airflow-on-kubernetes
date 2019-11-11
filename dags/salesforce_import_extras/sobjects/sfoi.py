@@ -1300,6 +1300,7 @@ sobjects = [
     {"name": "opportunitycompetitor"},
     {"name": "opportunitycontactrole"},
     {"name": "opportunityhistory"},
+    {"name": "opportunityfieldhistory", "last_modified_field": "createddate"},
     {"name": "opportunitylineitem"},
     {"name": "opportunitylineitemschedule"},
     {"name": "opportunityoverride"},
