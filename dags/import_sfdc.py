@@ -93,26 +93,26 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
             except Exception:
                 max_date = datetime.datetime.fromtimestamp(0).__str__()
 
-            # cols_ = tx.execute(
-            #     Select(
-            #         [column("column_name"), column("data_type")],
-            #         from_obj=text(f'"{sfdc_instance}"."salesforce"."columns"'),
-            #     )
-            #     .where(column("table_schema") == text(f"'{sfdc_instance}'"))
-            #     .where(column("table_name") == text(f"'{sobject_name}'"))
-            # ).fetchall()
-            #
-            # processed_columns = []
-            # for name_, type_ in cols_:
-            #     if type_ == "varchar":
-            #         type_ = "varchar(16777216)"
-            #
-            #     processed_columns.append(
-            #         text(f'CAST("{column(name_)}" AS {type_}) AS "{column(name_)}"')
-            #     )
+            cols_ = tx.execute(
+                Select(
+                    [column("column_name"), column("data_type")],
+                    from_obj=text(f'"{sfdc_instance}"."salesforce"."columns"'),
+                )
+                .where(column("table_schema") == text(f"'{sfdc_instance}'"))
+                .where(column("table_name") == text(f"'{sobject_name}'"))
+            ).fetchall()
+
+            processed_columns = []
+            for name_, type_ in cols_:
+                if type_ == "varchar":
+                    type_ = "varchar(16777216)"
+
+                processed_columns.append(
+                    text(f'CAST("{column(name_)}" AS {type_}) AS "{column(name_)}"')
+                )
 
             selectable: Select = Select(
-                [text("*")],
+                processed_columns,
                 from_obj=text(f'"{sfdc_instance}"."salesforce"."{sobject_name}"'),
             ).where(text(last_modified_field) > cast(text(":max_date"), TIMESTAMP))
 
