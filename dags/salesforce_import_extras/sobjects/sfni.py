@@ -254,7 +254,7 @@ sobjects = [
     {"name": "queuesobject"},
     {"name": "quicktext"},
     {"name": "quote"},
-    #{"name": "quote__c"},
+    # {"name": "quote__c"},
     {"name": "quote__c_hd"},
     {"name": "quotedocument"},
     {"name": "quotelineitem"},
