@@ -83,6 +83,26 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         )
 
     with engine.begin() as tx:
+        cols_ = tx.execute(
+            Select(
+                [column("column_name"), column("data_type")],
+                from_obj=text(f'"{sfdc_instance}"."information_schema"."columns"'),
+            )
+                .where(column("table_schema") == text(f"'salesforce'"))
+                .where(column("table_name") == text(f"'{sobject_name}'"))
+        ).fetchall()
+
+        processed_columns = []
+        for name_, type_ in cols_:
+            if type_ == "varchar":
+                type_ = "varchar(16777216)"
+
+            processed_columns.append(
+                text(f'CAST("{column(name_)}" AS {type_}) AS "{column(name_)}"')
+            )
+
+        selectable = Select(processed_columns, from_obj=selectable)
+
         first_import: bool = tx.execute(
             f'CREATE TABLE IF NOT EXISTS "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" AS {selectable}'
         ).fetchall()[0][0] >= 1
@@ -101,28 +121,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
             except Exception:
                 max_date = datetime.datetime.fromtimestamp(0).__str__()
 
-            cols_ = tx.execute(
-                Select(
-                    [column("column_name"), column("data_type")],
-                    from_obj=text(f'"{sfdc_instance}"."information_schema"."columns"'),
-                )
-                .where(column("table_schema") == text(f"'salesforce'"))
-                .where(column("table_name") == text(f"'{sobject_name}'"))
-            ).fetchall()
-
-            processed_columns = []
-            for name_, type_ in cols_:
-                if type_ == "varchar":
-                    type_ = "varchar(16777216)"
-
-                processed_columns.append(
-                    text(f'CAST("{column(name_)}" AS {type_}) AS "{column(name_)}"')
-                )
-
-            selectable: Select = Select(
-                processed_columns,
-                from_obj=text(f'"{sfdc_instance}"."salesforce"."{sobject_name}"'),
-            ).where(text(last_modified_field) > cast(text(":max_date"), TIMESTAMP))
+            selectable = selectable.where(text(last_modified_field) > cast(text(":max_date"), TIMESTAMP))
 
             stmt = text(
                 f'INSERT INTO "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" {selectable}'
