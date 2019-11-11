@@ -70,9 +70,17 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
     )
 
-    selectable: Select = Select(
-        [text("*")], from_obj=text(f'"{sfdc_instance}"."salesforce"."{sobject_name}"')
-    )
+    try:
+        selectable: Select = sobject["selectable"]["callable"](
+            table=sobject_name,
+            engine=engine,
+            **(sobject["selectable"].get("kwargs", {})),
+        )
+    except KeyError:
+        selectable: Select = Select(
+            columns=[text("*")],
+            from_obj=text(f'"{sfdc_instance}"."salesforce"."{sobject_name}"'),
+        )
 
     with engine.begin() as tx:
         first_import: bool = tx.execute(
