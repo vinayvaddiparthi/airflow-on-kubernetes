@@ -35,33 +35,31 @@ def ctas_to_glue(sfdc_instance: str, sobject: Dict):
         )
 
     with engine.begin() as tx:
-        tx.execute(
-            f"""
-        CREATE TABLE IF NOT EXISTS "glue"."{sfdc_instance}"."{sobject_name}" AS {selectable}
-        WITH NO DATA
-        """
-        ).fetchall()
+        first_import: bool = tx.execute(
+            f'CREATE TABLE IF NOT EXISTS "glue"."{sfdc_instance}"."{sobject_name}" AS {selectable}'
+        ).fetchall()[0][0] >= 1
 
-        try:
-            max_date = tx.execute(
-                Select(
-                    columns=[func.max(column(last_modified_field))],
-                    from_obj=text(f'"glue"."{sfdc_instance}"."{sobject_name}"'),
-                )
-            ).fetchall()[0][0]
-            max_date = datetime.datetime.fromisoformat(max_date).__str__()
-        except Exception:
-            max_date = datetime.datetime.fromtimestamp(0).__str__()
+        if not first_import:
+            try:
+                max_date = tx.execute(
+                    Select(
+                        columns=[func.max(column(last_modified_field))],
+                        from_obj=text(f'"glue"."{sfdc_instance}"."{sobject_name}"'),
+                    )
+                ).fetchall()[0][0]
+                max_date = datetime.datetime.fromisoformat(max_date).__str__()
+            except Exception:
+                max_date = datetime.datetime.fromtimestamp(0).__str__()
 
-        range_limited_selectable = selectable.where(
-            column(last_modified_field) > cast(text(":max_date"), TIMESTAMP)
-        )
+            range_limited_selectable = selectable.where(
+                column(last_modified_field) > cast(text(":max_date"), TIMESTAMP)
+            )
 
-        stmt = text(
-            f'INSERT INTO "glue"."{sfdc_instance}"."{sobject_name}" {range_limited_selectable}'
-        ).bindparams(max_date=max_date)
+            stmt = text(
+                f'INSERT INTO "glue"."{sfdc_instance}"."{sobject_name}" {range_limited_selectable}'
+            ).bindparams(max_date=max_date)
 
-        tx.execute(stmt).fetchall()
+            tx.execute(stmt).fetchall()
 
 
 def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
@@ -73,58 +71,56 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
     )
 
     selectable: Select = Select(
-        [text("*")], from_obj=text(f'"glue"."{sfdc_instance}"."{sobject_name}"')
+        [text("*")], from_obj=text(f'"{sfdc_instance}"."salesforce"."{sobject_name}"')
     )
 
     with engine.begin() as tx:
-        tx.execute(
-            f"""
-        CREATE TABLE IF NOT EXISTS "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" AS {selectable}
-        WITH NO DATA
-        """
-        ).fetchall()
+        first_import: bool = tx.execute(
+            f'CREATE TABLE IF NOT EXISTS "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" AS {selectable}'
+        ).fetchall()[0][0] >= 1
 
-        try:
-            max_date = tx.execute(
-                Select(
-                    columns=[func.max(column(last_modified_field))],
-                    from_obj=text(
-                        f'"sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}"'
-                    ),
-                )
-            ).fetchall()[0][0]
-            max_date = datetime.datetime.fromisoformat(max_date).__str__()
-        except Exception:
-            max_date = datetime.datetime.fromtimestamp(0).__str__()
+        if not first_import:
+            try:
+                max_date = tx.execute(
+                    Select(
+                        columns=[func.max(column(last_modified_field))],
+                        from_obj=text(
+                            f'"sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}"'
+                        ),
+                    )
+                ).fetchall()[0][0]
+                max_date = datetime.datetime.fromisoformat(max_date).__str__()
+            except Exception:
+                max_date = datetime.datetime.fromtimestamp(0).__str__()
 
-        cols_ = tx.execute(
-            Select(
-                [column("column_name"), column("data_type")],
-                from_obj=text(f'"glue"."information_schema"."columns"'),
-            )
-            .where(column("table_schema") == text(f"'{sfdc_instance}'"))
-            .where(column("table_name") == text(f"'{sobject_name}'"))
-        ).fetchall()
+            # cols_ = tx.execute(
+            #     Select(
+            #         [column("column_name"), column("data_type")],
+            #         from_obj=text(f'"{sfdc_instance}"."salesforce"."columns"'),
+            #     )
+            #     .where(column("table_schema") == text(f"'{sfdc_instance}'"))
+            #     .where(column("table_name") == text(f"'{sobject_name}'"))
+            # ).fetchall()
+            #
+            # processed_columns = []
+            # for name_, type_ in cols_:
+            #     if type_ == "varchar":
+            #         type_ = "varchar(16777216)"
+            #
+            #     processed_columns.append(
+            #         text(f'CAST("{column(name_)}" AS {type_}) AS "{column(name_)}"')
+            #     )
 
-        processed_columns = []
-        for name_, type_ in cols_:
-            if type_ == "varchar":
-                type_ = "varchar(16777216)"
+            selectable: Select = Select(
+                [text("*")],
+                from_obj=text(f'"{sfdc_instance}"."salesforce"."{sobject_name}"'),
+            ).where(text(last_modified_field) > cast(text(":max_date"), TIMESTAMP))
 
-            processed_columns.append(
-                text(f'CAST("{column(name_)}" AS {type_}) AS "{column(name_)}"')
-            )
+            stmt = text(
+                f'INSERT INTO "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" {selectable}'
+            ).bindparams(max_date=max_date)
 
-        selectable: Select = Select(
-            processed_columns,
-            from_obj=text(f'"glue"."{sfdc_instance}"."{sobject_name}"'),
-        ).where(text(last_modified_field) > cast(text(":max_date"), TIMESTAMP))
-
-        stmt = text(
-            f'INSERT INTO "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" {selectable}'
-        ).bindparams(max_date=max_date)
-
-        tx.execute(stmt).fetchall()
+            tx.execute(stmt).fetchall()
 
 
 def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
@@ -137,12 +133,12 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
         tx.execute(
             f"""
         CREATE OR REPLACE TABLE "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}"
-        as select distinct t0.* from "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}" t0
-        join (
-            select id, max({last_modified_field}) as max_date
-            from "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}"
-            group by id
-            ) t1 on t0.id = t1.id and t0.{last_modified_field} = t1.max_date
+        AS SELECT DISTINCT t0.* FROM "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}" t0
+        JOIN (
+            SELECT id, max({last_modified_field}) AS max_date
+            FROM "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}"
+            GROUP BY id
+            ) t1 ON t0.id = t1.id AND t0.{last_modified_field} = t1.max_date
         """
         ).fetchall()
 
@@ -162,11 +158,6 @@ def create_dag(instance: str):
     ) as dag:
         for sobject in sobjects:
             dag << PythonOperator(
-                task_id=f'glue__{sobject["name"]}',
-                python_callable=ctas_to_glue,
-                op_kwargs={"sfdc_instance": instance, "sobject": sobject},
-                pool=f"{instance}_pool",
-            ) >> PythonOperator(
                 task_id=f'snowflake__{sobject["name"]}',
                 python_callable=ctas_to_snowflake,
                 op_kwargs={"sfdc_instance": instance, "sobject": sobject},
