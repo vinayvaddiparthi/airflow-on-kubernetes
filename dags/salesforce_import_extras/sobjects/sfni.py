@@ -76,7 +76,7 @@ sobjects = [
     {"name": "collaborationinvitation"},
     {"name": "communication_consent__c"},
     {"name": "community"},
-    {"name": "contact"},
+    # {"name": "contact"},
     {"name": "contacthistory", "last_modified_field": "createddate"},
     {"name": "contactcleaninfo"},
     {"name": "contactrequest"},
