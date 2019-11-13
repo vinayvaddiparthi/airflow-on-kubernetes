@@ -108,22 +108,17 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         ).fetchall()[0][0] >= 1
 
         if not first_import:
-            try:
-                with SnowflakeHook(
-                    "snowflake_default"
-                ).get_sqlalchemy_engine().begin() as sf_tx:
-                    max_date = sf_tx.execute(
-                        Select(
-                            columns=[func.max(column(last_modified_field.upper()))],
-                            from_obj=text(
-                                f'"SALESFORCE"."{sfdc_instance}_raw"."{sobject_name}"'.upper()
-                            ),
-                        )
-                    ).fetchall()[0][0]
-
-                    max_date = str(max_date)
-            except Exception as e:
-                max_date = datetime.datetime.fromtimestamp(0).__str__()
+            with SnowflakeHook(
+                "snowflake_default"
+            ).get_sqlalchemy_engine().begin() as sf_tx:
+                max_date = sf_tx.execute(
+                    Select(
+                        columns=[func.max(column(last_modified_field.upper()))],
+                        from_obj=text(
+                            f'"SALESFORCE"."{sfdc_instance}_raw"."{sobject_name}"'.upper()
+                        ),
+                    )
+                ).fetchall()[0][0] or datetime.datetime.fromtimestamp(0)
 
             selectable = selectable.where(
                 text(last_modified_field) > cast(text(":max_date"), TIMESTAMP)
@@ -131,7 +126,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
 
             stmt = text(
                 f'INSERT INTO "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" {selectable}'
-            ).bindparams(max_date=max_date)
+            ).bindparams(max_date=str(max_date))
 
             tx.execute(stmt).fetchall()
 
