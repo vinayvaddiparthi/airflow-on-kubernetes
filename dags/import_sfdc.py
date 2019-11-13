@@ -105,7 +105,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
 
         first_import: bool = tx.execute(
             f'CREATE TABLE IF NOT EXISTS "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" AS {selectable}'
-        ).fetchall()[0][0] >= 1
+        ).fetchone()[0] >= 1
 
         if not first_import:
             with SnowflakeHook(
@@ -121,7 +121,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
                 ).fetchone()[0] or datetime.datetime.fromtimestamp(0)
 
             selectable = selectable.where(
-                text(last_modified_field) > cast(text(f'"{max_date}"'), TIMESTAMP)
+                text(last_modified_field) > cast(text(f"'{max_date}'"), TIMESTAMP)
             )
 
             tx.execute(
