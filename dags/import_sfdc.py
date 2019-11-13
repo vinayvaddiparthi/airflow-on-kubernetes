@@ -118,17 +118,15 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
                             f'"SALESFORCE"."{sfdc_instance}_raw"."{sobject_name}"'.upper()
                         ),
                     )
-                ).fetchall()[0][0] or datetime.datetime.fromtimestamp(0)
+                ).fetchone()[0] or datetime.datetime.fromtimestamp(0)
 
             selectable = selectable.where(
-                text(last_modified_field) > cast(text(":max_date"), TIMESTAMP)
+                text(last_modified_field) > cast(text(f'"{max_date}"'), TIMESTAMP)
             )
 
-            stmt = text(
+            tx.execute(
                 f'INSERT INTO "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" {selectable}'
-            ).bindparams(max_date=str(max_date))
-
-            tx.execute(stmt).fetchall()
+            ).fetchall()
 
 
 def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
