@@ -88,8 +88,8 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
                 [column("column_name"), column("data_type")],
                 from_obj=text(f'"{sfdc_instance}"."information_schema"."columns"'),
             )
-                .where(column("table_schema") == text(f"'salesforce'"))
-                .where(column("table_name") == text(f"'{sobject_name}'"))
+            .where(column("table_schema") == text(f"'salesforce'"))
+            .where(column("table_name") == text(f"'{sobject_name}'"))
         ).fetchall()
 
         processed_columns = []
@@ -109,19 +109,25 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
 
         if not first_import:
             try:
-                max_date = tx.execute(
-                    Select(
-                        columns=[func.max(column(last_modified_field))],
-                        from_obj=text(
-                            f'"sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}"'
-                        ),
-                    )
-                ).fetchall()[0][0]
-                max_date = datetime.datetime.fromisoformat(max_date).__str__()
-            except Exception:
+                with SnowflakeHook(
+                    "snowflake_default"
+                ).get_sqlalchemy_engine().begin() as sf_tx:
+                    max_date = sf_tx.execute(
+                        Select(
+                            columns=[func.max(column(last_modified_field.upper()))],
+                            from_obj=text(
+                                f'"SALESFORCE"."{sfdc_instance}_raw"."{sobject_name}"'.upper()
+                            ),
+                        )
+                    ).fetchall()[0][0]
+
+                    max_date = str(max_date)
+            except Exception as e:
                 max_date = datetime.datetime.fromtimestamp(0).__str__()
 
-            selectable = selectable.where(text(last_modified_field) > cast(text(":max_date"), TIMESTAMP))
+            selectable = selectable.where(
+                text(last_modified_field) > cast(text(":max_date"), TIMESTAMP)
+            )
 
             stmt = text(
                 f'INSERT INTO "sf_salesforce"."{sfdc_instance}_raw"."{sobject_name}" {selectable}'
