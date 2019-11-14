@@ -167,7 +167,9 @@ def create_dag(instance: str):
                 task_id=f'snowflake__{sobject["name"]}',
                 python_callable=ctas_to_snowflake,
                 op_kwargs={"sfdc_instance": instance, "sobject": sobject},
-                pool="snowflake_pool",
+                pool=f"{instance}_pool",
+                retry_delay=datetime.timedelta(hours=1),
+                retries=3,
             ) >> PythonOperator(
                 task_id=f'snowflake_summary__{sobject["name"]}',
                 python_callable=create_sf_summary_table,
@@ -177,6 +179,8 @@ def create_dag(instance: str):
                     "sobject": sobject,
                 },
                 pool="snowflake_pool",
+                retry_delay=datetime.timedelta(hours=1),
+                retries=3,
             )
 
     return dag
