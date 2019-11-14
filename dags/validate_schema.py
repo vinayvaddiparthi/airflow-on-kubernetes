@@ -73,4 +73,4 @@ def create_dag(instance: str):
     return dag
 
 
-globals()["validate_sfni"] = create_dag("sfni")
+# globals()["validate_sfni"] = create_dag("sfni")
