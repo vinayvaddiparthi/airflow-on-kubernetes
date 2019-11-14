@@ -13,6 +13,8 @@ from sqlalchemy import create_engine, text, column, func, TIMESTAMP, cast
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select
 
+from utils.failure_callbacks import slack_on_fail
+
 
 def ctas_to_glue(sfdc_instance: str, sobject: Dict):
     sobject_name = sobject["name"]
@@ -170,6 +172,7 @@ def create_dag(instance: str):
                 pool=f"{instance}_pool",
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
+                on_failure_callback=slack_on_fail,
             ) >> PythonOperator(
                 task_id=f'snowflake_summary__{sobject["name"]}',
                 python_callable=create_sf_summary_table,

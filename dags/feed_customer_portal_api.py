@@ -6,6 +6,8 @@ from airflow.operators.python_operator import PythonOperator
 from sqlalchemy import create_engine, column, text, VARCHAR, cast
 from sqlalchemy.sql import Select
 
+from utils.failure_callbacks import slack_on_fail
+
 
 def generate_ctas(schema: str, table: str):
     engine = create_engine(
@@ -33,14 +35,6 @@ def generate_ctas(schema: str, table: str):
 
         stmt = f'CREATE TABLE "csportal_prod"."public"."{table}" AS {selectable}'
         tx.execute(stmt).fetchall()
-
-
-def slack_on_fail(context):
-    return SlackWebhookOperator(
-        task_id="slack_fail",
-        http_conn_id="slack_tc_data_channel",
-        message=f"<!here> {context['ti']}",
-    ).execute(context=context)
 
 
 with DAG(
