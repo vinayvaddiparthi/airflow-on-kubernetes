@@ -169,6 +169,7 @@ sobjects = [
     {"name": "knowledgearticle"},
     {"name": "knowledgearticleversion"},
     {"name": "lead"},
+    {"name": "leadhistory", "last_modified_field": "createddate"},
     {"name": "leadcleaninfo"},
     {"name": "leadstatus"},
     {"name": "lightningexperiencetheme"},
