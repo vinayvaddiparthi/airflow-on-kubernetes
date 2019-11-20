@@ -67,7 +67,6 @@ def create_dag(conn: str, catalog: str):
 
 
 for target, catalog in [
-    ("postgres_csportal_prod", "csportal_prod"),
     ("postgres_sbportal_production", "sbportal_production_postgres"),
 ]:
     globals()[f"{target}_dag"] = create_dag(target, catalog)
