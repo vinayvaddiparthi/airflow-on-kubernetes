@@ -18,7 +18,7 @@ local params = import "../params.libsonnet";
   spec: {
     rules: [
       {
-        host: "airflow.tcdata.co",
+        host: "airflow" + "-" + params.env + ".tcdata.co",
         http: {
           paths: [
             {
