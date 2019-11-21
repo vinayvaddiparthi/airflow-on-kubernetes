@@ -29,11 +29,11 @@ local params = import "params.libsonnet";
         resources: {
           requests: {
             cpu: "250m",
-            memory: "128Mi",
+            memory: "512Mi",
           },
           limits: {
             cpu: "250m",
-            memory: "128Mi",
+            memory: "512Mi",
           },
         },
       },
