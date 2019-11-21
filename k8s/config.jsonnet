@@ -89,7 +89,7 @@ local airflowCfg = {
 
     },
     webserver:{ 
-      base_url:"http://localhost:8080",
+      base_url:"https://airflow.tcdata.co/" + params.env,
       web_server_host:"0.0.0.0",
       web_server_port:8080,
       #web_server_ssl_cert:null,
@@ -110,12 +110,12 @@ local airflowCfg = {
       log_fetch_timeout_sec:5,
       hide_paused_dags_by_default:false,
       page_size:100,
-      navbar_color:"#007A87",
+      navbar_color:"#3F0E40",
       default_dag_run_display_number:25,
       enable_proxy_fix:true,
       cookie_secure:true,
       #cookie_samesite:null,
-      default_wrap:false,
+      default_wrap:true,
       rbac:true,
     },
     email:{ 
