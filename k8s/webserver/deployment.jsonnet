@@ -41,6 +41,16 @@ local params = import "../params.libsonnet";
             name: "airflow",
             image: params.image.repo + ":" + params.image.tag,
             command: ["airflow", "webserver"],
+            resources: {
+              requests: {
+                cpu: "250m",
+                memory: "256Mi",
+              },
+              limits: {
+                cpu: "250m",
+                memory: "256Mi",
+              },
+            },
             readinessProbe: {
               periodSeconds: 10,
               httpGet: {
