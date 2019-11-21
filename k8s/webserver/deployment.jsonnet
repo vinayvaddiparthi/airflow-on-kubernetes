@@ -13,7 +13,7 @@ local params = import "../params.libsonnet";
     namespace: "airflow",
   },
   spec: {
-    replicas: 3,
+    replicas: 2,
     strategy: {
       type: "RollingUpdate",
       rollingUpdate: {
@@ -48,7 +48,7 @@ local params = import "../params.libsonnet";
               },
               limits: {
                 cpu: "250m",
-                memory: "768Mi",
+                memory: "1Gi",
               },
             },
             readinessProbe: {
