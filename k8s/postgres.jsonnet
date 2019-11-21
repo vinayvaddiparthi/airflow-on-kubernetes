@@ -16,14 +16,14 @@ local params = import "params.libsonnet";
     version: "9.6-v2",
     replicas: 3,
     standbyMode: "Warm",
-    storageType: "Durable",
-    storage: {
+    storageType: if params.env == "production" then "Durable" else "Ephemeral",
+    storage: if params.env == "production" then {
       storageClassName: "gp2-encrypted",
       accessModes: [ "ReadWriteOnce" ],
       resources: {
         requests: { storage: "20Gi" },
       },
-    },
+    } else null,
     podTemplate: {
       spec: {
         resources: {
