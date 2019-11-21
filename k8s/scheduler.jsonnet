@@ -42,7 +42,7 @@ local params = import "params.libsonnet";
             envFrom: [
               {
                 secretRef: {
-                  name: params.app + "-" + params.env + "-" + "postgres"
+                  name: params.app + "-" + params.env + "-" + "postgres-auth"
                 },
               },
               {
@@ -63,7 +63,7 @@ local params = import "params.libsonnet";
               },
               {
                 name: "AIRFLOW__CORE__SQL_ALCHEMY_CONN",
-                value: "postgresql+psycopg2://$(MASTER_USERNAME):$(MASTER_PASSWORD)@$(ENDPOINT_ADDRESS):$(PORT)/$(DB_NAME)"
+                value: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@" + params.app + "-" + params.env + "-" + "postgres" + "/postgres"
               },
               {
                 name: "AIRFLOW__CORE__REMOTE_BASE_LOG_FOLDER",
