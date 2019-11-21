@@ -47,7 +47,7 @@ local params = import "../params.libsonnet";
                 memory: "768Mi",
               },
               limits: {
-                cpu: "1",
+                cpu: "2",
                 memory: "1Gi",
               },
             },
