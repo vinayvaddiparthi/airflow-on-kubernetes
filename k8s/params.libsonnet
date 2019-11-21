@@ -1,17 +1,12 @@
 {
-    app: "airflow",
-    env: std.extVar("BITBUCKET_DEPLOYMENT_ENVIRONMENT"),
-
+    app: std.extVar("APP_NAME"),
+    env: std.extVar("CI_ENVIRONMENT_SLUG"),
+    namespace: std.extVar("KUBE_NAMESPACE"),
     image: {
         repo: std.extVar("DOCKER_REPOSITORY"),
-        tag: "bitbucket-" + std.extVar("BITBUCKET_BUILD_NUMBER"),
+        tag: std.extVar("DOCKER_IMAGE_TAG"),
     },
-    
+
     webserverSecretKey: std.extVar("WEBSERVER_SECRET_KEY"),
     fernetKey: std.extVar("FERNET_KEY"),
-
-    postgres: {
-        accessCidr: "10.201.0.0/16",
-        instanceType: "db.t2.small",
-    },
 }

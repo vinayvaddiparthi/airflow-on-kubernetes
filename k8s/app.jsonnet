@@ -2,7 +2,7 @@ local k = import "ksonnet.beta.4/k.libsonnet";
 
 local webserver = [import "webserver/deployment.jsonnet", import "webserver/service.jsonnet", import "webserver/ingress.jsonnet"];
 local scheduler = [import "scheduler.jsonnet"];
-local postgres = [import "postgres/serviceinstance.jsonnet", import "postgres/servicebinding.jsonnet"];
+local postgres = [import "postgres.jsonnet"];
 local secret = [import "secret.jsonnet"];
 local config = [import "config.jsonnet"];
 local s3 = [import "s3/serviceinstance.jsonnet", import "s3/servicebinding.jsonnet"];
