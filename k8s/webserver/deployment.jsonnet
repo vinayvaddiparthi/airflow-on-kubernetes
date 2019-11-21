@@ -44,11 +44,11 @@ local params = import "../params.libsonnet";
             resources: {
               requests: {
                 cpu: "250m",
-                memory: "512Mi",
+                memory: "768Mi",
               },
               limits: {
                 cpu: "250m",
-                memory: "512Mi",
+                memory: "768Mi",
               },
             },
             readinessProbe: {
