@@ -38,7 +38,7 @@ deploy_production:
         -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
   environment:
     name: production
-    url: https://airflow.tcdata.co/production/
+    url: https://airflow-${CI_ENVIRONMENT_SLUG}.tcdata.co/
   only:
     - master
 
@@ -61,7 +61,7 @@ deploy_review:
         -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
   environment:
     name: review/$CI_COMMIT_REF_NAME
-    url: https://airflow.tcdata.co/${CI_ENVIRONMENT_SLUG}/
+    url: https://airflow-${CI_ENVIRONMENT_SLUG}.tcdata.co/
     on_stop: stop_review
   only:
     - branches
