@@ -14,7 +14,7 @@ local params = import "params.libsonnet";
   },
   spec: {
     version: "9.6-v2",
-    replicas: 3,
+    replicas: if params.env == "production" then 3 else 1,
     standbyMode: "Warm",
     storageType: if params.env == "production" then "Durable" else "Ephemeral",
     storage: if params.env == "production" then {
