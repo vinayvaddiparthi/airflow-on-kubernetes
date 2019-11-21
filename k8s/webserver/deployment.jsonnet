@@ -46,10 +46,6 @@ local params = import "../params.libsonnet";
                 cpu: "250m",
                 memory: "768Mi",
               },
-              limits: {
-                cpu: "2",
-                memory: "1Gi",
-              },
             },
             readinessProbe: {
               periodSeconds: 10,
