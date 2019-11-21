@@ -39,6 +39,16 @@ local params = import "params.libsonnet";
             name: "airflow",
             image: params.image.repo + ":" + params.image.tag,
             command: ["bash", "-c", "airflow initdb && airflow scheduler"],
+            resources: {
+              requests: {
+                cpu: "1",
+                memory: "512Mi",
+              },
+              limits: {
+                cpu: "1",
+                memory: "512Mi",
+              },
+            },
             envFrom: [
               {
                 secretRef: {
