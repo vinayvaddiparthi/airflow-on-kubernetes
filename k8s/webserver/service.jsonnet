@@ -4,21 +4,21 @@ local params = import "../params.libsonnet";
   apiVersion: "v1",
   kind: "Service",
   metadata: {
-    name: "airflow-production-webserver",
+    name: params.app + "-" + params.env + "-" + "webserver",
     namespace: "airflow",
     labels: {
-      app: "airflow",
+      app: params.app,
       env: params.env,
       component: "webserver",
     },
   },
   spec: {
     selector: {
-      app: "airflow",
+      app: params.app,
       env: params.env,
       component: "webserver",
     },
-    type: "NodePort",
+    type: "ClusterIP",
     ports: [
       {
         protocol: "TCP",
