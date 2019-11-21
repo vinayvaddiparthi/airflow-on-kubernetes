@@ -1,7 +1,7 @@
 {
-    app: "airflow",
+    app: std.extVar("APP_NAME"),
     env: std.extVar("CI_ENVIRONMENT_SLUG"),
-
+    namespace: std.extVar("KUBE_NAMESPACE"),
     image: {
         repo: std.extVar("DOCKER_REPOSITORY"),
         tag: std.extVar("DOCKER_IMAGE_TAG"),
