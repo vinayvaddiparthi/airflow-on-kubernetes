@@ -69,7 +69,7 @@ EXPOSE 8080 5555 8793
 USER airflow
 WORKDIR ${AIRFLOW_USER_HOME}
 
-COPY dags ${AIRFLOW_HOME}/dags
 COPY plugins ${AIRFLOW_HOME}/plugins
+COPY dags ${AIRFLOW_HOME}/dags
 
 CMD ["airflow", "webserver"]

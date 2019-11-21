@@ -4,10 +4,10 @@ local params = import "../params.libsonnet";
   apiVersion: "extensions/v1beta1",
   kind: "Ingress",
   metadata: {
-    name: "airflow-production-webserver",
+    name: params.app + "-" + params.env + "-" + "webserver",
     namespace: "airflow",
     labels: {
-      app: "airflow",
+      app: params.app,
       env: params.env,
       component: "webserver",
     },
@@ -18,13 +18,13 @@ local params = import "../params.libsonnet";
   spec: {
     rules: [
       {
-        host: "airflow.tcdata.co",
+        host: "airflow" + "-" + params.env + ".tcdata.co",
         http: {
           paths: [
             {
               path: "/",
               backend: {
-                serviceName: "airflow-production-webserver",
+                serviceName: params.app + "-" + params.env + "-" + "webserver",
                 servicePort: 8080
               },
             },

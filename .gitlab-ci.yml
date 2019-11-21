@@ -1,0 +1,92 @@
+stages:
+  - build
+  - deploy
+  - cleanup
+
+variables:
+  DOCKER_REPOSITORY: ${DOCKER_REPOSITORY_BASE_URI}/tc-data/airflow
+  DOCKER_IMAGE_TAG: gitlab-${CI_PIPELINE_ID}
+  APP_NAME: "airflow"
+
+build_image:
+  stage: build
+  tags:
+    - docker
+  image: docker:stable
+  script:
+    - apk add -U python3 && pip3 install awscli
+    - $(aws ecr get-login --no-include-email --region ca-central-1)
+    - docker build -t ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG} .
+    - docker push ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG}
+
+deploy_production:
+  stage: deploy
+  tags:
+    - k8s
+  image:
+    name: pgag/kubectl-jsonnet
+    entrypoint: [""]
+  script:
+    - |
+      jsonnet -J /ksonnet-lib k8s/app.jsonnet \
+        -V APP_NAME \
+        -V KUBE_NAMESPACE \
+        -V DOCKER_REPOSITORY \
+        -V DOCKER_IMAGE_TAG \
+        -V FERNET_KEY \
+        -V WEBSERVER_SECRET_KEY \
+        -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
+  environment:
+    name: production
+    url: https://airflow-${CI_ENVIRONMENT_SLUG}.tcdata.co/
+  only:
+    - master
+
+deploy_review:
+  stage: deploy
+  tags:
+    - k8s
+  image:
+    name: pgag/kubectl-jsonnet
+    entrypoint: [""]
+  script:
+    - |
+      jsonnet -J /ksonnet-lib k8s/app.jsonnet \
+        -V APP_NAME \
+        -V KUBE_NAMESPACE \
+        -V DOCKER_REPOSITORY \
+        -V DOCKER_IMAGE_TAG \
+        -V FERNET_KEY \
+        -V WEBSERVER_SECRET_KEY \
+        -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    url: https://airflow-${CI_ENVIRONMENT_SLUG}.tcdata.co/
+    on_stop: stop_review
+  only:
+    - branches
+  except:
+    - master
+
+stop_review:
+  stage: cleanup
+  tags:
+    - k8s
+  variables:
+    GIT_STRATEGY: none
+  image:
+    name: pgag/kubectl-jsonnet
+    entrypoint: [""]
+  script:
+    - |
+      kubectl --token=${KUBE_TOKEN} -n ${KUBE_NAMESPACE} \
+      delete deploy,service,ingress,secret,postgres \
+      -l app=${APP_NAME},env=${CI_ENVIRONMENT_SLUG}
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  when: manual
+  only:
+    - branches
+  except:
+    - master
