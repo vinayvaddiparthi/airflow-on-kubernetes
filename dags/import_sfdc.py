@@ -170,6 +170,7 @@ def create_dag(instance: str):
                 python_callable=ctas_to_snowflake,
                 op_kwargs={"sfdc_instance": instance, "sobject": sobject},
                 pool=f"{instance}_pool",
+                execution_timeout=datetime.timedelta(hours=4),
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
                 on_failure_callback=slack_on_fail,
@@ -182,6 +183,7 @@ def create_dag(instance: str):
                     "sobject": sobject,
                 },
                 pool="snowflake_pool",
+                execution_timeout=datetime.timedelta(hours=4),
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
             )
