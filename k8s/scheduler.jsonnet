@@ -42,11 +42,7 @@ local params = import "params.libsonnet";
             resources: {
               requests: {
                 cpu: "1",
-                memory: "768Mi",
-              },
-              limits: {
-                cpu: "1",
-                memory: "768Mi",
+                memory: "1Gi",
               },
             },
             envFrom: [
