@@ -4,6 +4,9 @@ stages:
   - cleanup
 
 variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_HOST: tcp://docker:2376
+  DOCKER_TLS_CERTDIR: "/certs"
   DOCKER_REPOSITORY: ${DOCKER_REPOSITORY_BASE_URI}/tc-data/airflow
   DOCKER_IMAGE_TAG: gitlab-${CI_PIPELINE_ID}
   APP_NAME: "airflow"
@@ -12,6 +15,8 @@ build_image:
   stage: build
   tags:
     - docker
+  services:
+    - docker:stable-dind
   image: docker:stable
   script:
     - apk add -U python3 && pip3 install awscli
