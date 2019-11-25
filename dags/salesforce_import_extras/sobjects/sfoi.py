@@ -260,7 +260,6 @@ sobjects = [
             "kwargs": {"condition": text("test_account__c = false")},
         },
     },
-    {"name": "accounthistory", "last_modified_field": "createddate"},
     {"name": "account_balance__c"},
     {"name": "account_balance__history", "last_modified_field": "createddate"},
     {"name": "account_sales_note__c"},
