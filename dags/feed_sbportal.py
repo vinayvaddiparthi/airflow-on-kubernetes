@@ -67,7 +67,7 @@ def create_dag(conn: str, catalog: str):
                 on_failure_callback=slack_on_fail,
             )
 
-            return dag
+        return dag
 
 
 for target, catalog in [
