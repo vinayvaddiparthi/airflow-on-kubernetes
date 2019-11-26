@@ -140,7 +140,7 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
     with engine.begin() as tx:
         tx.execute(
             f"""
-        CREATE OR REPLACE TABLE "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}"
+        CREATE OR REPLACE TRANSIENT TABLE "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}"
         AS SELECT DISTINCT t0.* FROM "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}" t0
         JOIN (
             SELECT id, max({last_modified_field}) AS max_date
