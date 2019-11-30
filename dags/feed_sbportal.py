@@ -38,7 +38,7 @@ def ctas(catalog: str, schema: str, table: str):
 
 def swap(conn: str, table: str):
     with PostgresHook(conn).get_sqlalchemy_engine().begin() as tx:
-        tx.execute(f'DROP TABLE "{table}"')
+        tx.execute(f'DROP TABLE IF EXISTS "{table}"')
         tx.execute(f'ALTER TABLE "{table}__swap" RENAME TO "{table}"')
 
 
