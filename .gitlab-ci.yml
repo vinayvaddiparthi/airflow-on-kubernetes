@@ -40,6 +40,8 @@ deploy_production:
         -V DOCKER_IMAGE_TAG \
         -V FERNET_KEY \
         -V WEBSERVER_SECRET_KEY \
+        -V AWS_SES_USERNAME \
+        -V AWS_SES_PASSWORD \
         -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
   environment:
     name: production
@@ -63,6 +65,8 @@ deploy_review:
         -V DOCKER_IMAGE_TAG \
         -V FERNET_KEY \
         -V WEBSERVER_SECRET_KEY \
+        -V AWS_SES_USERNAME \
+        -V AWS_SES_PASSWORD \
         -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
   environment:
     name: review/$CI_COMMIT_REF_NAME
