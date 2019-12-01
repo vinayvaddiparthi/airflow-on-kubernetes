@@ -9,4 +9,9 @@
 
     webserverSecretKey: std.extVar("WEBSERVER_SECRET_KEY"),
     fernetKey: std.extVar("FERNET_KEY"),
+
+    smtp: {
+      username: std.extVar("AWS_SES_USERNAME"),
+      password: std.extVar("AWS_SES_PASSWORD"),
+    },
 }

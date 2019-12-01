@@ -127,8 +127,8 @@ local airflowCfg = {
       smtp_ssl:false,
       smtp_port:587,
       smtp_mail_from:"airflow@tcdata.co",
-      smtp_user:"AKIA3ZHS3AUYNDPZLSEU",
-      smtp_password:"BM3nWMoOzRS0nVm2BMX1jVSRkhTmxeBDxT1ElYCbjESu",
+      #smtp_user:null,
+      #smtp_password:null,
 
     },
     sentry:{ 
