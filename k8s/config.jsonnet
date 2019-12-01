@@ -112,9 +112,9 @@ local airflowCfg = {
       page_size:100,
       navbar_color:"#3F0E40",
       default_dag_run_display_number:25,
-      enable_proxy_fix:true,
+      enable_proxy_fix:false,
       cookie_secure:true,
-      #cookie_samesite:null,
+      cookie_samesite:"Strict",
       default_wrap:true,
       rbac:true,
     },
@@ -133,7 +133,6 @@ local airflowCfg = {
     },
     sentry:{ 
       sentry_dsn:null,
-
     },
     celery:{ 
       celery_app_name:"airflow.executors.celery_executor",
