@@ -80,6 +80,14 @@ local params = import "../params.libsonnet";
             ],
             env: [
               {
+                name: "AWS_ACCESS_KEY_ID",
+                value: "$(S3_AWS_ACCESS_KEY_ID)",
+              },
+              {
+                name: "AWS_SECRET_ACCESS_KEY",
+                value: "$(S3_AWS_SECRET_ACCESS_KEY)",
+              },
+              {
                 name: "AIRFLOW_CONN_S3_LOGS",
                 value: "s3://$(BUCKET_NAME)",
               },
