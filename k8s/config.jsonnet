@@ -280,7 +280,9 @@ local airflowCfg = {
 
     },
     kubernetes_environment_variables:{
-      AIRFLOW_CONN_S3_LOGS: "s3://$(BUCKET_NAME)?aws_access_key_id=$(S3_AWS_ACCESS_KEY_ID)&aws_secret_access_key=$(S3_AWS_SECRET_ACCESS_KEY)",
+      AWS_ACCESS_KEY_ID: "$(S3_AWS_ACCESS_KEY_ID)",
+      AWS_SECRET_ACCESS_KEY: "$(S3_AWS_SECRET_ACCESS_KEY)",
+      AIRFLOW_CONN_S3_LOGS: "s3://$(BUCKET_NAME)",
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@" + params.app + "-" + params.env + "-" + "postgres" + "/postgres",
       AIRFLOW__CORE__REMOTE_BASE_LOG_FOLDER: "s3://$(BUCKET_NAME)/logs",
     },
