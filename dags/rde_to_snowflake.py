@@ -29,7 +29,7 @@ def swap(conn: str, database: str, schema: str, table: str):
     with SnowflakeHook(conn).get_sqlalchemy_engine().begin() as tx:
         tx.execute(f'DROP TABLE IF EXISTS "{database}"."{schema}"."{table}"')
         tx.execute(
-            f'ALTER TABLE IF EXISTS "{database}"."{schema}"."{table}__SWAP" RENAME TO "{table}"'
+            f'ALTER TABLE IF EXISTS "{database}"."{schema}"."{table}__SWAP" RENAME TO "{database}"."{schema}"."{table}"'
         )
 
 
