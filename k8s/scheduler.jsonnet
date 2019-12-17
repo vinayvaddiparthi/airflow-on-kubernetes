@@ -65,7 +65,7 @@ local params = import "params.libsonnet";
             env: [
               {
                 name: "AIRFLOW_CONN_S3_LOGS",
-                value: "s3://$(BUCKET_NAME)?aws_access_key_id=$(S3_AWS_ACCESS_KEY_ID)&aws_secret_access_key=$(S3_AWS_SECRET_ACCESS_KEY)",
+                value: "s3://$(BUCKET_NAME)",
               },
               {
                 name: "AIRFLOW__CORE__SQL_ALCHEMY_CONN",
