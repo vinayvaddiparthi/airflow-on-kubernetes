@@ -1,9 +1,8 @@
 import pendulum
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.python_operator import PythonOperator
-from sqlalchemy import create_engine, column, text, VARCHAR, cast
+from sqlalchemy import create_engine, text
 from sqlalchemy.sql import Select
 
 from utils.failure_callbacks import slack_on_fail
