@@ -9,11 +9,11 @@ from utils.failure_callbacks import slack_on_fail
 
 
 def ctas(catalog: str, schema: str, table: str):
-    engine = create_engine("presto://presto-production-internal.presto.svc:8080/sf_production_appv3")
+    engine = create_engine(f"presto://presto-production-internal.presto.svc:8080/{catalog}")
 
     with engine.begin() as tx:
         selectable = Select(
-            [text("*")], from_obj=text(f'"production_appv3"."{schema}"."{table}"')
+            [text("*")], from_obj=text(f'"{catalog}"."{schema}"."{table}"')
         )
 
         stmt = f'CREATE TABLE IF NOT EXISTS "{catalog}"."{schema}"."{table}__swap" AS {selectable}'
