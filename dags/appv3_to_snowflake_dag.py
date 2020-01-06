@@ -44,8 +44,6 @@ def create_dag():
         for schema, table in [
             ("tc_salesvolume", "currency_code"),
             ("tc_salesvolume", "data_quality"),
-            ("tc_salesvolume", "databasechangelog"),
-            ("tc_salesvolume", "databasechangeloglock"),
             ("tc_salesvolume", "ext_txn"),
             ("tc_salesvolume", "fin_account"),
             ("tc_salesvolume", "job_log"),
