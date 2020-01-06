@@ -36,4 +36,6 @@ def create_dag():
             python_callable=runq),
         # on_failure_callback=slack_on_fail,
 
+    return dag
+
 globals()["accounthistory_import"] = create_dag()
