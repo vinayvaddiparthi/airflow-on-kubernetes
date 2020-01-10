@@ -4,7 +4,7 @@ import pendulum
 from sqlalchemy import create_engine
 
 query = """
-insert into sf_salesforce.sfni_raw.accounthistory select
+insert into sf_salesforce.sfoi_raw.accounthistory select
 cast(id as varchar(18)) as id,
 FALSE as isdeleted,
 cast(accountid as varchar(18)),
