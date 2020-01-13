@@ -15,7 +15,7 @@ with DAG(
     schedule_interval="10,50 8-18 * * 1-5",
     catchup=False,
 ) as dag:
-    for sobject in [{"name": "c2g__codatransactionlineitem__c"}]:
+    for sobject in [{"name": "c2g__codatransactionlineitem__c"}, {"name": "c2g__codatransaction__c"}]:
         dag << PythonOperator(
             task_id=f'glue__{sobject["name"]}',
             python_callable=ctas_to_glue,
