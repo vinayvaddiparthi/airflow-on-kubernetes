@@ -1,4 +1,4 @@
-local params = import "params.libsonnet";
+local params = import "../params.libsonnet";
 
 {
   apiVersion: "kubedb.com/v1alpha1",
