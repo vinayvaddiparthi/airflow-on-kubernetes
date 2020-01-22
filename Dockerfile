@@ -8,7 +8,7 @@ ENV TERM linux
 ARG AIRFLOW_VERSION=1.10.5
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
 ARG AIRFLOW_DEPS="kubernetes,s3,snowflake"
-ARG PYTHON_DEPS="snowflake-sqlalchemy,xmltodict"
+ARG PYTHON_DEPS="snowflake-sqlalchemy xmltodict"
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
 
 # Define en_US.
