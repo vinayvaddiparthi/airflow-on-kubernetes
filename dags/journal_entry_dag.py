@@ -18,7 +18,7 @@ from netsuite_extras import netsuite_helper
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
-    "start_date": datetime(2019, 12, 22),
+    "start_date": datetime(2020, 1, 22),
     "retries": 0,
 }
 
