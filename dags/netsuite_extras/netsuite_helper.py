@@ -127,27 +127,43 @@ def employee_search_reversed(attr, value):
     """
 
 
-def employee(first_name, last_name, gender, title, department, location, subsidiary, email):
+def employee(
+    first_name, last_name, gender, title, department, location, subsidiary, email
+):
     employee_record = [
-        "<platformMsg:record xsi:type='ns1:Employee' xmlns:ns1='urn:employees_2019_1.lists.webservices.netsuite.com' xmlns:ns2='urn:core_2019_1.platform.webservices.netsuite.com'>"]
+        "<platformMsg:record xsi:type='ns1:Employee' xmlns:ns1='urn:employees_2019_1.lists.webservices.netsuite.com' xmlns:ns2='urn:core_2019_1.platform.webservices.netsuite.com'>"
+    ]
     if first_name:
-        employee_record.append(f"<ns1:firstName xsi:type='xsd:string'>{escape(first_name)}</ns1:firstName>")
+        employee_record.append(
+            f"<ns1:firstName xsi:type='xsd:string'>{escape(first_name)}</ns1:firstName>"
+        )
     if last_name:
-        employee_record.append(f"<ns1:lastName xsi:type='xsd:string'>{escape(last_name)}</ns1:lastName>")
+        employee_record.append(
+            f"<ns1:lastName xsi:type='xsd:string'>{escape(last_name)}</ns1:lastName>"
+        )
     if gender:
         # _omitted
         # _female
         # _male
         employee_record.append(
-            f"<ns1:gender xsi:type='urn:types.employees.lists.webservices.netsuite.com'>{gender}</ns1:gender>")
+            f"<ns1:gender xsi:type='urn:types.employees.lists.webservices.netsuite.com'>{gender}</ns1:gender>"
+        )
     if title:
-        employee_record.append(f"<ns1:title xsi:type='xsd:string'>{escape(title)}</ns1:title>")
+        employee_record.append(
+            f"<ns1:title xsi:type='xsd:string'>{escape(title)}</ns1:title>"
+        )
     if department:
-        employee_record.append(f"<ns1:firstName xsi:type='xsd:string'>{escape(first_name)}</ns1:firstName>")
+        employee_record.append(
+            f"<ns1:firstName xsi:type='xsd:string'>{escape(first_name)}</ns1:firstName>"
+        )
     if location:
-        employee_record.append(f"<ns1:firstName xsi:type='xsd:string'>{escape(first_name)}</ns1:firstName>")
+        employee_record.append(
+            f"<ns1:firstName xsi:type='xsd:string'>{escape(first_name)}</ns1:firstName>"
+        )
     if subsidiary:
-        employee_record.append(f"<ns1:subsidiary xsi:type='platformCore:RecordRef' internalId='{subsidiary}'/>")
+        employee_record.append(
+            f"<ns1:subsidiary xsi:type='platformCore:RecordRef' internalId='{subsidiary}'/>"
+        )
     if email:
         employee_record.append(f"<ns1:email xsi:type='xsd:string'>{email}</ns1:email>")
     employee_record.append("</platformMsg:record>")
@@ -156,23 +172,45 @@ def employee(first_name, last_name, gender, title, department, location, subsidi
 
 
 def escape(value):
-    return value.replace('"', '*').replace("'", "*").replace("<", "-").replace(">", "-").replace("&", " and ")
+    return (
+        value.replace('"', "*")
+        .replace("'", "*")
+        .replace("<", "-")
+        .replace(">", "-")
+        .replace("&", " and ")
+    )
 
 
 def get_journal_entry_payload(created_date, rows, email, password, account, app_id):
-    print('get_journal_entry_payload:')
+    print("get_journal_entry_payload:")
     try:
-        if rows[0]['subsidiary_id']:
-            subsidiary = get_subsidiary(int(rows[0]['subsidiary_id']))
-            tran_date = get_tran_date(rows[0]['tran_date'])
+        if rows[0]["subsidiary_id"]:
+            subsidiary = get_subsidiary(int(rows[0]["subsidiary_id"]))
+            tran_date = get_tran_date(rows[0]["tran_date"])
             lines = []
             for row in rows:
-                if row['debit'] and float(row['debit']) > 0:
-                    lines.append(get_journal_entry_line('debit', int(row['account_internal_id']), abs(row['debit']), created_date))
-                if row['credit'] and float(row['credit']) < 0:
-                    lines.append(get_journal_entry_line('credit', int(row['account_internal_id']), abs(row['credit']), created_date))
+                if row["debit"] and float(row["debit"]) > 0:
+                    lines.append(
+                        get_journal_entry_line(
+                            "debit",
+                            int(row["account_internal_id"]),
+                            abs(row["debit"]),
+                            created_date,
+                        )
+                    )
+                if row["credit"] and float(row["credit"]) < 0:
+                    lines.append(
+                        get_journal_entry_line(
+                            "credit",
+                            int(row["account_internal_id"]),
+                            abs(row["credit"]),
+                            created_date,
+                        )
+                    )
             journal_entry_line_list = get_journal_entry_line_list(lines)
-            journal_entry = get_journal_entry(subsidiary, tran_date, journal_entry_line_list)
+            journal_entry = get_journal_entry(
+                subsidiary, tran_date, journal_entry_line_list
+            )
             return get_body(add(journal_entry), email, password, account, app_id)
     except Exception as e:
         print(f"Error: {rows}")
@@ -180,4 +218,6 @@ def get_journal_entry_payload(created_date, rows, email, password, account, app_
 
 
 def search_employees(attr, value, email, password, account, app_id):
-    return get_body(search(employee_search_reversed(attr, value)), email, password, account, app_id)
+    return get_body(
+        search(employee_search_reversed(attr, value)), email, password, account, app_id
+    )
