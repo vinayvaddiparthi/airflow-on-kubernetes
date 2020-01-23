@@ -9,7 +9,9 @@ from utils.failure_callbacks import slack_on_fail
 
 
 def ctas(catalog: str, schema: str, table: str):
-    engine = create_engine("presto://presto-production-internal.presto.svc:8080/sf_production_appv3")
+    engine = create_engine(
+        "presto://presto-production-internal.presto.svc:8080/sf_production_appv3"
+    )
 
     with engine.begin() as tx:
         selectable = Select(
@@ -57,7 +59,11 @@ def create_dag():
             dag << PythonOperator(
                 task_id=f"ctas__{schema}__{table}",
                 python_callable=ctas,
-                op_kwargs={"catalog": "sf_production_appv3", "schema": schema, "table": table},
+                op_kwargs={
+                    "catalog": "sf_production_appv3",
+                    "schema": schema,
+                    "table": table,
+                },
                 # on_failure_callback=slack_on_fail,
             ) >> PythonOperator(
                 task_id=f"swap__{schema}__{table}",
