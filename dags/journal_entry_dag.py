@@ -47,7 +47,7 @@ with DAG(
         date_tag = cd.replace("-", "")
         print(f"Created_date: {kwargs['ds']}")
         with open(
-            "airflow/dags/netsuite_extras/queries/get_tli_by_created_date.sql"
+            "dags/netsuite_extras/queries/get_tli_by_created_date.sql"
         ) as f:
             sql_template = Template(f.read())
         sql = sql_template.render(
@@ -77,7 +77,7 @@ with DAG(
     def get_unbalanced_tli_by_subsidiary(**kwargs):
         date_tag = kwargs["ds"].replace("-", "")
         with open(
-            "airflow/dags/netsuite_extras/queries/get_unbalanced_tran_by_subsidiary.sql"
+            "dags/netsuite_extras/queries/get_unbalanced_tran_by_subsidiary.sql"
         ) as f:
             sql_template = Template(f.read())
             sql = sql_template.render(env="test", created_date_trim=date_tag)
@@ -148,7 +148,7 @@ with DAG(
         date_tag = kwargs["ds"].replace("-", "")
         execution_time = kwargs["ts"]
         with open(
-            "airflow/dags/netsuite_extras/queries/update_tli_unbalanced_historical.sql"
+            "dags/netsuite_extras/queries/update_tli_unbalanced_historical.sql"
         ) as f:
             sql_template = Template(f.read())
             sql = sql_template.render(
@@ -170,7 +170,7 @@ with DAG(
     def send_journal_entries(**kwargs):
         created_date = kwargs["ds"]
         with open(
-            "airflow/dags/netsuite_extras/queries/create_journal_entry_line.sql"
+            "dags/netsuite_extras/queries/create_journal_entry_line.sql"
         ) as f:
             sql_template = Template(f.read())
             sql = sql_template.render(
@@ -285,7 +285,7 @@ with DAG(
     def log_uploaded(**kwargs):
         print("log_uploaded")
         created_date = kwargs["ds"]
-        with open("airflow/dags/netsuite_extras/queries/log_uploaded.sql") as f:
+        with open("dags/netsuite_extras/queries/log_uploaded.sql") as f:
             sql_template = Template(f.read())
         log_history_sql = sql_template.render(
             env="test", created_date_trim=created_date.replace("-", "")
@@ -305,7 +305,7 @@ with DAG(
     def log_error(**kwargs):
         print("log_uploaded")
         created_date = kwargs["ds"]
-        with open("airflow/dags/netsuite_extras/queries/log_error.sql") as f:
+        with open("dags/netsuite_extras/queries/log_error.sql") as f:
             sql_template = Template(f.read())
         log_history_sql = sql_template.render(
             env="test", created_date_trim=created_date.replace("-", "")
@@ -332,7 +332,7 @@ with DAG(
         subsidiary_id,
     ):
         print(f"log_status:{uploaded}")
-        with open("airflow/dags/netsuite_extras/queries/log_status.sql") as f:
+        with open("dags/netsuite_extras/queries/log_status.sql") as f:
             sql_template = Template(f.read())
         log_status_sql = sql_template.render(
             je_internal_id=je_internal_id,
