@@ -66,4 +66,4 @@ def create_table_swap_dag(
                 },
             )
 
-        return dag
+    return dag
