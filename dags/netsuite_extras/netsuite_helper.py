@@ -194,7 +194,7 @@ def get_journal_entry_payload(created_date, rows, email, password, account, app_
                         get_journal_entry_line(
                             "debit",
                             int(row["account_internal_id"]),
-                            abs(row["debit"]),
+                            abs(round(row["debit"], 2)),
                             created_date,
                         )
                     )
@@ -203,7 +203,7 @@ def get_journal_entry_payload(created_date, rows, email, password, account, app_
                         get_journal_entry_line(
                             "credit",
                             int(row["account_internal_id"]),
-                            abs(row["credit"]),
+                            abs(round(row["credit"], 2)),
                             created_date,
                         )
                     )
