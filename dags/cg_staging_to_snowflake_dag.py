@@ -6,7 +6,7 @@ globals()["cg_staging_to_snowflake"] = create_table_swap_dag(
     "cg_staging_to_snowflake",
     pendulum.datetime(2020, 1, 22, tzinfo=pendulum.timezone("America/Toronto")),
     "cg_lms_staging",
-    "sf_credigenie",
+    "sf_creditgenie",
     "creditgenie",
     [
         {
