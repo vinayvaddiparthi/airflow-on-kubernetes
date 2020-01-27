@@ -46,9 +46,7 @@ with DAG(
         cd = kwargs["ds"]
         date_tag = cd.replace("-", "")
         print(f"Created_date: {kwargs['ds']}")
-        with open(
-            "dags/netsuite_extras/queries/get_tli_by_created_date.sql"
-        ) as f:
+        with open("dags/netsuite_extras/queries/get_tli_by_created_date.sql") as f:
             sql_template = Template(f.read())
         sql = sql_template.render(
             created_date=cd, env=f"{env}", create_date_trim=date_tag
@@ -169,9 +167,7 @@ with DAG(
 
     def send_journal_entries(**kwargs):
         created_date = kwargs["ds"]
-        with open(
-            "dags/netsuite_extras/queries/create_journal_entry_line.sql"
-        ) as f:
+        with open("dags/netsuite_extras/queries/create_journal_entry_line.sql") as f:
             sql_template = Template(f.read())
             sql = sql_template.render(
                 created_date=created_date,
