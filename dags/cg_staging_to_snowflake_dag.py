@@ -10,6 +10,14 @@ globals()["cg_staging_to_snowflake"] = create_table_swap_dag(
     "creditgenie",
     [
         {
+            "src": {"schema": "cg-lms", "table": "transaction_discount"},
+            "dst": {"schema": "staging", "table": "transaction_discount"},
+        },
+        {
+            "src": {"schema": "cg-lms", "table": "refund_partialrefund"},
+            "dst": {"schema": "staging", "table": "refund_partialrefund"},
+        },
+        {
             "src": {"schema": "cg-lms", "table": "bankaccount_bankaccount"},
             "dst": {"schema": "staging", "table": "bankaccount_bankaccount"},
         },
