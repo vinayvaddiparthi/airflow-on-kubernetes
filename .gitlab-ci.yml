@@ -1,15 +1,26 @@
 stages:
+  - pre-test
   - build
   - deploy
   - cleanup
 
 variables:
+  PYTHON_VERSION: "3.8"
   DOCKER_DRIVER: overlay2
   DOCKER_HOST: tcp://docker:2376
   DOCKER_TLS_CERTDIR: "/certs"
   DOCKER_REPOSITORY: ${DOCKER_REPOSITORY_BASE_URI}/tc-data/airflow
   DOCKER_IMAGE_TAG: gitlab-${CI_PIPELINE_ID}
   APP_NAME: "airflow"
+
+black:
+  stage: pre-test
+  tags:
+    - docker
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install black
+    - black --check .
 
 build_image:
   stage: build
