@@ -12,6 +12,15 @@ PRESTO_ADDR = "presto://presto-production-internal.presto.svc:8080"
 
 
 def format_load_as_json_query(catalog: str, schema: str, table: str) -> Select:
+    """
+    Takes a catalog, schema and table as input and returns a Select object
+    that represents a query to load the data and transform it in JSON.
+
+    :param catalog:
+    :param schema:
+    :param table:
+    :return:
+    """
     from_obj = text(f'"{catalog}"."{schema}"."{table}"')
 
     engine = create_engine(PRESTO_ADDR)
@@ -40,7 +49,14 @@ def format_load_as_json_query(catalog: str, schema: str, table: str) -> Select:
     return Select(columns=[json_fn], from_obj=from_obj)
 
 
-def extract_load(src: Dict, dst: Dict) -> None:
+def extract_load(src: Dict[str, str], dst: Dict[str, str]) -> None:
+    """
+    Extracts data from source table src and loads it into table dst in JSON format.
+
+    :param src:
+    :param dst:
+    :return:
+    """
     to_obj = text(f'"{dst["catalog"]}"."{dst["schema"]}"."{dst["table"]}__SWAP"')
 
     selectable = format_load_as_json_query(src["catalog"], src["schema"], src["table"])
@@ -49,7 +65,14 @@ def extract_load(src: Dict, dst: Dict) -> None:
         tx.execute(f"CREATE TABLE IF NOT EXISTS {to_obj} AS {selectable}")
 
 
-def snowflake_swap(src: Dict, dst: Dict) -> None:
+def snowflake_swap(src: Dict[str, str], dst: Dict[str, str]) -> None:
+    """
+    Performs a table swap on the destination table in Snowflake in a transaction.
+
+    :param src:
+    :param dst:
+    :return:
+    """
     from_obj = text(
         f'"{src["catalog"].upper()}"."{src["schema"].upper()}"."{src["table"].upper()}__SWAP"'
     )
