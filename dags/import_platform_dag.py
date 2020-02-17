@@ -23,8 +23,6 @@ def format_load_as_json_query(catalog: str, schema: str, table: str) -> Select:
     """
     from_obj = text(f'"{catalog}"."{schema}"."{table}"')
 
-    engine = create_engine(PRESTO_ADDR)
-
     column_names_selectable = Select(
         columns=[text("column_name")],
         from_obj=text(f'"{catalog}"."information_schema"."columns"'),
@@ -35,7 +33,7 @@ def format_load_as_json_query(catalog: str, schema: str, table: str) -> Select:
         ),
     )
 
-    with engine.begin() as tx:
+    with create_engine(PRESTO_ADDR).begin() as tx:
         resultset = [x[0] for x in tx.execute(column_names_selectable).fetchall()]
 
     column_names = [f"'{column(x)}'" for x in resultset]
@@ -60,7 +58,7 @@ def load(src: Dict[str, str], dst: Dict[str, str]) -> None:
 
     selectable = format_load_as_json_query(src["catalog"], src["schema"], src["table"])
 
-    with create_engine(PRESTO_ADDR) as tx:
+    with create_engine(PRESTO_ADDR).begin() as tx:
         tx.execute(f"CREATE TABLE IF NOT EXISTS {to_obj} AS {selectable}")
 
 
