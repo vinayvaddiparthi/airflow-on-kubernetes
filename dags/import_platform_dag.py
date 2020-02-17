@@ -48,7 +48,7 @@ def format_load_as_json_query(catalog: str, schema: str, table: str) -> Select:
     return Select(columns=[json_fn], from_obj=from_obj)
 
 
-def extract_load(src: Dict[str, str], dst: Dict[str, str]) -> None:
+def load(src: Dict[str, str], dst: Dict[str, str]) -> None:
     """
     Extracts data from source table src and loads it into table dst in JSON format.
 
@@ -105,7 +105,7 @@ def _create_dag(
         for catalog, schema, table in resultset:
             dag << PythonOperator(
                 task_id=f"extract_load__{catalog}__{schema}__{table}",
-                python_callable=extract_load,
+                python_callable=load,
                 op_kwargs={
                     "src": {"catalog": catalog, "schema": schema, "table": table,},
                     "dst": {
@@ -130,13 +130,13 @@ def _create_dag(
     return dag
 
 
-globals()["import_cg_lms_generic"] = _create_dag(
-    "import__cg_lms_prod__cg-lms",
+globals()["import_kyc_staging"] = _create_dag(
+    "import__kyc_staging",
     start_date=pendulum.datetime(
         2020, 2, 12, tzinfo=pendulum.timezone("America/Toronto"),
     ),
-    presto_input_catalog="cg_lms_prod",
-    presto_output_catalog="sf_cg_lms_prod",
-    snow_dbname="CG_LMS_PROD",
-    schema="cg-lms",
+    presto_input_catalog="airflow_sandbox_pr",
+    presto_output_catalog="sf_kyc_staging",
+    snow_dbname="KYC_STAGING",
+    schema="public",
 )
