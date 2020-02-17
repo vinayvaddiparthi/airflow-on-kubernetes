@@ -41,7 +41,9 @@ def format_load_as_json_query(catalog: str, schema: str, table: str) -> Select:
     names_array = text(f"ARRAY[{', '.join(column_names)}]")
     expr_array = text(f"ARRAY[{', '.join(casts)}]")
 
-    json_fn = func.json_format(cast(func.map(names_array, expr_array), JSON))
+    json_fn = func.json_format(cast(func.map(names_array, expr_array), JSON)).alias(
+        "data_"
+    )
 
     return Select(columns=[json_fn], from_obj=from_obj)
 
