@@ -1159,6 +1159,7 @@ sobjects = [
     {"name": "one_penny_cash_entry__history", "last_modified_field": "createddate"},
     {"name": "open_cases__c"},
     {"name": "opportunity", "selectable": {"callable": format_wide_table_select}},
+    {"name": "opportunityfieldhistory", "last_modified_field": "createddate"},
     {"name": "opportunity_sales_note__c"},
     {"name": "opportunity_statistic__c"},
     {"name": "opportunity_statistic__history", "last_modified_field": "createddate"},
