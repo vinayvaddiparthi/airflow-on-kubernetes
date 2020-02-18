@@ -73,7 +73,7 @@ def snowflake_swap(src: Dict[str, str], dst: Dict[str, str]) -> None:
     :return:
     """
     from_obj = text(
-        f'"{src["catalog"].upper()}"."{src["schema"].upper()}"."{src["table"].upper()}__SWAP"'
+        f'"{src["catalog"].upper()}"."{src["schema"].upper()}"."{src["table"].upper()}"'
     )
     to_obj = text(
         f'"{dst["catalog"].upper()}"."{dst["schema"].upper()}"."{dst["table"].upper()}"'
