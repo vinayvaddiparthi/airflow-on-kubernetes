@@ -1,4 +1,8 @@
+import logging
 from typing import Dict
+
+from s3fs import S3FileSystem
+
 
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -9,6 +13,11 @@ from airflow import DAG
 
 
 PRESTO_ADDR = "presto://presto-production-internal.presto.svc:8080"
+
+
+def extract(archive_path: str, sandbox_conn: str):
+    fs = S3FileSystem()
+    print(fs.ls(""))
 
 
 def format_load_as_json_query(catalog: str, schema: str, table: str) -> Select:
@@ -42,7 +51,7 @@ def format_load_as_json_query(catalog: str, schema: str, table: str) -> Select:
     expr_array = text(f"ARRAY[{', '.join(casts)}]")
 
     json_fn = func.json_format(cast(func.map(names_array, expr_array), JSON)).alias(
-        "data_"
+        "data"
     )
 
     return Select(columns=[json_fn], from_obj=from_obj)
@@ -81,7 +90,15 @@ def snowflake_swap(src: Dict[str, str], dst: Dict[str, str]) -> None:
 
     with SnowflakeHook("snowflake_default").get_sqlalchemy_engine().begin() as tx:
         tx.execute(f"DROP TABLE IF EXISTS {to_obj}")
-        tx.execute(f"ALTER TABLE IF EXISTS {from_obj} RENAME TO {to_obj}")
+
+        try:
+            tx.execute(f"ALTER TABLE IF EXISTS {from_obj} RENAME TO {to_obj}")
+        except Exception as e:
+            # if the previous command fails for any reason,
+            # we will attempt to restore the previous version
+            # of to_obj
+            tx.execute(f"UNDROP TABLE {to_obj}")
+            raise e
 
 
 def _create_dag(
@@ -104,7 +121,7 @@ def _create_dag(
     with DAG(dag_id=dag_id, start_date=start_date, schedule_interval="@daily",) as dag:
         for catalog, schema, table in resultset:
             dag << PythonOperator(
-                task_id=f"extract_load__{catalog}__{schema}__{table}",
+                task_id=f"load__{catalog}__{schema}__{table}",
                 python_callable=load,
                 op_kwargs={
                     "src": {"catalog": catalog, "schema": schema, "table": table,},
