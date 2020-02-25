@@ -1,0 +1,189 @@
+import json
+from datetime import datetime, timedelta
+
+import pandas as pd
+import snowflake.connector
+from airflow import DAG
+from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
+from airflow.hooks.base_hook import BaseHook
+from airflow.operators.python_operator import PythonOperator
+from apiclient.discovery import build
+from oauth2client.service_account import ServiceAccountCredentials
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+
+from utils.failure_callbacks import slack_on_fail
+
+# view_id from GA: Overall - IP and spam filtered
+VIEW_ID = "102945619"
+SCOPES = ["https://www.googleapis.com/auth/analytics.readonly"]
+ENV = "public"
+ROW_LIMIT = 10000
+
+default_args = {
+    "owner": "tc",
+    "depends_on_past": False,
+    "start_date": datetime(2020, 1, 1),
+    "retries": 0,
+}
+
+reports = {
+    "source_medium": {
+        "reportRequests": [
+            {
+                "viewId": VIEW_ID,
+                "dateRanges": [{"startDate": None, "endDate": None}],
+                "metrics": [
+                    # acquisition
+                    {"expression": "ga:users"},
+                    {"expression": "ga:newUsers"},
+                    {"expression": "ga:sessions"},
+                    # behavior
+                    {"expression": "ga:bounceRate"},
+                    {"expression": "ga:pageviewsPerSession"},
+                    {"expression": "ga:avgSessionDuration"},
+                    # conversion
+                    {"expression": "ga:goal1ConversionRate"},
+                    {"expression": "ga:goal1Completions"},
+                    {"expression": "ga:goal1Value"},
+                ],
+                "dimensions": [{"name": "ga:sourceMedium"}, {"name": "ga:dimension5"}],
+                "pageToken": "0",
+                "pageSize": ROW_LIMIT,
+            }
+        ]
+    },
+    "google_ads_campaigns": {
+        "reportRequests": [
+            {
+                "viewId": VIEW_ID,
+                "dateRanges": [{"startDate": None, "endDate": None}],
+                "metrics": [
+                    # acquisition
+                    {"expression": "ga:adClicks"},
+                    {"expression": "ga:adCost"},
+                    {"expression": "ga:CPC"},
+                    {"expression": "ga:users"},
+                    {"expression": "ga:sessions"},
+                    # behavior
+                    {"expression": "ga:bounceRate"},
+                    {"expression": "ga:pageviewsPerSession"},
+                    # conversion
+                    {"expression": "ga:goal1ConversionRate"},
+                    {"expression": "ga:goal1Completions"},
+                    {"expression": "ga:goal1Value"},
+                ],
+                "dimensions": [{"name": "ga:campaign"}, {"name": "ga:dimension5"}],
+                "pageToken": "0",
+                "pageSize": ROW_LIMIT,
+            }
+        ]
+    },
+}
+
+with DAG(
+    "google_analytics_to_snowflake_dag",
+    schedule_interval="@daily",
+    default_args=default_args,
+) as dag:
+
+    def initialize_analytics_reporting():
+        hook = GoogleCloudBaseHook(gcp_conn_id="google_analytics_default")
+
+        key = json.loads(hook._get_field("keyfile_dict"))
+        credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+            key, scopes=SCOPES
+        )
+        # Build the service object.
+        analytics = build("analyticsreporting", "v4", credentials=credentials)
+
+        return analytics
+
+    def get_report(analytics, table, ds, page_token):
+        print(f"Current page_token: {page_token}")
+        prev_ds = datetime.strptime(ds, "%Y-%m-%d").date() - timedelta(days=1)
+        payload = reports[table]
+        payload["reportRequests"][0]["dateRanges"][0]["startDate"] = str(prev_ds)
+        payload["reportRequests"][0]["dateRanges"][0]["endDate"] = ds
+        if page_token is not None:
+            print(f"Overwrite page_token:{page_token}")
+            payload["reportRequests"][0]["pageToken"] = page_token
+        return analytics.reports().batchGet(body=payload).execute()
+
+    def transform_response_to_df(response, ds):
+        page_token = None
+        if "nextPageToken" in response.get("reports", [])[0]:
+            page_token = response.get("reports", [])[0]["nextPageToken"]
+            print(f"nextPageToken:{page_token}")
+        # getting the first report
+        for report in response.get("reports", []):
+            columnHeader = report.get("columnHeader", {})
+            dimensionHeaders = columnHeader.get("dimensions", [])
+            metricHeaders = columnHeader.get("metricHeader", {}).get(
+                "metricHeaderEntries", []
+            )
+            list = []
+            for row in report.get("data", {}).get("rows", []):
+                dimensions = row.get("dimensions", [])
+                dateRangeValues = row.get("metrics", [])
+                dict = {}
+                for i, values in enumerate(dateRangeValues):
+                    # print('Date range: ' + str(i))
+                    dict["date"] = pd.to_datetime(ds, format="%Y-%m-%d")
+                    for header, dimension in zip(dimensionHeaders, dimensions):
+                        # print(header + ': ' + dimension)
+                        dict[header.replace("ga:", "")] = dimension
+                    for metricHeader, value in zip(metricHeaders, values.get("values")):
+                        # print(metricHeader.get('name') + ': ' + value)
+                        dict[metricHeader.get("name").replace("ga:", "")] = value
+                list.append(dict)
+            df = pd.DataFrame(list)
+            return df, page_token
+
+    def df_to_sql(conn: str, schema: str, table: str, **context):
+        ds = context["ds"]
+        prev_ds = datetime.strptime(ds, "%Y-%m-%d").date() - timedelta(days=1)
+        print(f"Date Range:{prev_ds} - {ds}")
+        analytics = initialize_analytics_reporting()
+        page_token = "0"
+        while page_token is not None:
+            response = get_report(analytics, table, ds, page_token)
+            df, token = transform_response_to_df(response, ds)
+            df["date"] = df["date"].dt.date
+            snowflake_hook = BaseHook.get_connection(conn)
+
+            with snowflake.connector.connect(
+                user=snowflake_hook.login,
+                password=snowflake_hook.password,
+                account=snowflake_hook.host,
+                warehouse="etl",
+                database="google_analytics",
+                schema=schema,
+                ocsp_fail_open=False,
+            ) as conn:
+                engine = create_engine(
+                    f"snowflake://{snowflake_hook.host}.snowflakecomputing.com",
+                    poolclass=StaticPool,
+                    creator=lambda: conn,
+                )
+                if response:
+                    df.to_sql(table, engine, if_exists="append", index=False)
+                    print(f"Row count: {len(response)}")
+            if token is not None:
+                page_token = str(token)
+            else:
+                page_token = None
+            print(f"Row count: {len(df.values)} loaded")
+
+    for report in reports:
+        dag << PythonOperator(
+            task_id=f"task_{report}",
+            python_callable=df_to_sql,
+            op_kwargs={
+                "conn": "snowflake_default",
+                "schema": ENV,
+                "table": f"{report}",
+            },
+            provide_context=True,
+            on_failure_callback=slack_on_fail,
+        )
