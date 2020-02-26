@@ -12,7 +12,7 @@ from sqlalchemy.sql import Select
 from airflow import DAG
 
 
-PRESTO_ADDR = "presto://localhost:8080"
+PRESTO_ADDR = "presto://presto-production-coordinator.presto.svc:8080"
 
 
 def extract(archive_path: str, sandbox_conn: str):
