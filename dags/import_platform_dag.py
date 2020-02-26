@@ -1,8 +1,4 @@
-import logging
 from typing import Dict
-
-from s3fs import S3FileSystem
-
 
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -13,11 +9,6 @@ from airflow import DAG
 
 
 PRESTO_ADDR = "presto://presto-production-internal.presto.svc:8080"
-
-
-def extract(archive_path: str, sandbox_conn: str):
-    fs = S3FileSystem()
-    print(fs.ls(""))
 
 
 def format_load_as_json_query(catalog: str, schema: str, table: str) -> Select:
