@@ -4,9 +4,8 @@ import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from sqlalchemy import text, and_, create_engine, cast, VARCHAR, column, JSON, func
-from sqlalchemy.sql import Select
+from sqlalchemy.sql import Select, label
 from airflow import DAG
-
 
 PRESTO_ADDR = "presto://presto-production-internal.presto.svc:8080"
 
@@ -54,7 +53,8 @@ def load(src: Dict[str, str], dst: Dict[str, str]) -> None:
     :param dst:
     :return:
     """
-    to_obj = text(f'"{dst["catalog"]}"."{dst["schema"]}"."{dst["table"]}__SWAP"')
+
+    to_obj = text(f'"{dst["catalog"]}"."{dst["schema"]}"."{dst["table"]}"')
 
     selectable = format_load_as_json_query(src["catalog"], src["schema"], src["table"])
 
@@ -78,16 +78,13 @@ def snowflake_swap(src: Dict[str, str], dst: Dict[str, str]) -> None:
     )
 
     with SnowflakeHook("snowflake_default").get_sqlalchemy_engine().begin() as tx:
-        tx.execute(f"DROP TABLE IF EXISTS {to_obj}")
+        selectable = Select(
+            columns=[label("data", func.parse_json(column("json_format_1")))],
+            from_obj=from_obj,
+        )
 
-        try:
-            tx.execute(f"ALTER TABLE IF EXISTS {from_obj} RENAME TO {to_obj}")
-        except Exception as e:
-            # if the previous command fails for any reason,
-            # we will attempt to restore the previous version
-            # of to_obj and re-raise the exception.
-            tx.execute(f"UNDROP TABLE {to_obj}")
-            raise e
+        tx.execute(f"CREATE OR REPLACE TABLE {to_obj} AS {selectable}")
+        tx.execute(f"DROP TABLE {from_obj}")
 
 
 def _create_dag(
@@ -98,6 +95,8 @@ def _create_dag(
     snow_dbname: str,
     schema: str,
 ) -> DAG:
+    SUFFIX = "SWAP"
+
     stmt = Select(
         columns=[column("table_catalog"), column("table_schema"), column("table_name")],
         from_obj=text(f'"{presto_input_catalog}"."information_schema"."tables"'),
@@ -117,7 +116,7 @@ def _create_dag(
                     "dst": {
                         "catalog": presto_output_catalog,
                         "schema": schema,
-                        "table": table,
+                        "table": f"{table}__{SUFFIX}",
                     },
                 },
             ) >> PythonOperator(
@@ -127,7 +126,7 @@ def _create_dag(
                     "src": {
                         "catalog": snow_dbname,
                         "schema": schema,
-                        "table": f"{table}__SWAP",
+                        "table": f"{table}__{SUFFIX}",
                     },
                     "dst": {"catalog": snow_dbname, "schema": schema, "table": table,},
                 },
@@ -139,7 +138,7 @@ def _create_dag(
 globals()["import__zt_production_core"] = _create_dag(
     "import__zt_production_core",
     start_date=pendulum.datetime(
-        2020, 2, 12, tzinfo=pendulum.timezone("America/Toronto"),
+        2020, 2, 27, tzinfo=pendulum.timezone("America/Toronto"),
     ),
     presto_input_catalog="glue",
     presto_output_catalog="sf_zt_production",
