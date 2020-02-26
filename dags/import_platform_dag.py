@@ -12,7 +12,7 @@ from sqlalchemy.sql import Select
 from airflow import DAG
 
 
-PRESTO_ADDR = "presto://presto-production-internal.presto.svc:8080"
+PRESTO_ADDR = "presto://localhost:8080"
 
 
 def extract(archive_path: str, sandbox_conn: str):
@@ -50,9 +50,7 @@ def format_load_as_json_query(catalog: str, schema: str, table: str) -> Select:
     names_array = text(f"ARRAY[{', '.join(column_names)}]")
     expr_array = text(f"ARRAY[{', '.join(casts)}]")
 
-    json_fn = func.json_format(cast(func.map(names_array, expr_array), JSON)).alias(
-        "data"
-    )
+    json_fn = func.json_format(cast(func.map(names_array, expr_array), JSON))
 
     return Select(columns=[json_fn], from_obj=from_obj)
 
@@ -96,7 +94,7 @@ def snowflake_swap(src: Dict[str, str], dst: Dict[str, str]) -> None:
         except Exception as e:
             # if the previous command fails for any reason,
             # we will attempt to restore the previous version
-            # of to_obj
+            # of to_obj and re-raise the exception.
             tx.execute(f"UNDROP TABLE {to_obj}")
             raise e
 
@@ -147,13 +145,13 @@ def _create_dag(
     return dag
 
 
-globals()["import_kyc_staging"] = _create_dag(
-    "import__kyc_staging",
+globals()["import__zt_production_core"] = _create_dag(
+    "import__zt_production_core",
     start_date=pendulum.datetime(
         2020, 2, 12, tzinfo=pendulum.timezone("America/Toronto"),
     ),
-    presto_input_catalog="airflow_sandbox_pr",
-    presto_output_catalog="sf_kyc_staging",
-    snow_dbname="KYC_STAGING",
-    schema="public",
+    presto_input_catalog="glue",
+    presto_output_catalog="sf_zt_production",
+    schema="zt_production_core",
+    snow_dbname="ZT_PRODUCTION",
 )
