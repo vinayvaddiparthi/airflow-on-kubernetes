@@ -1,3 +1,4 @@
+import tempfile
 from datetime import datetime
 
 import boto3
@@ -68,33 +69,33 @@ with DAG(
             )
             data = cur.fetchall()
             df = pd.DataFrame(data)
-            df.to_csv(r"temp_formatted.csv", header=None, index=None, sep="\t")
-            with open("temp_formatted.csv", mode="r", encoding="utf-8") as file_in:
-                with open(
-                    "request_formatted.txt", mode="w", encoding="utf-8"
-                ) as file_out:
-                    text = file_in.read()
-                    text = text.replace("\t", "")
-                    file_out.writelines(header)
-                    file_out.write("\n")
-                    file_out.write(text)
-                    file_out.writelines(trailer)
-                    file_out.writelines(str(len(df)).zfill(8))
-                with open("request_formatted.txt", "rb") as file:
-                    client = boto3.client(
-                        "s3",
-                        aws_access_key_id=f"{aws_credentials.access_key}",
-                        aws_secret_access_key=f"{aws_credentials.secret_key}",
-                    )
-                    client.upload_fileobj(file, bucket, f"{prefix}/{input_file_name}")
-                with open("request_formatted.txt", mode="r") as file:
-                    lines = file.readlines()
-                    c = 0
-                    for line in lines:
-                        if len(line) != 221:
-                            print(f"Length warning: {line}")
-                            c += 1
-                    print(f"Wrong lines: {c}")
+            with tempfile.NamedTemporaryFile(mode='w+') as temp:
+                df.to_csv(temp.name, header=None, index=None, sep='\t')
+                text = temp.read()
+                text = text.replace('\t', '')
+            with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as file_out:
+                file_out.writelines(header)
+                file_out.write('\n')
+                file_out.write(text)
+                file_out.writelines(trailer)
+                file_out.writelines(str(len(df)).zfill(8))
+                file_out.seek(0)
+
+                c = 0
+                for line in file_out:
+                    if len(line) != 221:
+                        print(f"{line}")
+                        c += 1
+                print(f"wrong lines: {c}")
+                file_out.seek(0)
+                client = boto3.client(
+                    "s3",
+                    aws_access_key_id=f"{aws_credentials.access_key}",
+                    aws_secret_access_key=f"{aws_credentials.secret_key}",
+                )
+
+                client.upload_fileobj(file_out, bucket, f"{prefix}/{input_file_name}")
+
 
     def create_month_table():
         with snowflake.connector.connect(
