@@ -47,6 +47,31 @@ reports = {
                     {"expression": "ga:goal1Completions"},
                     {"expression": "ga:goal1Value"},
                 ],
+                "dimensions": [{"name": "ga:sourceMedium"}],
+                "pageToken": "0",
+                "pageSize": ROW_LIMIT,
+            }
+        ]
+    },
+    "source_medium_with_gid": {
+        "reportRequests": [
+            {
+                "viewId": VIEW_ID,
+                "dateRanges": [{"startDate": None, "endDate": None}],
+                "metrics": [
+                    # acquisition
+                    {"expression": "ga:users"},
+                    {"expression": "ga:newUsers"},
+                    {"expression": "ga:sessions"},
+                    # behavior
+                    {"expression": "ga:bounceRate"},
+                    {"expression": "ga:pageviewsPerSession"},
+                    {"expression": "ga:avgSessionDuration"},
+                    # conversion
+                    {"expression": "ga:goal1ConversionRate"},
+                    {"expression": "ga:goal1Completions"},
+                    {"expression": "ga:goal1Value"},
+                ],
                 "dimensions": [{"name": "ga:sourceMedium"}, {"name": "ga:dimension5"}],
                 "pageToken": "0",
                 "pageSize": ROW_LIMIT,
@@ -73,7 +98,86 @@ reports = {
                     {"expression": "ga:goal1Completions"},
                     {"expression": "ga:goal1Value"},
                 ],
+                "dimensions": [{"name": "ga:campaign"}],
+                "pageToken": "0",
+                "pageSize": ROW_LIMIT,
+            }
+        ]
+    },
+    "google_ads_campaigns_with_gid": {
+        "reportRequests": [
+            {
+                "viewId": VIEW_ID,
+                "dateRanges": [{"startDate": None, "endDate": None}],
+                "metrics": [
+                    # acquisition
+                    {"expression": "ga:adClicks"},
+                    {"expression": "ga:adCost"},
+                    {"expression": "ga:CPC"},
+                    {"expression": "ga:users"},
+                    {"expression": "ga:sessions"},
+                    # behavior
+                    {"expression": "ga:bounceRate"},
+                    {"expression": "ga:pageviewsPerSession"},
+                    # conversion
+                    {"expression": "ga:goal1ConversionRate"},
+                    {"expression": "ga:goal1Completions"},
+                    {"expression": "ga:goal1Value"},
+                ],
                 "dimensions": [{"name": "ga:campaign"}, {"name": "ga:dimension5"}],
+                "pageToken": "0",
+                "pageSize": ROW_LIMIT,
+            }
+        ]
+    },
+    "channels": {
+        "reportRequests": [
+            {
+                "viewId": VIEW_ID,
+                "dateRanges": [{"startDate": None, "endDate": None}],
+                "metrics": [
+                    # acquisition
+                    {"expression": "ga:users"},
+                    {"expression": "ga:newUsers"},
+                    {"expression": "ga:sessions"},
+                    # behavior
+                    {"expression": "ga:bounceRate"},
+                    {"expression": "ga:pageviewsPerSession"},
+                    {"expression": "ga:avgSessionDuration"},
+                    # conversion
+                    {"expression": "ga:goal1ConversionRate"},
+                    {"expression": "ga:goal1Completions"},
+                    {"expression": "ga:goal1Value"},
+                ],
+                "dimensions": [{"name": "ga:channelGrouping"}],
+                "pageToken": "0",
+                "pageSize": ROW_LIMIT,
+            }
+        ]
+    },
+    "channels_with_gid": {
+        "reportRequests": [
+            {
+                "viewId": VIEW_ID,
+                "dateRanges": [{"startDate": None, "endDate": None}],
+                "metrics": [
+                    # acquisition
+                    {"expression": "ga:users"},
+                    {"expression": "ga:newUsers"},
+                    {"expression": "ga:sessions"},
+                    # behavior
+                    {"expression": "ga:bounceRate"},
+                    {"expression": "ga:pageviewsPerSession"},
+                    {"expression": "ga:avgSessionDuration"},
+                    # conversion
+                    {"expression": "ga:goal1ConversionRate"},
+                    {"expression": "ga:goal1Completions"},
+                    {"expression": "ga:goal1Value"},
+                ],
+                "dimensions": [
+                    {"name": "ga:channelGrouping"},
+                    {"name": "ga:dimension5"},
+                ],
                 "pageToken": "0",
                 "pageSize": ROW_LIMIT,
             }
