@@ -6,10 +6,10 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-apache-airflow = {version = ">=1.10.5<2",extra = ["kubernetes","redshift","presto","s3"]}
+apache-airflow = {version = ">=1.10.9<2",extra = ["kubernetes","redshift","presto"]}
 pyhive = {version = "*",extra = ["presto"]}
 snowflake-sqlalchemy = "*"
 xmltodict = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.8"
