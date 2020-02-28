@@ -59,7 +59,7 @@ def load(src: Dict[str, str], dst: Dict[str, str]) -> None:
     selectable = format_load_as_json_query(src["catalog"], src["schema"], src["table"])
 
     with create_engine(PRESTO_ADDR).begin() as tx:
-        tx.execute(f"CREATE TABLE IF NOT EXISTS {to_obj} AS {selectable}")
+        tx.execute(f"CREATE TABLE IF NOT EXISTS {to_obj} AS {selectable}").fetchall()
 
 
 def snowflake_swap(src: Dict[str, str], dst: Dict[str, str]) -> None:
@@ -83,8 +83,8 @@ def snowflake_swap(src: Dict[str, str], dst: Dict[str, str]) -> None:
             from_obj=from_obj,
         )
 
-        tx.execute(f"CREATE OR REPLACE TABLE {to_obj} AS {selectable}")
-        tx.execute(f"DROP TABLE {from_obj}")
+        tx.execute(f"CREATE OR REPLACE TABLE {to_obj} AS {selectable}").fetchall()
+        tx.execute(f"DROP TABLE {from_obj}").fetchall()
 
 
 def _create_dag(
