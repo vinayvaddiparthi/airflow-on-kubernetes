@@ -1,7 +1,8 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pandas as pd
+import pendulum
 import snowflake.connector
 from airflow import DAG
 from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
@@ -10,22 +11,11 @@ from airflow.operators.python_operator import PythonOperator
 from apiclient.discovery import build
 from oauth2client.service_account import ServiceAccountCredentials
 from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
-
 from utils.failure_callbacks import slack_on_fail
 
 # view_id from GA: Overall - IP and spam filtered
 VIEW_ID = "102945619"
-SCOPES = ["https://www.googleapis.com/auth/analytics.readonly"]
-ENV = "public"
 ROW_LIMIT = 10000
-
-default_args = {
-    "owner": "tc",
-    "depends_on_past": False,
-    "start_date": datetime(2020, 1, 1),
-    "retries": 0,
-}
 
 reports = {
     "source_medium": {
@@ -188,7 +178,9 @@ reports = {
 with DAG(
     "google_analytics_to_snowflake_dag",
     schedule_interval="@daily",
-    default_args=default_args,
+    start_date=pendulum.datetime(
+        2020, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+    ),
 ) as dag:
 
     def initialize_analytics_reporting():
@@ -196,7 +188,7 @@ with DAG(
 
         key = json.loads(hook._get_field("keyfile_dict"))
         credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-            key, scopes=SCOPES
+            key, scopes=["https://www.googleapis.com/auth/analytics.readonly"]
         )
         # Build the service object.
         analytics = build("analyticsreporting", "v4", credentials=credentials)
@@ -205,9 +197,8 @@ with DAG(
 
     def get_report(analytics, table, ds, page_token):
         print(f"Current page_token: {page_token}")
-        prev_ds = datetime.strptime(ds, "%Y-%m-%d").date() - timedelta(days=1)
         payload = reports[table]
-        payload["reportRequests"][0]["dateRanges"][0]["startDate"] = str(prev_ds)
+        payload["reportRequests"][0]["dateRanges"][0]["startDate"] = ds
         payload["reportRequests"][0]["dateRanges"][0]["endDate"] = ds
         if page_token is not None:
             print(f"Overwrite page_token:{page_token}")
@@ -232,13 +223,10 @@ with DAG(
                 dateRangeValues = row.get("metrics", [])
                 dict = {}
                 for i, values in enumerate(dateRangeValues):
-                    # print('Date range: ' + str(i))
                     dict["date"] = pd.to_datetime(ds, format="%Y-%m-%d")
                     for header, dimension in zip(dimensionHeaders, dimensions):
-                        # print(header + ': ' + dimension)
                         dict[header.replace("ga:", "")] = dimension
                     for metricHeader, value in zip(metricHeaders, values.get("values")):
-                        # print(metricHeader.get('name') + ': ' + value)
                         dict[metricHeader.get("name").replace("ga:", "")] = value
                 list.append(dict)
             df = pd.DataFrame(list)
@@ -246,13 +234,13 @@ with DAG(
 
     def df_to_sql(conn: str, schema: str, table: str, **context):
         ds = context["ds"]
-        prev_ds = datetime.strptime(ds, "%Y-%m-%d").date() - timedelta(days=1)
-        print(f"Date Range:{prev_ds} - {ds}")
+        print(f"Date Range:{ds}")
         analytics = initialize_analytics_reporting()
         page_token = "0"
         while page_token is not None:
             response = get_report(analytics, table, ds, page_token)
             df, token = transform_response_to_df(response, ds)
+            print(df.head(3))
             df["date"] = df["date"].dt.date
             snowflake_hook = BaseHook.get_connection(conn)
 
@@ -267,11 +255,12 @@ with DAG(
             ) as conn:
                 engine = create_engine(
                     f"snowflake://{snowflake_hook.host}.snowflakecomputing.com",
-                    poolclass=StaticPool,
                     creator=lambda: conn,
                 )
                 if response:
-                    df.to_sql(table, engine, if_exists="append", index=False)
+                    df.to_sql(
+                        table, engine, if_exists="append", method="multi", index=False
+                    )
                     print(f"Row count: {len(response)}")
             if token is not None:
                 page_token = str(token)
@@ -285,9 +274,10 @@ with DAG(
             python_callable=df_to_sql,
             op_kwargs={
                 "conn": "snowflake_default",
-                "schema": ENV,
+                "schema": "public",
                 "table": f"{report}",
             },
             provide_context=True,
+            pool="ga_pool",
             on_failure_callback=slack_on_fail,
         )
