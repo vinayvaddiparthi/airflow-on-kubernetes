@@ -145,3 +145,25 @@ globals()["import__zt_production_core"] = _create_dag(
     schema="zt_production_core",
     snow_dbname="ZT_PRODUCTION",
 )
+
+globals()["import__zt_production_idp"] = _create_dag(
+    "import__zt_production_idp",
+    start_date=pendulum.datetime(
+        2020, 2, 27, tzinfo=pendulum.timezone("America/Toronto"),
+    ),
+    presto_input_catalog="glue",
+    presto_output_catalog="sf_zt_production",
+    schema="zt_production_idp",
+    snow_dbname="ZT_PRODUCTION",
+)
+
+globals()["import__zt_production_kyc"] = _create_dag(
+    "import__zt_production_kyc",
+    start_date=pendulum.datetime(
+        2020, 2, 27, tzinfo=pendulum.timezone("America/Toronto"),
+    ),
+    presto_input_catalog="glue",
+    presto_output_catalog="sf_zt_production",
+    schema="zt_production_kyc",
+    snow_dbname="ZT_PRODUCTION",
+)
