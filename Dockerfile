@@ -28,7 +28,6 @@ RUN set -ex \
         libpq-dev \
         git \
     ' \
-    && mkdir -p /usr/share/man/man1 /usr/share/man/man7 \
     && apt-get update -yqq \
     && apt-get upgrade -yqq \
     && apt-get install -yqq --no-install-recommends \
@@ -41,7 +40,6 @@ RUN set -ex \
         rsync \
         netcat \
         locales \
-        postgresql \
     && sed -i 's/^# en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/g' /etc/locale.gen \
     && locale-gen \
     && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \

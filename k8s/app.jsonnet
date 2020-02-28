@@ -7,6 +7,4 @@ local secret = [import "secret.jsonnet"];
 local config = [import "config.jsonnet"];
 local s3 = [import "s3/serviceinstance.jsonnet", import "s3/servicebinding.jsonnet"];
 
-local postgresSandbox = [import "postgres-sandbox/postgres.jsonnet", import "postgres-sandbox/networkpolicy.jsonnet"];
-
-k.core.v1.list.new(scheduler + webserver + postgres + config + secret + s3 + postgresSandbox)
+k.core.v1.list.new(scheduler + webserver + postgres + config + secret + s3)
