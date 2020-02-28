@@ -190,7 +190,7 @@ with DAG(
         credentials = ServiceAccountCredentials.from_json_keyfile_dict(
             key, scopes=["https://www.googleapis.com/auth/analytics.readonly"]
         )
-        # Build the service object.
+        # Build the service object with google api's build function
         analytics = build("analyticsreporting", "v4", credentials=credentials)
 
         return analytics
