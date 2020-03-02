@@ -24,6 +24,8 @@ local airflowCfg = {
       hostname_callable:"airflow.utils.net:get_host_ip_address",
       default_timezone:"utc",
       executor:"KubernetesExecutor",
+      store_serialized_dags:true,
+      min_serialized_dag_update_interval: 30,
       #sql_alchemy_conn:"sqlite:////usr/local/airflow/airflow.db",
       sql_engine_encoding:"utf-8",
       sql_alchemy_pool_enabled:true,
