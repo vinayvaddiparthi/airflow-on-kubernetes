@@ -48,6 +48,7 @@ def create_dag():
             ("public", "pricing_history_api"),
             ("public", "pricing_metadata"),
             ("public", "pricing_metadata_api"),
+            ("public", "migrated_model_c"),
         ]:
             dag << PythonOperator(
                 task_id=f"ctas__{schema}__{table}",
