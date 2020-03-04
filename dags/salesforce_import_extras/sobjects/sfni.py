@@ -1,4 +1,5 @@
 sobjects = [
+    {"name": "blablabla"},
     {"name": "acceptedeventrelation"},
     {"name": "account"},
     {"name": "accounthistory", "last_modified_field": "createddate"},
