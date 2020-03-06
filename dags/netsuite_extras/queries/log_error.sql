@@ -1,8 +1,8 @@
 merge into erp.{{env}}.tli_error t2 using (
     select tli.*,
-    status.error_msg
-    from erp.{{env}}.tli_{{created_date_trim}} tli
-        left join erp.test.journal_entry_status status
+    status.error_msg as error
+    from erp.{{env}}.tli_balanced tli
+        left join erp.{{env}}.journal_entry_status status
     on to_date(status.created_date) = to_date(tli.created_date) and status.transaction_date = tli.tran_date and status.subsidiary_id = tli.subsidiary_id
     where status.uploaded = 'FALSE'
     ) t1
@@ -20,7 +20,7 @@ insert (id,
         debit,
         tran_date,
         created_date,
-        error_msg)
+        error)
 values (t1.id,
     t1.tran_id,
     t1.new_gl,
@@ -33,4 +33,4 @@ values (t1.id,
     t1.debit,
     t1.tran_date,
     t1.created_date,
-    t1.error_msg);
+    t1.error);
