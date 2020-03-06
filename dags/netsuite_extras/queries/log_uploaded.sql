@@ -1,8 +1,8 @@
 merge into erp.{{env}}.tli_uploaded t2 using (
     select tli.*,
        status.je_internal_id as journal_entry_internal_id
-    from erp.{{env}}.tli_{{created_date_trim}} tli
-        left join erp.test.journal_entry_status status
+    from erp.{{env}}.tli_balanced tli
+        left join erp.{{env}}.journal_entry_status status
     on to_date(status.created_date) = to_date(tli.created_date) and status.transaction_date = tli.tran_date and status.subsidiary_id = tli.subsidiary_id
     where status.uploaded = 'TRUE'
     ) t1

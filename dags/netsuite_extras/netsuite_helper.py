@@ -3,14 +3,14 @@ def get_journal_entry_line(entry_type, account_internal_id, amount, created_date
     <ns1:line>
          <ns1:account xsi:type='platformCore:RecordRef' internalId='{account_internal_id}'/>
          <ns1:{entry_type}>{amount}</ns1:{entry_type}>
-         <ns1:memo xsi:type='xsd:string'>ETL-Test-{created_date}</ns1:memo>
+         <ns1:memo xsi:type='xsd:string'>ETL-{created_date}</ns1:memo>
     </ns1:line>
     """
 
 
 def get_tran_date(date):
     if "T" not in date:
-        date = date + "T00:00:00Z"
+        date = date + "T12:00:00Z"
         print(f"fixed date: {date}")
     return f"""<ns1:tranDate xsi:type='xsd:dateTime'>{date}</ns1:tranDate>"""
 
