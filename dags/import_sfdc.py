@@ -140,14 +140,17 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
     with engine.begin() as tx:
         tx.execute(
             f"""
-        CREATE OR REPLACE TRANSIENT TABLE "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}"
-        AS SELECT DISTINCT t0.* FROM "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}" t0
-        JOIN (
-            SELECT id, max({last_modified_field}) AS max_date
-            FROM "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}"
-            GROUP BY id
-            ) t1 ON t0.id = t1.id AND t0.{last_modified_field} = t1.max_date
-        """
+            WITH tbl AS (
+                SELECT *,
+                ROW_NUMBER() OVER (
+                    PARTITON BY id
+                    ORDER BY {last_modified_field} DESC
+                ) = 1 AS is_most_recent_record
+                FROM "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}" 
+            )
+            SELECT * FROM tbl
+            WHERE is_most_recent_record
+"""
         ).fetchall()
 
 
