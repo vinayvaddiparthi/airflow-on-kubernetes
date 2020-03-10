@@ -13,6 +13,9 @@ local params = import "../params.libsonnet";
   },
   "spec": {
     "clusterServiceClassExternalName": "s3",
-    "clusterServicePlanExternalName": "production",
+    "clusterServicePlanExternalName":
+      if params.env == "production" then "production"
+      else "custom",
+    "parameters": if params.env != "production" then { PreventDeletion: "False" },
   }
 }
