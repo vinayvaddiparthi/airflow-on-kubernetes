@@ -1148,11 +1148,11 @@ sobjects = [
     {"name": "nsfs__c"},
     #     {"name": "nubik_salesvalue__c"},
     #     {"name": "objectpermissions"},
-    #     {"name": "off_balance_sheet_financing__c"},
-    #     {
-    #         "name": "off_balance_sheet_financing__history",
-    #         "last_modified_field": "createddate",
-    #     },
+    {"name": "off_balance_sheet_financing__c"},
+    {
+        "name": "off_balance_sheet_financing__history",
+        "last_modified_field": "createddate",
+    },
     #     {"name": "one_penny__c"},
     #     {"name": "one_penny__history", "last_modified_field": "createddate"},
     #     {"name": "one_penny_cash_entry__c"},
