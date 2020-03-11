@@ -142,7 +142,7 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
             f"""
     SELECT *,
     ROW_NUMBER() OVER (
-        PARTITON BY id
+        PARTITION BY id
         ORDER BY {last_modified_field} DESC
     ) = 1 AS is_most_recent_record
     FROM "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}"
