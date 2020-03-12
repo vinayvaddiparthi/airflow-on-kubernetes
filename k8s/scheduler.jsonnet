@@ -41,8 +41,8 @@ local params = import "params.libsonnet";
             command: ["bash", "-c", "airflow initdb && airflow scheduler"],
             resources: {
               requests: {
-                cpu: "1",
-                memory: "1Gi",
+                cpu: "4",
+                memory: "2Gi",
               },
             },
             envFrom: [
