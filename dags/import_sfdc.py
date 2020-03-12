@@ -162,7 +162,7 @@ def create_dag(instance: str):
         start_date=pendulum.datetime(
             2019, 10, 12, tzinfo=pendulum.timezone("America/Toronto")
         ),
-        schedule_interval="5 4 * * *",
+        schedule_interval="0 0 * * *",
         catchup=False,
     ) as dag:
         for sobject in sobjects:
