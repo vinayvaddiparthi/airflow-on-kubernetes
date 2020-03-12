@@ -140,13 +140,14 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
     with engine.begin() as tx:
         tx.execute(
             f"""
+    CREATE OR REPLACE TABLE "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}" AS
     SELECT *,
     ROW_NUMBER() OVER (
         PARTITION BY id
         ORDER BY {last_modified_field} DESC
-    ) = 1 AS is_most_recent_record
+    ) = 1 AS __is_latest
     FROM "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}"
-    QUALIFY is_most_recent_record
+    QUALIFY __is_latest
 """
         ).fetchall()
 
