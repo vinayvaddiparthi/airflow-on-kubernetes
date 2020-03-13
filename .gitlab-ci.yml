@@ -1,6 +1,7 @@
 stages:
   - pre-test
   - build
+  - test
   - deploy
   - cleanup
 
@@ -13,7 +14,7 @@ variables:
   DOCKER_IMAGE_TAG: gitlab-${CI_PIPELINE_ID}
   APP_NAME: "airflow"
 
-black:
+style_checking:
   stage: pre-test
   tags:
     - docker
@@ -34,6 +35,25 @@ build_image:
     - $(aws ecr get-login --no-include-email --region ca-central-1)
     - docker build -t ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG} .
     - docker push ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG}
+
+sast:
+  stage: test
+  tags:
+    - docker
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install bandit
+    - bandit -r .
+
+check_dependencies:
+  stage: test
+  tags:
+    - docker
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install pipenv
+    - pipenv check
+
 
 deploy_production:
   stage: deploy
