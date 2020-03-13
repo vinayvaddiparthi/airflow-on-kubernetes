@@ -36,7 +36,7 @@ build_image:
     - docker build -t ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG} .
     - docker push ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG}
 
-static_code_analysis:
+sast:
   stage: test
   tags:
     - docker
