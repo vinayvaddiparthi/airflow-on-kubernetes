@@ -147,13 +147,13 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
                     partition_by=column("id"),
                     order_by=column(last_modified_field).desc(),
                 )
-                .label("__is_latest"),
+                .label("_RN"),
             ],
             from_obj=from_obj,
         )
 
         tx.execute(
-            f"CREATE OR REPLACE TABLE {to_obj} AS {selectable} QUALIFY __is_latest"
+            f"CREATE OR REPLACE TABLE {to_obj} AS {selectable} QUALIFY _RN = 1"
         ).fetchall()
 
 
