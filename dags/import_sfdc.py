@@ -135,20 +135,25 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
     sobject_name = sobject["name"]
     last_modified_field = sobject.get("last_modified_field", "systemmodstamp")
 
-    engine: Engine = SnowflakeHook(snowflake_conn_id=conn).get_sqlalchemy_engine()
+    with SnowflakeHook(snowflake_conn_id=conn).get_sqlalchemy_engine().begin() as tx:
+        selectable = Select(
+            columns=[
+                text("*"),
+                func.row_number()
+                .over(
+                    partition_by=column("id"),
+                    order_by=column(last_modified_field).desc(),
+                )
+                .label("__is_latest"),
+            ],
+            from_obj=text(
+                f'"SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}"'
+            ),
+        )
 
-    with engine.begin() as tx:
         tx.execute(
-            f"""
-    CREATE OR REPLACE TABLE "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}" AS
-    SELECT *,
-    ROW_NUMBER() OVER (
-        PARTITION BY id
-        ORDER BY {last_modified_field} DESC
-    ) = 1 AS __is_latest
-    FROM "SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}"
-    QUALIFY __is_latest
-"""
+            f'''CREATE OR REPLACE TABLE "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}" AS
+            {selectable} QUALIFY "__is_latest"'''
         ).fetchall()
 
 
