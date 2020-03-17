@@ -135,6 +135,11 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
     sobject_name = sobject["name"]
     last_modified_field = sobject.get("last_modified_field", "systemmodstamp")
 
+    from_obj = text(
+        f'"SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}"'
+    )
+    to_obj = text(f'"SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}"')
+
     with SnowflakeHook(snowflake_conn_id=conn).get_sqlalchemy_engine().begin() as tx:
         selectable = Select(
             columns=[
@@ -146,14 +151,12 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
                 )
                 .label("__is_latest"),
             ],
-            from_obj=text(
-                f'"SALESFORCE"."{sfdc_instance.upper()}_RAW"."{sobject_name.upper()}"'
-            ),
+            from_obj=from_obj,
         )
 
         tx.execute(
-            f'''CREATE OR REPLACE TABLE "SALESFORCE"."{sfdc_instance.upper()}"."{sobject_name.upper()}" AS
-            {selectable} QUALIFY "__is_latest"'''
+            f"""CREATE OR REPLACE TABLE {to_obj} AS
+            {selectable} QUALIFY __is_latest"""
         ).fetchall()
 
 
