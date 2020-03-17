@@ -14,7 +14,7 @@ variables:
   DOCKER_IMAGE_TAG: gitlab-${CI_PIPELINE_ID}
   APP_NAME: "airflow"
 
-style_checking:
+black:
   stage: pre-test
   tags:
     - docker
@@ -45,13 +45,14 @@ sast:
     - pip install bandit
     - bandit -r .
 
-check_dependencies:
+dependencies_scan:
   stage: test
   tags:
     - docker
   image: python:${PYTHON_VERSION}
   script:
     - pip install pipenv
+    - pipenv lock
     - pipenv check
 
 deploy_production:
