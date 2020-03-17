@@ -54,7 +54,6 @@ check_dependencies:
     - pip install pipenv
     - pipenv check
 
-
 deploy_production:
   stage: deploy
   tags:
