@@ -14,7 +14,7 @@ with DAG(
     start_date=pendulum.datetime(
         2019, 3, 20, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    schedule_interval=None,
+    schedule_interval="0 18 * * *",
     catchup=False,
 ) as dag:
     for sobject in [
