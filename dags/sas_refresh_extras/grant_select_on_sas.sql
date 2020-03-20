@@ -1,0 +1,1 @@
+grant select on all tables in schema sas.public to role {{role}};
