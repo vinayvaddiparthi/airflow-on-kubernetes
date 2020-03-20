@@ -4,16 +4,16 @@ import pendulum
 from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
-import subprocess
+import subprocess  # nosec
 
 
 def run_heroku_command(app: str, snowflake_connection, snowflake_schema):
     os.environ["HEROKU_API_KEY"] = HttpHook("heroku_production").get_conn().auth[1]
 
-    subprocess.run(["ssh-keygen", "-t", "rsa", "-N", "", "-f", "id_rsa"])
-    subprocess.run(["ssh-add", "id_rsa"])
-    subprocess.run(["heroku", "keys:add", "id_rsa.pub"])
-    subprocess.run(
+    subprocess.run(["ssh-keygen", "-t", "rsa", "-N", "", "-f", "id_rsa"])  # nosec
+    subprocess.run(["ssh-add", "id_rsa"])  # nosec
+    subprocess.run(["heroku", "keys:add", "id_rsa.pub"])  # nosec
+    subprocess.run(  # nosec
         [
             "heroku",
             "run",
@@ -35,7 +35,7 @@ def run_heroku_command(app: str, snowflake_connection, snowflake_schema):
             snowflake_schema,
         ]
     )
-    subprocess.run(["heroku", "keys:clear"])
+    subprocess.run(["heroku", "keys:clear"])  # nosec
 
 
 with DAG(
