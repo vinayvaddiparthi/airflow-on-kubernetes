@@ -1,0 +1,1 @@
+create or replace table sas.public.{{table}} clone analytics_production.dbt_sas.{{table}};
