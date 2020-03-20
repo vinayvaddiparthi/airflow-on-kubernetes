@@ -3,7 +3,7 @@ import pendulum
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 
-from import_sfdc import ctas_to_glue, ctas_to_snowflake, create_sf_summary_table
+from import_sfdc import ctas_to_snowflake, create_sf_summary_table
 
 from salesforce_import_extras.sobjects.sfoi import sobjects
 
@@ -23,15 +23,10 @@ with DAG(
         if x["name"] in ["account", "opportunity", "collections_issue__c", "pricing__c"]
     ]:
         dag << PythonOperator(
-            task_id=f'glue__{sobject["name"]}',
-            python_callable=ctas_to_glue,
-            op_kwargs={"sfdc_instance": instance, "sobject": sobject},
-            pool=f"{instance}_pool",
-        ) >> PythonOperator(
             task_id=f'snowflake__{sobject["name"]}',
             python_callable=ctas_to_snowflake,
             op_kwargs={"sfdc_instance": instance, "sobject": sobject},
-            pool="snowflake_pool",
+            pool=f"{instance}_pool",
         ) >> PythonOperator(
             task_id=f'snowflake_summary__{sobject["name"]}',
             python_callable=create_sf_summary_table,
