@@ -10,58 +10,9 @@ from typing import Dict
 
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from sqlalchemy import create_engine, text, column, func, TIMESTAMP, cast
-from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select
 
 from utils.failure_callbacks import slack_on_fail
-
-
-def ctas_to_glue(sfdc_instance: str, sobject: Dict):
-    sobject_name = sobject["name"]
-    last_modified_field = sobject.get("last_modified_field", "systemmodstamp")
-
-    engine = create_engine(
-        f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
-    )
-
-    try:
-        selectable: Select = sobject["selectable"]["callable"](
-            table=sobject_name,
-            engine=engine,
-            **(sobject["selectable"].get("kwargs", {})),
-        )
-    except KeyError:
-        selectable: Select = Select(
-            columns=[text("*")],
-            from_obj=text(f'"{sfdc_instance}"."salesforce"."{sobject_name}"'),
-        )
-
-    with engine.begin() as tx:
-        first_import: bool = tx.execute(
-            f'CREATE TABLE IF NOT EXISTS "glue"."{sfdc_instance}"."{sobject_name}" AS {selectable}'
-        ).fetchall()[0][0] >= 1
-
-        if not first_import:
-            try:
-                max_date = tx.execute(
-                    Select(
-                        columns=[func.max(column(last_modified_field))],
-                        from_obj=text(f'"glue"."{sfdc_instance}"."{sobject_name}"'),
-                    )
-                ).fetchall()[0][0]
-                max_date = datetime.datetime.fromisoformat(max_date).__str__()
-            except Exception:
-                max_date = datetime.datetime.fromtimestamp(0).__str__()
-
-            range_limited_selectable = selectable.where(
-                column(last_modified_field) > cast(text(":max_date"), TIMESTAMP)
-            )
-
-            stmt = text(
-                f'INSERT INTO "glue"."{sfdc_instance}"."{sobject_name}" {range_limited_selectable}'
-            ).bindparams(max_date=max_date)
-
-            tx.execute(stmt).fetchall()
 
 
 def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
