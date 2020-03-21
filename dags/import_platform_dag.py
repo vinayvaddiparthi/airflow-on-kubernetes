@@ -20,22 +20,16 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
                 ["ssh-add", "id_rsa"],
                 ["heroku", "keys:add", "id_rsa.pub"],
                 [
-                    "/usr/local/heroku/bin/heroku",
+                    "heroku",
                     "run",
                     "-a",
                     app,
-                    "python",
-                    "extract.py",
-                    "--snowflake-account",
-                    "thinkingcapital.ca-central-1.aws",
-                    "--snowflake-username",
-                    snowflake_conn.login,
-                    "--snowflake-password",
-                    snowflake_conn.password,
-                    "--snowflake-database",
-                    "ZETATANGO",
-                    "--snowflake-schema",
-                    snowflake_schema,
+                    f"python extract.py "
+                    f"--snowflake-account thinkingcapital.ca-central-1.aws "
+                    f"--snowflake-username {snowflake_conn.login} "
+                    f"--snowflake-password {snowflake_conn.password} "
+                    f"--snowflake-database ZETATANGO "
+                    f"--snowflake-schema {snowflake_schema}",
                 ],
             ]
         ]
