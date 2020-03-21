@@ -14,33 +14,33 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     os.environ["HEROKU_API_KEY"] = HttpHook.get_connection("heroku_production").password
     snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        base_ssh_key_path = Path(temp_dir) / "id_dsa"
-        try:
-            [
-                subprocess.run(command)  # nosec
-                for command in [
-                    ["ssh-keygen", "-t", "rsa", "-N", "", "-f", f"{base_ssh_key_path}"],
-                    ["ssh-add", f"{base_ssh_key_path}"],
-                    ["heroku", "keys:add", f"{base_ssh_key_path}.pub"],
-                    [
-                        "heroku",
-                        "run",
-                        "-a",
-                        app,
-                        "bash",
-                        "-c",
-                        f"python extract.py ",
-                        f"--snowflake-account thinkingcapital.ca-central-1.aws "
-                        f"--snowflake-username {snowflake_conn.login} "
-                        f"--snowflake-password {snowflake_conn.password} "
-                        f"--snowflake-database ZETATANGO "
-                        f"--snowflake-schema {snowflake_schema}",
-                    ],
-                ]
-            ]
-        finally:
-            subprocess.run(["heroku", "keys:clear"])  # nosec
+    base_ssh_key_path = Path.home() / ".ssh" / "id_rsa"
+
+    for command in [
+        ["ssh-keygen", "-t" "rsa" "-N", "", "-f", base_ssh_key_path],
+        ["heroku", "keys:add", f"{base_ssh_key_path}.pub"],
+        [
+            "heroku",
+            "run",
+            "-a",
+            app,
+            "python",
+            "extract.py",
+            "--snowflake-account",
+            "thinkingcapital.ca-central-1.aws",
+            "--snowflake-username",
+            snowflake_conn.login,
+            "--snowflake-password",
+            snowflake_conn.password,
+            "--snowflake-database",
+            "ZETATANGO",
+            "--snowflake-schema",
+            snowflake_schema,
+            "--snowflake-schema",
+            snowflake_schema,
+        ],
+    ]:
+        subprocess.run(command)  # nosec
 
 
 with DAG(
