@@ -12,30 +12,35 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     os.environ["HEROKU_API_KEY"] = HttpHook.get_connection("heroku_production").password
     snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
 
-    subprocess.run(["ssh-keygen", "-t", "rsa", "-N", "", "-f", "id_rsa"])  # nosec
-    subprocess.run(["ssh-add", "id_rsa"])  # nosec
-    subprocess.run(["heroku", "keys:add", "id_rsa.pub"])  # nosec
-    subprocess.run(  # nosec
+    try:
         [
-            "/usr/local/heroku/bin/heroku",
-            "run",
-            "-a",
-            app,
-            "python",
-            "extract.py",
-            "--snowflake-account",
-            "thinkingcapital.ca-central-1.aws",
-            "--snowflake-username",
-            snowflake_conn.login,
-            "--snowflake-password",
-            snowflake_conn.password,
-            "--snowflake-database",
-            "ZETATANGO",
-            "--snowflake-schema",
-            snowflake_schema,
+            subprocess.run(command)  # nosec
+            for command in [
+                ["ssh-keygen", "-t", "rsa", "-N", "", "-f", "id_rsa"],
+                ["ssh-add", "id_rsa"],
+                ["heroku", "keys:add", "id_rsa.pub"],
+                [
+                    "/usr/local/heroku/bin/heroku",
+                    "run",
+                    "-a",
+                    app,
+                    "python",
+                    "extract.py",
+                    "--snowflake-account",
+                    "thinkingcapital.ca-central-1.aws",
+                    "--snowflake-username",
+                    snowflake_conn.login,
+                    "--snowflake-password",
+                    snowflake_conn.password,
+                    "--snowflake-database",
+                    "ZETATANGO",
+                    "--snowflake-schema",
+                    snowflake_schema,
+                ],
+            ]
         ]
-    )
-    subprocess.run(["heroku", "keys:clear"])  # nosec
+    finally:
+        subprocess.run(["heroku", "keys:clear"])  # nosec
 
 
 with DAG(
