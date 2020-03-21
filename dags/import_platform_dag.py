@@ -17,7 +17,7 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     subprocess.run(["heroku", "keys:add", "id_rsa.pub"])  # nosec
     subprocess.run(  # nosec
         [
-            "heroku",
+            "/usr/local/heroku/bin/heroku",
             "run",
             "-a",
             app,
