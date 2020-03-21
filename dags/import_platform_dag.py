@@ -24,7 +24,9 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
                     "run",
                     "-a",
                     app,
-                    f"python extract.py "
+                    "bash",
+                    "-c",
+                    f"python extract.py ",
                     f"--snowflake-account thinkingcapital.ca-central-1.aws "
                     f"--snowflake-username {snowflake_conn.login} "
                     f"--snowflake-password {snowflake_conn.password} "
