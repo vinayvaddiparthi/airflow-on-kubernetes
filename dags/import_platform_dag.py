@@ -1,14 +1,16 @@
 import os
 
 import pendulum
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
 import subprocess  # nosec
 
 
-def run_heroku_command(app: str, snowflake_connection, snowflake_schema):
-    os.environ["HEROKU_API_KEY"] = HttpHook("heroku_production").get_conn().auth[1]
+def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: str):
+    os.environ["HEROKU_API_KEY"] = HttpHook.get_connection("heroku_production").password
+    snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
 
     subprocess.run(["ssh-keygen", "-t", "rsa", "-N", "", "-f", "id_rsa"])  # nosec
     subprocess.run(["ssh-add", "id_rsa"])  # nosec
@@ -20,13 +22,13 @@ def run_heroku_command(app: str, snowflake_connection, snowflake_schema):
             "-a",
             app,
             "-e",
-            f"SNOWFLAKE_PASSWORD={snowflake_connection.password}",
+            f"SNOWFLAKE_PASSWORD={snowflake_conn.password}",
             "python",
             "extract.py",
             "--snowflake-account",
             "thinkingcapital.ca-central-1.aws",
             "--snowflake-username",
-            snowflake_connection.login,
+            snowflake_conn.login,
             "--snowflake-password",
             "$SNOWFLAKE_PASSWORD",
             "--snowflake-database",
