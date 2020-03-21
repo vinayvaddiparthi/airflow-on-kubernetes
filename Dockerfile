@@ -4,8 +4,6 @@ FROM python:3.7-slim-stretch
 ENV DEBIAN_FRONTEND noninteractive
 ENV TERM linux
 
-ENV SUDO_FORCE_REMOVE=yes
-
 # Airflow
 ARG AIRFLOW_VERSION=1.10.9
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
@@ -29,7 +27,6 @@ RUN set -ex \
         libffi-dev \
         libpq-dev \
         git \
-        sudo \
     ' \
     && apt-get update -yqq \
     && apt-get upgrade -yqq \
@@ -44,7 +41,6 @@ RUN set -ex \
         netcat \
         locales \
         openssh-client \
-    && curl -sSL https://toolbelt.heroku.com/install-ubuntu.sh | sh \
     && sed -i 's/^# en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/g' /etc/locale.gen \
     && locale-gen \
     && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
@@ -66,6 +62,9 @@ RUN set -ex \
         /usr/share/man \
         /usr/share/doc \
         /usr/share/doc-base
+
+RUN curl https://cli-assets.heroku.com/heroku-linux-x64.tar.gz | tar xzf - -C /usr/local \
+    && ln -s /usr/local/heroku/bin/heroku /usr/local/bin/heroku
 
 RUN chown -R airflow: ${AIRFLOW_USER_HOME}
 
