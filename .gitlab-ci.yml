@@ -1,7 +1,7 @@
 stages:
   - pre-test
-  - build
   - test
+  - build
   - deploy
   - cleanup
 
@@ -14,7 +14,7 @@ variables:
   DOCKER_IMAGE_TAG: gitlab-${CI_PIPELINE_ID}
   APP_NAME: "airflow"
 
-style_checking:
+black:
   stage: pre-test
   tags:
     - docker
