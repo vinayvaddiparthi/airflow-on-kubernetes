@@ -56,3 +56,21 @@ with DAG(
             "snowflake_schema": "CORE_PRODUCTION",
         },
     )
+    dag << PythonOperator(
+        task_id="import_kyc_production",
+        python_callable=run_heroku_command,
+        op_kwargs={
+            "app": "zt-production-elt-kyc",
+            "snowflake_connection": "snowflake_zetatango_production",
+            "snowflake_schema": "KYC_PRODUCTION",
+        },
+    )
+    dag << PythonOperator(
+        task_id="import_idp_production",
+        python_callable=run_heroku_command,
+        op_kwargs={
+            "app": "zt-production-elt-idp",
+            "snowflake_connection": "snowflake_zetatango_production",
+            "snowflake_schema": "IDP_PRODUCTION",
+        },
+    )
