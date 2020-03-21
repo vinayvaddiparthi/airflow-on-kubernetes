@@ -1,4 +1,6 @@
 import os
+import tempfile
+from pathlib import Path
 
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -12,31 +14,33 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     os.environ["HEROKU_API_KEY"] = HttpHook.get_connection("heroku_production").password
     snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
 
-    try:
-        [
-            subprocess.run(command)  # nosec
-            for command in [
-                ["ssh-keygen", "-t", "rsa", "-N", "", "-f", "id_rsa"],
-                ["ssh-add", "id_rsa"],
-                ["heroku", "keys:add", "id_rsa.pub"],
-                [
-                    "heroku",
-                    "run",
-                    "-a",
-                    app,
-                    "bash",
-                    "-c",
-                    f"python extract.py ",
-                    f"--snowflake-account thinkingcapital.ca-central-1.aws "
-                    f"--snowflake-username {snowflake_conn.login} "
-                    f"--snowflake-password {snowflake_conn.password} "
-                    f"--snowflake-database ZETATANGO "
-                    f"--snowflake-schema {snowflake_schema}",
-                ],
+    with tempfile.TemporaryDirectory() as temp_dir:
+        base_ssh_key_path = Path(temp_dir) / "id_dsa"
+        try:
+            [
+                subprocess.run(command)  # nosec
+                for command in [
+                    ["ssh-keygen", "-t", "rsa", "-N", "", "-f", f"{base_ssh_key_path}"],
+                    ["ssh-add", f"{base_ssh_key_path}"],
+                    ["heroku", "keys:add", f"{base_ssh_key_path}.pub"],
+                    [
+                        "heroku",
+                        "run",
+                        "-a",
+                        app,
+                        "bash",
+                        "-c",
+                        f"python extract.py ",
+                        f"--snowflake-account thinkingcapital.ca-central-1.aws "
+                        f"--snowflake-username {snowflake_conn.login} "
+                        f"--snowflake-password {snowflake_conn.password} "
+                        f"--snowflake-database ZETATANGO "
+                        f"--snowflake-schema {snowflake_schema}",
+                    ],
+                ]
             ]
-        ]
-    finally:
-        subprocess.run(["heroku", "keys:clear"])  # nosec
+        finally:
+            subprocess.run(["heroku", "keys:clear"])  # nosec
 
 
 with DAG(
