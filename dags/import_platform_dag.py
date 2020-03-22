@@ -48,7 +48,7 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 3, 20, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    schedule_interval="@hourly",
+    schedule_interval="0 0,8-20 * * 1-5",
 ) as dag:
     dag << PythonOperator(
         task_id="import_core_production",
