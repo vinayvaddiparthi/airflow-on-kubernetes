@@ -1,8 +1,8 @@
 import json
 from datetime import datetime
 
+import pendulum
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.utils.email import send_email
 from jinja2 import Template
 import pandas as pd
 import requests
@@ -15,21 +15,20 @@ from airflow.operators.python_operator import PythonOperator, BranchPythonOperat
 
 from netsuite_extras import netsuite_helper
 
-default_args = {
-    "owner": "airflow",
-    "depends_on_past": False,
-    "start_date": datetime(2020, 1, 22),
-    "retries": 0,
-}
-
 aws_hook = AwsHook(aws_conn_id="s3_conn_id")
 aws_credentials = aws_hook.get_credentials()
 
-fun = "Exception report"
-env = "test"
+env = "public"
 roles = ["analyst_role", "looker_role"]
+execution_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
 with DAG(
-    "journal_entry", schedule_interval="0 13 * * *", default_args=default_args
+    "journal_entry",
+    max_active_runs=1,
+    schedule_interval="0 13 * * *",
+    start_date=pendulum.datetime(
+        2020, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+    ),
 ) as dag:
     snowflake_hook = BaseHook.get_connection("snowflake_erp")
     netsuite_hook = BaseHook.get_connection("netsuite")
@@ -44,143 +43,86 @@ with DAG(
 
     def get_tli_by_created_date(**kwargs):
         cd = kwargs["ds"]
-        date_tag = cd.replace("-", "")
         print(f"Created_date: {kwargs['ds']}")
-        with open("dags/netsuite_extras/queries/get_tli_by_created_date.sql") as f:
+        with open("/netsuite_extras/queries/get_tli_by_created_date.sql") as f:
             sql_template = Template(f.read())
         sql = sql_template.render(
-            created_date=cd, env=f"{env}", create_date_trim=date_tag
+            created_date=cd, env=env, execution_time=execution_time
         )
 
-        count_all = f"select count(*) from erp.{env}.tli_{date_tag};"
+        count_all = f"select count(*) from erp.{env}.tli_raw;"
         with snowflake.connector.connect(
             user=snowflake_hook.login,
             password=snowflake_hook.password,
             account=snowflake_hook.host,
             warehouse="ETL",
             database="ERP",
-            schema="PUBLIC",
+            schema=env,
             ocsp_fail_open=False,
         ) as conn:
             cur = conn.cursor()
             cur.execute(sql)
             conn.commit()
-            for role in roles:
-                cur.execute(f"grant select on erp.{env}.tli_{date_tag} to role {role};")
+            # for role in roles:
+            #     cur.execute(f"grant select on erp.{env}.tli_{date_tag} to role {role};")
             cur.execute(count_all)
-            if cur.fetchone()[0] == 0:
+            count = cur.fetchone()[0]
+            print(f"Total TLI count: {count}")
+            if count == 0:
                 return "task_end"
-            return "task_get_unbalanced_tli_by_subsidiary"
+            return [
+                "task_get_unbalanced_tli_by_subsidiary",
+                "task_get_balanced_tli_by_subsidiary",
+            ]
 
-    def get_unbalanced_tli_by_subsidiary(**kwargs):
-        date_tag = kwargs["ds"].replace("-", "")
-        with open(
-            "dags/netsuite_extras/queries/get_unbalanced_tran_by_subsidiary.sql"
-        ) as f:
+    def get_balanced_tli_by_subsidiary():
+        with open("/netsuite_extras/queries/get_balanced_tli_by_subsidiary.sql") as f:
             sql_template = Template(f.read())
-            sql = sql_template.render(env="test", created_date_trim=date_tag)
+            sql = sql_template.render(env=env)
         with snowflake.connector.connect(
             user=snowflake_hook.login,
             password=snowflake_hook.password,
             account=snowflake_hook.host,
             warehouse="ETL",
             database="ERP",
-            schema="PUBLIC",
+            schema=env,
             ocsp_fail_open=False,
         ) as conn:
             cur = conn.cursor()
             cur.execute(sql)
-            for role in roles:
-                cur.execute(
-                    f"grant select on erp.{env}.tli_unbalanced_{date_tag} to role {role};"
-                )
 
-    def send_email_for_unbalanced_tli(**kwargs):
-        date_tag = kwargs["ds"].replace("-", "")
-        print("send_email_for_unbalanced_tli")
-        sql = f"select * from erp.{env}.tli_unbalanced_{date_tag}"
-        with snowflake.connector.connect(
-            user=snowflake_hook.login,
-            password=snowflake_hook.password,
-            account=snowflake_hook.host,
-            warehouse="ETL",
-            database="ERP",
-            schema="PUBLIC",
-            ocsp_fail_open=False,
-        ) as conn:
-            cur = conn.cursor()
-            cur.execute(sql)
-            data = cur.fetchall()
-            if data:
-                df = pd.DataFrame(data)
-                df.columns = [
-                    "id",
-                    "tran_id",
-                    "new_gl",
-                    "old_gl",
-                    "account_internal_id",
-                    "subsidiary",
-                    "subsidiary_id",
-                    "document_description",
-                    "credit",
-                    "debit",
-                    "tran_date",
-                    "created_date",
-                ]
-                subject = f"Unbalanced transaction line items created on {date_tag}"
-                file_name = f"/tmp/tli_unbalanced_{date_tag}.csv"
-                df.to_csv(file_name, index=False, sep="\t")
-                with open(file_name, "r") as f:
-                    print("Send email: unbalanced tli")
-                    send_email(
-                        to=netsuite["recipients"],
-                        # to=['xzhang@thinkingcapital.ca'],
-                        subject=subject,
-                        html_content=fun,
-                        files=[file_name],
-                    )
-                return "Email sent"
-            return "Nothing to send"
-
-    def update_tli_unbalanced_historical(**kwargs):
-        date_tag = kwargs["ds"].replace("-", "")
-        execution_time = kwargs["ts"]
-        with open(
-            "dags/netsuite_extras/queries/update_tli_unbalanced_historical.sql"
-        ) as f:
+    def get_unbalanced_tli_by_subsidiary():
+        with open("/netsuite_extras/queries/get_unbalanced_tli_by_subsidiary.sql") as f:
             sql_template = Template(f.read())
-            sql = sql_template.render(
-                execition_time=execution_time, created_date_trim=date_tag, env=env
-            )
+            sql = sql_template.render(env=env)
         with snowflake.connector.connect(
             user=snowflake_hook.login,
             password=snowflake_hook.password,
             account=snowflake_hook.host,
             warehouse="ETL",
             database="ERP",
-            schema="PUBLIC",
+            schema=env,
             ocsp_fail_open=False,
         ) as conn:
             cur = conn.cursor()
             cur.execute(sql)
-            return "Update to historical table"
+            # for role in roles:
+            #     cur.execute(
+            #         f"grant select on erp.{env}.tli_unbalanced_{date_tag} to role {role};"
+            #     )
 
-    def send_journal_entries(**kwargs):
+    def create_journal_entry(**kwargs):
         created_date = kwargs["ds"]
-        with open("dags/netsuite_extras/queries/create_journal_entry_line.sql") as f:
+        with open("/netsuite_extras/queries/get_journal_entry_line.sql") as f:
             sql_template = Template(f.read())
-            sql = sql_template.render(
-                created_date=created_date,
-                env="test",
-                create_date_trim=created_date.replace("-", ""),
-            )
+            sql = sql_template.render(env=env)
         with snowflake.connector.connect(
             user=snowflake_hook.login,
             password=snowflake_hook.password,
             account=snowflake_hook.host,
             warehouse="ETL",
             database="ERP",
-            schema="PUBLIC",
+            schema=env,
             ocsp_fail_open=False,
         ) as conn:
             cur = conn.cursor()
@@ -215,7 +157,7 @@ with DAG(
 
     def upload_journal_entry(created_date, rows):
         # print(rows)
-        execution_time = datetime.utcnow()
+
         try:
             tran_date = rows[0]["tran_date"]
             subsidiary_id = rows[0]["subsidiary_id"]
@@ -278,45 +220,39 @@ with DAG(
         except Exception as e:
             raise e
 
-    def log_uploaded(**kwargs):
+    def log_uploaded():
         print("log_uploaded")
-        created_date = kwargs["ds"]
-        with open("dags/netsuite_extras/queries/log_uploaded.sql") as f:
+        with open("/netsuite_extras/queries/log_uploaded.sql") as f:
             sql_template = Template(f.read())
-        log_history_sql = sql_template.render(
-            env="test", created_date_trim=created_date.replace("-", "")
-        )
+        sql = sql_template.render(env=env)
         with snowflake.connector.connect(
             user=snowflake_hook.login,
             password=snowflake_hook.password,
             account=snowflake_hook.host,
             warehouse="ETL",
             database="ERP",
-            schema="PUBLIC",
+            schema=env,
             ocsp_fail_open=False,
         ) as conn:
             cur = conn.cursor()
-            cur.execute(log_history_sql)
+            cur.execute(sql)
 
-    def log_error(**kwargs):
+    def log_error():
         print("log_uploaded")
-        created_date = kwargs["ds"]
-        with open("dags/netsuite_extras/queries/log_error.sql") as f:
+        with open("/netsuite_extras/queries/log_error.sql") as f:
             sql_template = Template(f.read())
-        log_history_sql = sql_template.render(
-            env="test", created_date_trim=created_date.replace("-", "")
-        )
+        sql = sql_template.render(env=env)
         with snowflake.connector.connect(
             user=snowflake_hook.login,
             password=snowflake_hook.password,
             account=snowflake_hook.host,
             warehouse="ETL",
             database="ERP",
-            schema="PUBLIC",
+            schema=env,
             ocsp_fail_open=False,
         ) as conn:
             cur = conn.cursor()
-            cur.execute(log_history_sql)
+            cur.execute(sql)
 
     def log_status(
         je_internal_id,
@@ -328,9 +264,9 @@ with DAG(
         subsidiary_id,
     ):
         print(f"log_status:{uploaded}")
-        with open("dags/netsuite_extras/queries/log_status.sql") as f:
+        with open("/netsuite_extras/queries/log_journal_entry_status.sql") as f:
             sql_template = Template(f.read())
-        log_status_sql = sql_template.render(
+        sql = sql_template.render(
             je_internal_id=je_internal_id,
             subsidiary_id=subsidiary_id,
             uploaded=uploaded,
@@ -338,7 +274,7 @@ with DAG(
             created_date=created_date,
             transaction_date=transaction_date,
             execution_time=execution_time,
-            env="test",
+            env=env,
         )
         with snowflake.connector.connect(
             user=snowflake_hook.login,
@@ -346,13 +282,32 @@ with DAG(
             account=snowflake_hook.host,
             warehouse="ETL",
             database="ERP",
-            schema="PUBLIC",
+            schema=env,
             ocsp_fail_open=False,
         ) as conn:
             cur = conn.cursor()
-            cur.execute(log_status_sql)
+            cur.execute(sql)
 
-    task_filter_tli_on_created_date = BranchPythonOperator(
+    def clean_up():
+        with open("/netsuite_extras/queries/clean_up.sql") as f:
+            sql_template = Template(f.read())
+        clean_raw = sql_template.render(env=env, table_name="tli_raw")
+        clean_balanced = sql_template.render(env=env, table_name="tli_balanced")
+        with snowflake.connector.connect(
+            user=snowflake_hook.login,
+            password=snowflake_hook.password,
+            account=snowflake_hook.host,
+            warehouse="ETL",
+            database="ERP",
+            schema=env,
+            ocsp_fail_open=False,
+        ) as conn:
+            cur = conn.cursor()
+            cur.execute(clean_raw)
+            cur.execute(clean_balanced)
+            conn.commit()
+
+    task_get_tli_by_created_date = BranchPythonOperator(
         task_id="task_filter_tli_on_created_date",
         python_callable=get_tli_by_created_date,
         provide_context=True,
@@ -362,52 +317,43 @@ with DAG(
     task_get_unbalanced_tli_by_subsidiary = PythonOperator(
         task_id="task_get_unbalanced_tli_by_subsidiary",
         python_callable=get_unbalanced_tli_by_subsidiary,
-        provide_context=True,
         dag=dag,
     )
 
-    task_send_email_for_unbalanced_tli = PythonOperator(
-        task_id="task_send_email_for_unbalanced_tli",
-        python_callable=send_email_for_unbalanced_tli,
-        provide_context=True,
+    task_get_balanced_tli_by_subsidiary = PythonOperator(
+        task_id="task_get_balanced_tli_by_subsidiary",
+        python_callable=get_balanced_tli_by_subsidiary,
         dag=dag,
     )
 
     task_create_journal_entry = PythonOperator(
         task_id="task_create_journal_entry",
-        python_callable=send_journal_entries,
+        python_callable=create_journal_entry,
         provide_context=True,
         pool="netsuite_pool",
         dag=dag,
     )
 
-    task_end = DummyOperator(task_id="task_end", dag=dag)
-
     task_log_uploaded = PythonOperator(
-        task_id="task_log_uploaded",
-        python_callable=log_uploaded,
-        provide_context=True,
-        dag=dag,
+        task_id="task_log_uploaded", python_callable=log_uploaded, dag=dag
     )
 
     task_log_error = PythonOperator(
-        task_id="task_log_error",
-        python_callable=log_error,
-        provide_context=True,
-        dag=dag,
+        task_id="task_log_error", python_callable=log_error, dag=dag
     )
 
-    task_update_tli_unbalanced_historical = PythonOperator(
-        task_id="task_update_tli_unbalanced_historical",
-        python_callable=update_tli_unbalanced_historical,
-        provide_context=True,
-        dag=dag,
+    task_clean_up = PythonOperator(
+        task_id="task_clean_up", python_callable=clean_up, dag=dag
     )
 
-    task_filter_tli_on_created_date >> [task_get_unbalanced_tli_by_subsidiary, task_end]
-    task_get_unbalanced_tli_by_subsidiary >> [
-        task_send_email_for_unbalanced_tli,
-        task_create_journal_entry,
+    task_end = DummyOperator(task_id="task_end", dag=dag)
+
+    task_get_tli_by_created_date >> [
+        task_get_unbalanced_tli_by_subsidiary,
+        task_get_balanced_tli_by_subsidiary,
+        task_end,
     ]
-    task_create_journal_entry >> [task_log_uploaded, task_log_error] >> task_end
-    task_send_email_for_unbalanced_tli >> task_update_tli_unbalanced_historical
+    task_get_balanced_tli_by_subsidiary >> task_create_journal_entry >> [
+        task_log_uploaded,
+        task_log_error,
+    ] >> task_clean_up >> task_end
