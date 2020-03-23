@@ -1,4 +1,5 @@
 import json
+import pathlib
 from datetime import datetime
 
 import pendulum
@@ -44,120 +45,131 @@ with DAG(
     def get_tli_by_created_date(**kwargs):
         cd = kwargs["ds"]
         print(f"Created_date: {kwargs['ds']}")
-        with open("/netsuite_extras/queries/get_tli_by_created_date.sql") as f:
-            sql_template = Template(f.read())
-        sql = sql_template.render(
-            created_date=cd, env=env, execution_time=execution_time
-        )
+        # find path of template file
+        path = None
+        for e in pathlib.Path.cwd().rglob("get_tli_by_created_date.sql"):
+            path = e
+            break
+        if path:
+            with path.open() as f:
+                sql_template = Template(f.read())
+            sql = sql_template.render(
+                created_date=cd, env=env, execution_time=execution_time
+            )
 
-        count_all = f"select count(*) from erp.{env}.tli_raw;"
-        with snowflake.connector.connect(
-            user=snowflake_hook.login,
-            password=snowflake_hook.password,
-            account=snowflake_hook.host,
-            warehouse="ETL",
-            database="ERP",
-            schema=env,
-            ocsp_fail_open=False,
-        ) as conn:
-            cur = conn.cursor()
-            cur.execute(sql)
-            conn.commit()
-            # for role in roles:
-            #     cur.execute(f"grant select on erp.{env}.tli_{date_tag} to role {role};")
-            cur.execute(count_all)
-            count = cur.fetchone()[0]
-            print(f"Total TLI count: {count}")
-            if count == 0:
-                return "task_end"
-            return [
-                "task_get_unbalanced_tli_by_subsidiary",
-                "task_get_balanced_tli_by_subsidiary",
-            ]
+            count_all = f"select count(*) from erp.{env}.tli_raw;"
+            with snowflake.connector.connect(
+                user=snowflake_hook.login,
+                password=snowflake_hook.password,
+                account=snowflake_hook.host,
+                warehouse="ETL",
+                database="ERP",
+                schema=env,
+                ocsp_fail_open=False,
+            ) as conn:
+                cur = conn.cursor()
+                cur.execute(sql)
+                conn.commit()
+                cur.execute(count_all)
+                count = cur.fetchone()[0]
+                print(f"Total TLI count: {count}")
+                if count == 0:
+                    return "task_end"
+                return [
+                    "task_get_unbalanced_tli_by_subsidiary",
+                    "task_get_balanced_tli_by_subsidiary",
+                ]
 
     def get_balanced_tli_by_subsidiary():
-        with open("/netsuite_extras/queries/get_balanced_tli_by_subsidiary.sql") as f:
-            sql_template = Template(f.read())
-            sql = sql_template.render(env=env)
-        with snowflake.connector.connect(
-            user=snowflake_hook.login,
-            password=snowflake_hook.password,
-            account=snowflake_hook.host,
-            warehouse="ETL",
-            database="ERP",
-            schema=env,
-            ocsp_fail_open=False,
-        ) as conn:
-            cur = conn.cursor()
-            cur.execute(sql)
+        path = None
+        for e in pathlib.Path.cwd().rglob("get_balanced_tli_by_subsidiary.sql"):
+            path = e
+            break
+        if path:
+            with path.open() as f:
+                sql_template = Template(f.read())
+                sql = sql_template.render(env=env)
+            with snowflake.connector.connect(
+                user=snowflake_hook.login,
+                password=snowflake_hook.password,
+                account=snowflake_hook.host,
+                warehouse="ETL",
+                database="ERP",
+                schema=env,
+                ocsp_fail_open=False,
+            ) as conn:
+                cur = conn.cursor()
+                cur.execute(sql)
 
     def get_unbalanced_tli_by_subsidiary():
-        with open("/netsuite_extras/queries/get_unbalanced_tli_by_subsidiary.sql") as f:
-            sql_template = Template(f.read())
-            sql = sql_template.render(env=env)
-        with snowflake.connector.connect(
-            user=snowflake_hook.login,
-            password=snowflake_hook.password,
-            account=snowflake_hook.host,
-            warehouse="ETL",
-            database="ERP",
-            schema=env,
-            ocsp_fail_open=False,
-        ) as conn:
-            cur = conn.cursor()
-            cur.execute(sql)
-            # for role in roles:
-            #     cur.execute(
-            #         f"grant select on erp.{env}.tli_unbalanced_{date_tag} to role {role};"
-            #     )
+        path = None
+        for e in pathlib.Path.cwd().rglob("get_unbalanced_tli_by_subsidiary.sql"):
+            path = e
+            break
+        if path:
+            with path.open() as f:
+                sql_template = Template(f.read())
+                sql = sql_template.render(env=env)
+            with snowflake.connector.connect(
+                user=snowflake_hook.login,
+                password=snowflake_hook.password,
+                account=snowflake_hook.host,
+                warehouse="ETL",
+                database="ERP",
+                schema=env,
+                ocsp_fail_open=False,
+            ) as conn:
+                cur = conn.cursor()
+                cur.execute(sql)
 
     def create_journal_entry(**kwargs):
         created_date = kwargs["ds"]
-        with open("/netsuite_extras/queries/get_journal_entry_line.sql") as f:
-            sql_template = Template(f.read())
-            sql = sql_template.render(env=env)
-        with snowflake.connector.connect(
-            user=snowflake_hook.login,
-            password=snowflake_hook.password,
-            account=snowflake_hook.host,
-            warehouse="ETL",
-            database="ERP",
-            schema=env,
-            ocsp_fail_open=False,
-        ) as conn:
-            cur = conn.cursor()
-            cur.execute(sql)
-            data = cur.fetchall()
-            if data:
-                df = pd.DataFrame(data)
-                df.columns = [
-                    "tran_date",
-                    "old_gl",
-                    "account_internal_id",
-                    "subsidiary_id",
-                    "credit",
-                    "debit",
-                ]
-                data_json = json.loads(df.to_json(orient="records"))
-                # group gl/transaction_date
-                rows = {}
-                for item in data_json:
-                    key = (
-                        f"{item['tran_date'].replace('-', '')}_{item['subsidiary_id']}"
-                    )
-                    if key not in rows:
-                        rows[key] = []
-                    rows[key].append(item)
+        path = None
+        for e in pathlib.Path.cwd().rglob("get_journal_entry_line.sql"):
+            path = e
+            break
+        if path:
+            with path.open() as f:
+                sql_template = Template(f.read())
+                sql = sql_template.render(env=env)
+            with snowflake.connector.connect(
+                user=snowflake_hook.login,
+                password=snowflake_hook.password,
+                account=snowflake_hook.host,
+                warehouse="ETL",
+                database="ERP",
+                schema=env,
+                ocsp_fail_open=False,
+            ) as conn:
+                cur = conn.cursor()
+                cur.execute(sql)
+                data = cur.fetchall()
+                if data:
+                    df = pd.DataFrame(data)
+                    df.columns = [
+                        "tran_date",
+                        "old_gl",
+                        "account_internal_id",
+                        "subsidiary_id",
+                        "credit",
+                        "debit",
+                    ]
+                    data_json = json.loads(df.to_json(orient="records"))
+                    # group gl/transaction_date
+                    rows = {}
+                    for item in data_json:
+                        key = f"{item['tran_date'].replace('-', '')}_{item['subsidiary_id']}"
+                        if key not in rows:
+                            rows[key] = []
+                        rows[key].append(item)
 
-                for key in rows:
-                    print(f"{key}:{rows[key]}")
-                    upload_journal_entry(created_date, rows[key])
-            else:
-                print("Nothing to send")
+                    for key in rows:
+                        print(f"{key}:{rows[key]}")
+                        upload_journal_entry(created_date, rows[key])
+                else:
+                    print("Nothing to send")
 
     def upload_journal_entry(created_date, rows):
-        # print(rows)
-
         try:
             tran_date = rows[0]["tran_date"]
             subsidiary_id = rows[0]["subsidiary_id"]
@@ -222,37 +234,47 @@ with DAG(
 
     def log_uploaded():
         print("log_uploaded")
-        with open("/netsuite_extras/queries/log_uploaded.sql") as f:
-            sql_template = Template(f.read())
-        sql = sql_template.render(env=env)
-        with snowflake.connector.connect(
-            user=snowflake_hook.login,
-            password=snowflake_hook.password,
-            account=snowflake_hook.host,
-            warehouse="ETL",
-            database="ERP",
-            schema=env,
-            ocsp_fail_open=False,
-        ) as conn:
-            cur = conn.cursor()
-            cur.execute(sql)
+        path = None
+        for e in pathlib.Path.cwd().rglob("log_uploaded.sql"):
+            path = e
+            break
+        if path:
+            with path.open() as f:
+                sql_template = Template(f.read())
+            sql = sql_template.render(env=env)
+            with snowflake.connector.connect(
+                user=snowflake_hook.login,
+                password=snowflake_hook.password,
+                account=snowflake_hook.host,
+                warehouse="ETL",
+                database="ERP",
+                schema=env,
+                ocsp_fail_open=False,
+            ) as conn:
+                cur = conn.cursor()
+                cur.execute(sql)
 
     def log_error():
         print("log_uploaded")
-        with open("/netsuite_extras/queries/log_error.sql") as f:
-            sql_template = Template(f.read())
-        sql = sql_template.render(env=env)
-        with snowflake.connector.connect(
-            user=snowflake_hook.login,
-            password=snowflake_hook.password,
-            account=snowflake_hook.host,
-            warehouse="ETL",
-            database="ERP",
-            schema=env,
-            ocsp_fail_open=False,
-        ) as conn:
-            cur = conn.cursor()
-            cur.execute(sql)
+        path = None
+        for e in pathlib.Path.cwd().rglob("log_error.sql"):
+            path = e
+            break
+        if path:
+            with path.open() as f:
+                sql_template = Template(f.read())
+            sql = sql_template.render(env=env)
+            with snowflake.connector.connect(
+                user=snowflake_hook.login,
+                password=snowflake_hook.password,
+                account=snowflake_hook.host,
+                warehouse="ETL",
+                database="ERP",
+                schema=env,
+                ocsp_fail_open=False,
+            ) as conn:
+                cur = conn.cursor()
+                cur.execute(sql)
 
     def log_status(
         je_internal_id,
@@ -264,48 +286,58 @@ with DAG(
         subsidiary_id,
     ):
         print(f"log_status:{uploaded}")
-        with open("/netsuite_extras/queries/log_journal_entry_status.sql") as f:
-            sql_template = Template(f.read())
-        sql = sql_template.render(
-            je_internal_id=je_internal_id,
-            subsidiary_id=subsidiary_id,
-            uploaded=uploaded,
-            error_msg=error_msg,
-            created_date=created_date,
-            transaction_date=transaction_date,
-            execution_time=execution_time,
-            env=env,
-        )
-        with snowflake.connector.connect(
-            user=snowflake_hook.login,
-            password=snowflake_hook.password,
-            account=snowflake_hook.host,
-            warehouse="ETL",
-            database="ERP",
-            schema=env,
-            ocsp_fail_open=False,
-        ) as conn:
-            cur = conn.cursor()
-            cur.execute(sql)
+        path = None
+        for e in pathlib.Path.cwd().rglob("log_journal_entry_status.sql"):
+            path = e
+            break
+        if path:
+            with path.open() as f:
+                sql_template = Template(f.read())
+            sql = sql_template.render(
+                je_internal_id=je_internal_id,
+                subsidiary_id=subsidiary_id,
+                uploaded=uploaded,
+                error_msg=error_msg,
+                created_date=created_date,
+                transaction_date=transaction_date,
+                execution_time=execution_time,
+                env=env,
+            )
+            with snowflake.connector.connect(
+                user=snowflake_hook.login,
+                password=snowflake_hook.password,
+                account=snowflake_hook.host,
+                warehouse="ETL",
+                database="ERP",
+                schema=env,
+                ocsp_fail_open=False,
+            ) as conn:
+                cur = conn.cursor()
+                cur.execute(sql)
 
     def clean_up():
-        with open("/netsuite_extras/queries/clean_up.sql") as f:
-            sql_template = Template(f.read())
-        clean_raw = sql_template.render(env=env, table_name="tli_raw")
-        clean_balanced = sql_template.render(env=env, table_name="tli_balanced")
-        with snowflake.connector.connect(
-            user=snowflake_hook.login,
-            password=snowflake_hook.password,
-            account=snowflake_hook.host,
-            warehouse="ETL",
-            database="ERP",
-            schema=env,
-            ocsp_fail_open=False,
-        ) as conn:
-            cur = conn.cursor()
-            cur.execute(clean_raw)
-            cur.execute(clean_balanced)
-            conn.commit()
+        path = None
+        for e in pathlib.Path.cwd().rglob("clean_up.sql"):
+            path = e
+            break
+        if path:
+            with path.open() as f:
+                sql_template = Template(f.read())
+            clean_raw = sql_template.render(env=env, table_name="tli_raw")
+            clean_balanced = sql_template.render(env=env, table_name="tli_balanced")
+            with snowflake.connector.connect(
+                user=snowflake_hook.login,
+                password=snowflake_hook.password,
+                account=snowflake_hook.host,
+                warehouse="ETL",
+                database="ERP",
+                schema=env,
+                ocsp_fail_open=False,
+            ) as conn:
+                cur = conn.cursor()
+                cur.execute(clean_raw)
+                cur.execute(clean_balanced)
+                conn.commit()
 
     task_get_tli_by_created_date = BranchPythonOperator(
         task_id="task_filter_tli_on_created_date",
