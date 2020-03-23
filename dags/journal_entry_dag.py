@@ -44,7 +44,7 @@ with DAG(
     def get_tli_by_created_date(**kwargs):
         cd = kwargs["ds"]
         print(f"Created_date: {kwargs['ds']}")
-        with open("/netsuite_extras/queries/get_tli_by_created_date.sql") as f:
+        with open("dags/netsuite_extras/queries/get_tli_by_created_date.sql") as f:
             sql_template = Template(f.read())
         sql = sql_template.render(
             created_date=cd, env=env, execution_time=execution_time
@@ -76,7 +76,9 @@ with DAG(
             ]
 
     def get_balanced_tli_by_subsidiary():
-        with open("/netsuite_extras/queries/get_balanced_tli_by_subsidiary.sql") as f:
+        with open(
+            "dags/netsuite_extras/queries/get_balanced_tli_by_subsidiary.sql"
+        ) as f:
             sql_template = Template(f.read())
             sql = sql_template.render(env=env)
         with snowflake.connector.connect(
@@ -92,7 +94,9 @@ with DAG(
             cur.execute(sql)
 
     def get_unbalanced_tli_by_subsidiary():
-        with open("/netsuite_extras/queries/get_unbalanced_tli_by_subsidiary.sql") as f:
+        with open(
+            "dags/netsuite_extras/queries/get_unbalanced_tli_by_subsidiary.sql"
+        ) as f:
             sql_template = Template(f.read())
             sql = sql_template.render(env=env)
         with snowflake.connector.connect(
@@ -113,7 +117,7 @@ with DAG(
 
     def create_journal_entry(**kwargs):
         created_date = kwargs["ds"]
-        with open("/netsuite_extras/queries/get_journal_entry_line.sql") as f:
+        with open("dags/netsuite_extras/queries/get_journal_entry_line.sql") as f:
             sql_template = Template(f.read())
             sql = sql_template.render(env=env)
         with snowflake.connector.connect(
@@ -222,7 +226,7 @@ with DAG(
 
     def log_uploaded():
         print("log_uploaded")
-        with open("/netsuite_extras/queries/log_uploaded.sql") as f:
+        with open("dags/netsuite_extras/queries/log_uploaded.sql") as f:
             sql_template = Template(f.read())
         sql = sql_template.render(env=env)
         with snowflake.connector.connect(
@@ -239,7 +243,7 @@ with DAG(
 
     def log_error():
         print("log_uploaded")
-        with open("/netsuite_extras/queries/log_error.sql") as f:
+        with open("dags/netsuite_extras/queries/log_error.sql") as f:
             sql_template = Template(f.read())
         sql = sql_template.render(env=env)
         with snowflake.connector.connect(
@@ -264,7 +268,7 @@ with DAG(
         subsidiary_id,
     ):
         print(f"log_status:{uploaded}")
-        with open("/netsuite_extras/queries/log_journal_entry_status.sql") as f:
+        with open("dags/netsuite_extras/queries/log_journal_entry_status.sql") as f:
             sql_template = Template(f.read())
         sql = sql_template.render(
             je_internal_id=je_internal_id,
@@ -289,7 +293,7 @@ with DAG(
             cur.execute(sql)
 
     def clean_up():
-        with open("/netsuite_extras/queries/clean_up.sql") as f:
+        with open("dags/netsuite_extras/queries/clean_up.sql") as f:
             sql_template = Template(f.read())
         clean_raw = sql_template.render(env=env, table_name="tli_raw")
         clean_balanced = sql_template.render(env=env, table_name="tli_balanced")
