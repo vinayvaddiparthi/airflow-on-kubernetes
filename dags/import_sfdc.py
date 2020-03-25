@@ -121,34 +121,36 @@ def create_dag(instance: str):
         schedule_interval="0 0,18 * * *",
         catchup=False,
     ) as dag:
-        dag << [
-            PythonOperator(
-                task_id=f'snowflake__{sobject["name"]}',
-                python_callable=ctas_to_snowflake,
-                op_kwargs={"sfdc_instance": instance, "sobject": sobject},
-                pool=f"{instance}_pool",
-                execution_timeout=datetime.timedelta(hours=4),
-                retry_delay=datetime.timedelta(hours=1),
-                retries=3,
-                on_failure_callback=slack_on_fail,
-                priority_weight=sobject.get("weight"),
-            )
-            >> PythonOperator(
-                task_id=f'snowflake_summary__{sobject["name"]}',
-                python_callable=create_sf_summary_table,
-                op_kwargs={
-                    "conn": "snowflake_default",
-                    "sfdc_instance": instance,
-                    "sobject": sobject,
-                },
-                pool="snowflake_pool",
-                execution_timeout=datetime.timedelta(hours=4),
-                retry_delay=datetime.timedelta(hours=1),
-                retries=3,
-                priority_weight=sobject.get("weight"),
-            )
-            for sobject in sobjects
-        ]
+        dag.add_tasks(
+            [
+                PythonOperator(
+                    task_id=f'snowflake__{sobject["name"]}',
+                    python_callable=ctas_to_snowflake,
+                    op_kwargs={"sfdc_instance": instance, "sobject": sobject},
+                    pool=f"{instance}_pool",
+                    execution_timeout=datetime.timedelta(hours=4),
+                    retry_delay=datetime.timedelta(hours=1),
+                    retries=3,
+                    on_failure_callback=slack_on_fail,
+                    priority_weight=sobject.get("weight"),
+                )
+                >> PythonOperator(
+                    task_id=f'snowflake_summary__{sobject["name"]}',
+                    python_callable=create_sf_summary_table,
+                    op_kwargs={
+                        "conn": "snowflake_default",
+                        "sfdc_instance": instance,
+                        "sobject": sobject,
+                    },
+                    pool="snowflake_pool",
+                    execution_timeout=datetime.timedelta(hours=4),
+                    retry_delay=datetime.timedelta(hours=1),
+                    retries=3,
+                    priority_weight=sobject.get("weight"),
+                )
+                for sobject in sobjects
+            ]
+        )
     return dag
 
 
