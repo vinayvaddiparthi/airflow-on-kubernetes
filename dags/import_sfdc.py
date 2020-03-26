@@ -131,7 +131,7 @@ def create_dag(instance: str):
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
                 on_failure_callback=slack_on_fail,
-                priority_weight=sobject.get("weight"),
+                priority_weight=sobject.get("weight", 0),
             ) >> PythonOperator(
                 task_id=f'snowflake_summary__{sobject["name"]}',
                 python_callable=create_sf_summary_table,
@@ -144,7 +144,7 @@ def create_dag(instance: str):
                 execution_timeout=datetime.timedelta(hours=4),
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
-                priority_weight=sobject.get("weight"),
+                priority_weight=sobject.get("weight", 0),
             )
         return dag
 
