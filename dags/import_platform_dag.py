@@ -1,3 +1,4 @@
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -16,31 +17,35 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
 
     base_ssh_key_path = Path.home() / ".ssh" / "id_rsa"
 
-    for command in [
-        ["ssh-keygen", "-t", "rsa", "-N", "", "-f", base_ssh_key_path],
-        ["heroku", "keys:add", f"{base_ssh_key_path}.pub"],
-        [
-            "heroku",
-            "run",
-            "-a",
-            app,
-            "python",
-            "extract.py",
-            "--snowflake-account",
-            "thinkingcapital.ca-central-1.aws",
-            "--snowflake-username",
-            snowflake_conn.login,
-            "--snowflake-password",
-            snowflake_conn.password,
-            "--snowflake-database",
-            "ZETATANGO",
-            "--snowflake-schema",
-            snowflake_schema,
-            "--snowflake-schema",
-            snowflake_schema,
-        ],
-    ]:
-        subprocess.run(command, capture_output=True).check_returncode()  # nosec
+    for completed_process in (
+        subprocess.run(command, capture_output=True)  # nosec
+        for command in [
+            ["ssh-keygen", "-t", "rsa", "-N", "", "-f", base_ssh_key_path],
+            ["heroku", "keys:add", f"{base_ssh_key_path}.pub"],
+            [
+                "heroku",
+                "run",
+                "-a",
+                app,
+                "python",
+                "extract.py",
+                "--snowflake-account",
+                "thinkingcapital.ca-central-1.aws",
+                "--snowflake-username",
+                snowflake_conn.login,
+                "--snowflake-password",
+                snowflake_conn.password,
+                "--snowflake-database",
+                "ZETATANGO",
+                "--snowflake-schema",
+                snowflake_schema,
+                "--snowflake-schema",
+                snowflake_schema,
+            ],
+        ]
+    ):
+        logging.info(completed_process)
+        completed_process.check_returncode()
 
 
 with DAG(
