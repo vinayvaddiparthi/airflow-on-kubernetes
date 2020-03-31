@@ -46,7 +46,9 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
             ],
         ]
     ):
-        logging.info(completed_process)
+        logging.info(
+            f"process: {completed_process.args[0]}\nstdout: {completed_process.stdout}\nstderr: {completed_process.stderr}"
+        )
         completed_process.check_returncode()
 
 
