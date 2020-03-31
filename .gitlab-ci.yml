@@ -17,7 +17,7 @@ variables:
 black:
   stage: pre-test
   tags:
-    - docker
+    - k8s
   image: python:${PYTHON_VERSION}
   script:
     - pip install black
@@ -39,7 +39,7 @@ build_image:
 sast:
   stage: test
   tags:
-    - docker
+    - k8s
   image: python:${PYTHON_VERSION}
   script:
     - pip install bandit
@@ -48,7 +48,7 @@ sast:
 check_dependencies:
   stage: test
   tags:
-    - docker
+    - k8s
   image: python:${PYTHON_VERSION}
   script:
     - pip install pipenv
