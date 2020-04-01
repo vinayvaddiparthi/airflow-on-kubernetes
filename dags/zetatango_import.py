@@ -55,7 +55,7 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
 with DAG(
     dag_id="zetatango_import",
     start_date=pendulum.datetime(
-        2020, 3, 20, tzinfo=pendulum.timezone("America/Toronto")
+        2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
     ),
     schedule_interval="0 0,8-20 * * 1-5",
 ) as dag:
