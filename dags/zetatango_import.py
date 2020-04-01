@@ -53,7 +53,7 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
 
 
 with DAG(
-    dag_id="platform_import_production",
+    dag_id="zetatango_import",
     start_date=pendulum.datetime(
         2020, 3, 20, tzinfo=pendulum.timezone("America/Toronto")
     ),
@@ -74,6 +74,21 @@ with DAG(
             "app": "zt-production-elt-idp",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "IDP_PRODUCTION",
+        },
+        {
+            "app": "zt-staging-elt-core",
+            "snowflake_connection": "snowflake_zetatango_staging",
+            "snowflake_schema": "CORE_STAGING",
+        },
+        {
+            "app": "zt-staging-elt-kyc",
+            "snowflake_connection": "snowflake_zetatango_staging",
+            "snowflake_schema": "KYC_STAGING",
+        },
+        {
+            "app": "zt-staging-elt-idp",
+            "snowflake_connection": "snowflake_zetatango_staging",
+            "snowflake_schema": "IDP_STAGING",
         },
     ]:
         dag << PythonOperator(
