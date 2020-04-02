@@ -66,7 +66,9 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
         completed_process.check_returncode()
 
 
-def decrypt_pii_columns(snowflake_connection: str, column_specs: List[ColumnSpec]):
+def decrypt_pii_columns(
+    snowflake_connection: str, column_specs: List[ColumnSpec], target_schema: str
+):
     from pyporky.symmetric import SymmetricPorky
     from json import loads as json_loads
     from base64 import b64decode
@@ -118,7 +120,7 @@ def decrypt_pii_columns(snowflake_connection: str, column_specs: List[ColumnSpec
                     for stmt in [
                         f"CREATE OR REPLACE STAGE {cs.schema}.{cs.table}__PII FILE_FORMAT=(TYPE=PARQUET)",
                         f"PUT file://{path} @{cs.schema}.{cs.table}",
-                        f"CREATE OR REPLACE TABLE {cs.schema}.{cs.table}__PII AS SELECT * FROM @{cs.schema}.{cs.table}__PII",
+                        f"CREATE OR REPLACE TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{cs.schema}.{cs.table}__PII",
                     ]
                 ]
             )
@@ -181,6 +183,7 @@ with DAG(
                     columns=["value"],
                 )
             ],
+            "target_schema": "PII_STAGING",
         },
         executor_config={
             "KubernetesExecutor": {
