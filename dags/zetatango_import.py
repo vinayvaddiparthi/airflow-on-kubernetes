@@ -118,7 +118,7 @@ def decrypt_pii_columns(
                 [
                     tx.execute(stmt).fetchall()
                     for stmt in [
-                        f"CREATE OR REPLACE STAGE {target_schema}.{cs.schema}__{cs.table} FILE_FORMAT=(TYPE=PARQUET)",
+                        f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{cs.schema}__{cs.table} FILE_FORMAT=(TYPE=PARQUET)",
                         f"PUT file://{path} @{target_schema}.{cs.schema}__{cs.table}",
                         f"CREATE OR REPLACE TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{target_schema}.{cs.schema}__{cs.table}",
                     ]
