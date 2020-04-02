@@ -101,7 +101,7 @@ def decrypt_pii_columns(snowflake_connection: str, column_specs: List[ColumnSpec
                 for col in cs.columns
             ],
             from_obj=text(f"{cs.schema}.{cs.table}"),
-        ).limit(10)
+        )
 
         engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
         with engine.begin() as tx, tempfile.TemporaryDirectory() as output_directory:
