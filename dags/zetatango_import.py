@@ -114,14 +114,16 @@ def decrypt_pii_columns(snowflake_connection: str, column_specs: List[ColumnSpec
             )
             df.to_parquet(path, engine="fastparquet", compression="gzip")
 
-            return [
-                dict(tx.execute(stmt).fetchall())
-                for stmt in [
-                    f"CREATE OR REPLACE STAGE {cs.schema}.{cs.table}__PII FILE_FORMAT=(TYPE=PARQUET)",
-                    f"PUT file://{path} @{cs.schema}.{cs.table}",
-                    f"CREATE OR REPLACE TABLE {cs.schema}.{cs.table}__PII AS SELECT * FROM @{cs.schema}.{cs.table}__PII",
+            logging.info(
+                [
+                    tx.execute(stmt).fetchall()
+                    for stmt in [
+                        f"CREATE OR REPLACE STAGE {cs.schema}.{cs.table}__PII FILE_FORMAT=(TYPE=PARQUET)",
+                        f"PUT file://{path} @{cs.schema}.{cs.table}",
+                        f"CREATE OR REPLACE TABLE {cs.schema}.{cs.table}__PII AS SELECT * FROM @{cs.schema}.{cs.table}__PII",
+                    ]
                 ]
-            ]
+            )
 
 
 with DAG(
