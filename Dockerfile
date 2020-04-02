@@ -1,4 +1,4 @@
-FROM python:3.7-slim-stretch
+FROM python:3.8
 
 # Never prompts the user for choices on installation/configuration of packages
 ENV DEBIAN_FRONTEND noninteractive
@@ -8,7 +8,7 @@ ENV TERM linux
 ARG AIRFLOW_VERSION=1.10.9
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
 ARG AIRFLOW_DEPS="kubernetes,s3,snowflake"
-ARG PYTHON_DEPS="snowflake-sqlalchemy xmltodict fastparquet pandas pynacl"
+ARG PYTHON_DEPS="snowflake-sqlalchemy xmltodict fastparquet pandas pynacl cffi<1.14"
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
 
 # Define en_US.
