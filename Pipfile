@@ -4,12 +4,19 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+pytest = "*"
+pytest-cov = "*"
+pytest-mock = "*"
+mypy = "*"
 
 [packages]
+pyporky = {git = "https://gitlab.com/tc-data/pyporky.git"}
 apache-airflow = {version = ">=1.10.9<2",extra = ["kubernetes","redshift","presto"]}
 pyhive = {version = "*",extra = ["presto"]}
 snowflake-sqlalchemy = "*"
 xmltodict = "*"
+pynacl = "*"
+fastparquet = "*"
 
 [requires]
 python_version = "3.8"
