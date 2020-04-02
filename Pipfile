@@ -10,6 +10,7 @@ apache-airflow = {version = ">=1.10.9<2",extra = ["kubernetes","redshift","prest
 pyhive = {version = "*",extra = ["presto"]}
 snowflake-sqlalchemy = "*"
 xmltodict = "*"
+dbt = "*"
 
 [requires]
 python_version = "3.8"
