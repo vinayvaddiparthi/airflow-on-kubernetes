@@ -141,6 +141,27 @@ with DAG(
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "CORE_PRODUCTION",
         },
+    ) >> PythonOperator(
+        task_id="zt-production-elt-core__pii_decryption",
+        python_callable=decrypt_pii_columns,
+        op_kwargs={
+            "snowflake_connection": "snowflake_zetatango_production",
+            "column_specs": [
+                ColumnSpec(
+                    schema="CORE_PRODUCTION",
+                    table="MERCHANT_ATTRIBUTES",
+                    columns=["value"],
+                )
+            ],
+            "target_schema": "PII_PRODUCTION",
+        },
+        executor_config={
+            "KubernetesExecutor": {
+                "annotations": {
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowProductionZetatangoPiiRole"
+                }
+            }
+        },
     )
 
     dag << PythonOperator(
