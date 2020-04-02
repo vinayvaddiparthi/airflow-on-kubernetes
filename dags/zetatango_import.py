@@ -71,6 +71,12 @@ def decrypt_pii_columns(snowflake_connection: str, column_specs: List[ColumnSpec
     from json import loads as json_loads
     from base64 import b64decode
 
+    try:
+        del os.environ["AWS_ACCESS_KEY_ID"]
+        del os.environ["AWS_SECRET_ACCESS_KEY"]
+    except KeyError:
+        pass
+
     def __decrypt(row):
         list_ = [row[0]]
         for field in row[1:]:
