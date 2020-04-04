@@ -50,6 +50,8 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
                 "-a",
                 app,
                 "--exit-code",
+                "--size",
+                "standard-2x",
                 "-e",
                 f"SNOWFLAKE_PASSWORD={snowflake_conn.password}",
                 "python",
