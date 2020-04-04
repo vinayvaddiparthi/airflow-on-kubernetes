@@ -54,7 +54,7 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
 
     completed_process = subprocess.run(  # nosec
         [
-            "heroku",
+            "/usr/local/bin/heroku",
             "run",
             f"--app={app}",
             "--exit-code",
