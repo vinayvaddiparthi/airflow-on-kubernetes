@@ -69,7 +69,8 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
             "HEROKU_API_KEY": HttpHook.get_connection(
                 "heroku_production_api_key"
             ).password
-        },
+        }
+        + os.environ,
     )
     logging.info(
         f"stdout: {completed_process.stdout}\n" f"stderr: {completed_process.stderr}"
