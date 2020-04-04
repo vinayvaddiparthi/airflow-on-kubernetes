@@ -36,8 +36,8 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     ssh_conn = SSHHook.get_connection("heroku_production_ssh_key")
 
     ssh_private_key_dir = Path.home() / ".ssh"
-    ssh_private_key_file = ssh_private_key_dir / "id_rsa"
     ssh_private_key_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    ssh_private_key_file = ssh_private_key_dir / "id_rsa"
     ssh_private_key_file.write_text(ssh_conn.extra_dejson["private_key"])
     ssh_private_key_file.chmod(0o600)
 
@@ -48,9 +48,8 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
             f'bash -c "python extract.py '
             f"--snowflake-account thinkingcapital.ca-central-1.aws "
             f"--snowflake-username {snowflake_conn.login} "
-            f"--snowflake-password $SNOWFLAKE_PASSWORD "
             f"--snowflake-database ZETATANGO "
-            f'--snowflake-schema {snowflake_schema}" '
+            f'--snowflake-schema {snowflake_schema}"'
         ]
     ):
         logging.info(
