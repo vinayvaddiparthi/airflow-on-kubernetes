@@ -11,7 +11,6 @@ import pandas as pd
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
-from airflow.hooks.base_hook import BaseHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.operators.bash_operator import BashOperator
 from airflow.operators.python_operator import PythonOperator
@@ -47,7 +46,7 @@ def _bash_command(app, snowflake_connection, snowflake_schema):
 
     return (
         f"mkdir --parents --mode=700 ~/.ssh && "
-        f"echo $SSH_PRIVATE_KEY > ~/.ssh/id_rsa && "
+        f"echo $SSH_PRIVATE_KEY | base64 -d > ~/.ssh/id_rsa && "
         f"chmod 600 ~/.ssh/id_rsa && "
         f'/usr/local/bin/heroku run -x --app="{app}" --env="{env}" python extract.py'
     )
