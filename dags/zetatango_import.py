@@ -41,7 +41,7 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
 
     env = ";".join(
         [
-            f'{k}="{v}"'
+            f"{k}={v}"
             for k, v in {
                 "SNOWFLAKE_ACCOUNT": "thinkingcapital.ca-central-1.aws",
                 "SNOWFLAKE_USERNAME": snowflake_conn.login,
