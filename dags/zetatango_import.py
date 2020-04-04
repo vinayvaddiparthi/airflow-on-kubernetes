@@ -45,12 +45,12 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
         subprocess.run(command, capture_output=True, shell=True)  # nosec
         for command in [
             f"heroku run -a {app} --exit-code -e SNOWFLAKE_PASSWORD={snowflake_conn.password} "
-            f"python extract.py "
+            f'bash -c "python extract.py '
             f"--snowflake-account thinkingcapital.ca-central-1.aws "
             f"--snowflake-username {snowflake_conn.login} "
             f"--snowflake-password $SNOWFLAKE_PASSWORD "
             f"--snowflake-database ZETATANGO "
-            f"--snowflake-schema {snowflake_schema} "
+            f'--snowflake-schema {snowflake_schema}" '
         ]
     ):
         logging.info(
