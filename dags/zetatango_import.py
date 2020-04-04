@@ -42,23 +42,36 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     ssh_private_key_file.write_text(ssh_conn.extra_dejson["private_key"])
     ssh_private_key_file.chmod(0o600)
 
-    for completed_process in (
-        subprocess.run(command, capture_output=True, shell=True)  # nosec
-        for command in [
-            f"heroku run -a {app} --exit-code "
-            f'SNOWFLAKE_ACCOUNT="thinkingcapital.ca-central-1.aws";'
-            f'SNOWFLAKE_USERNAME="{snowflake_conn.login}";'
-            f'SNOWFLAKE_PASSWORD="{snowflake_conn.password}";'
-            f'SNOWFLAKE_DATABASE="ZETATANGO";'
-            f'SNOWFLAKE_SCHEMA="{snowflake_schema}" '
-            f"python extract.py"
+    env = ";".join(
+        [
+            f'{k}="{v}"'
+            for k, v in {
+                "SNOWFLAKE_ACCOUNT": "thinkingcapital.ca-central-1.aws",
+                "SNOWFLAKE_USERNAME": snowflake_conn.login,
+                "SNOWFLAKE_PASSWORD": snowflake_conn.password,
+                "SNOWFLAKE_DATABASE": "ZETATANGO",
+                "SNOWFLAKE_SCHEMA": snowflake_schema,
+            }.items()
         ]
-    ):
-        logging.info(
-            f"stdout: {completed_process.stdout}\n"
-            f"stderr: {completed_process.stderr}"
-        )
-        completed_process.check_returncode()
+    )
+
+    completed_process = subprocess.run(  # nosec
+        [
+            "heroku",
+            "run",
+            f"--app={app}",
+            "--exit-code",
+            f"--env={env}",
+            "python",
+            "extract.py",
+        ],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    logging.info(
+        f"stdout: {completed_process.stdout}\n" f"stderr: {completed_process.stderr}"
+    )
 
 
 def decrypt_pii_columns(
