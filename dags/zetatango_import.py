@@ -11,6 +11,7 @@ import pandas as pd
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
+from airflow.hooks.base_hook import BaseHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
@@ -44,12 +45,13 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     for completed_process in (
         subprocess.run(command, capture_output=True, shell=True)  # nosec
         for command in [
-            f"heroku run -a {app} --exit-code -e SNOWFLAKE_PASSWORD={snowflake_conn.password} "
-            f'bash -c "python extract.py '
-            f"--snowflake-account thinkingcapital.ca-central-1.aws "
-            f"--snowflake-username {snowflake_conn.login} "
-            f"--snowflake-database ZETATANGO "
-            f'--snowflake-schema {snowflake_schema}"'
+            f"heroku run -a {app} --exit-code "
+            f'SNOWFLAKE_ACCOUNT="thinkingcapital.ca-central-1.aws";'
+            f'SNOWFLAKE_USERNAME="{snowflake_conn.login}";'
+            f'SNOWFLAKE_PASSWORD="{snowflake_conn.password}";'
+            f'SNOWFLAKE_DATABASE="ZETATANGO";'
+            f'SNOWFLAKE_SCHEMA="{snowflake_schema}" '
+            f"python extract.py"
         ]
     ):
         logging.info(
