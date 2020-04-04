@@ -224,7 +224,7 @@ with DAG(
     )
 
     dag << PythonOperator(
-        task_id="zt-core-elt-kyc__import",
+        task_id="zt-staging-elt-kyc__import",
         python_callable=run_heroku_command,
         op_kwargs={
             "app": "zt-staging-elt-kyc",
