@@ -168,10 +168,10 @@ local airflowCfg = {
     },
     scheduler:{ 
       job_heartbeat_sec:5,
-      scheduler_heartbeat_sec:5,
+      scheduler_heartbeat_sec:30,
       num_runs:-1,
-      processor_poll_interval:10,
-      min_file_process_interval:60,
+      processor_poll_interval:1,
+      min_file_process_interval:120,
       dag_dir_list_interval:300,
       print_stats_interval:30,
       scheduler_health_check_threshold:60,
@@ -184,7 +184,7 @@ local airflowCfg = {
       statsd_port:8125,
       statsd_prefix:"airflow",
       statsd_allow_list:null,
-      max_threads:16,
+      max_threads:8,
       authenticate:false,
       use_job_schedule:true,
 
