@@ -30,9 +30,6 @@ class ColumnSpec:
 
 
 def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: str):
-    os.environ["HEROKU_API_KEY"] = HttpHook.get_connection(
-        "heroku_production_api_key"
-    ).password
     snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
     ssh_conn = SSHHook.get_connection("heroku_production_ssh_key")
 
@@ -68,6 +65,11 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
         capture_output=True,
         check=True,
         text=True,
+        env={
+            "HEROKU_API_KEY": HttpHook.get_connection(
+                "heroku_production_api_key"
+            ).password
+        },
     )
     logging.info(
         f"stdout: {completed_process.stdout}\n" f"stderr: {completed_process.stderr}"
