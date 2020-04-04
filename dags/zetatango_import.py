@@ -127,6 +127,7 @@ with DAG(
     dag << BashOperator(
         task_id="zt-production-elt-core__import",
         env={
+            "HOME": os.environ["HOME"],
             "SSH_PRIVATE_KEY": SSHHook.get_connection(
                 "heroku_production_ssh_key"
             ).extra_dejson["private_key"],
@@ -165,6 +166,7 @@ with DAG(
     dag << BashOperator(
         task_id="zt-production-elt-idp__import",
         env={
+            "HOME": os.environ["HOME"],
             "SSH_PRIVATE_KEY": SSHHook.get_connection(
                 "heroku_production_ssh_key"
             ).extra_dejson["private_key"],
@@ -182,6 +184,7 @@ with DAG(
     dag << BashOperator(
         task_id="zt-production-elt-kyc__import",
         env={
+            "HOME": os.environ["HOME"],
             "SSH_PRIVATE_KEY": SSHHook.get_connection(
                 "heroku_production_ssh_key"
             ).extra_dejson["private_key"],
@@ -199,6 +202,7 @@ with DAG(
     dag << BashOperator(
         task_id="zt-staging-elt-core__import",
         env={
+            "HOME": os.environ["HOME"],
             "SSH_PRIVATE_KEY": SSHHook.get_connection(
                 "heroku_production_ssh_key"
             ).extra_dejson["private_key"],
@@ -237,6 +241,7 @@ with DAG(
     dag << BashOperator(
         task_id="zt-staging-elt-idp__import",
         env={
+            "HOME": os.environ["HOME"],
             "SSH_PRIVATE_KEY": SSHHook.get_connection(
                 "heroku_production_ssh_key"
             ).extra_dejson["private_key"],
@@ -254,6 +259,7 @@ with DAG(
     BashOperator(
         task_id="zt-staging-elt-kyc__import",
         env={
+            "HOME": os.environ["HOME"],
             "SSH_PRIVATE_KEY": SSHHook.get_connection(
                 "heroku_production_ssh_key"
             ).extra_dejson["private_key"],
