@@ -45,7 +45,6 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     for completed_process in (
         subprocess.run(command, capture_output=True)  # nosec
         for command in [
-            ["ssh-keygen", "-t", "rsa", "-N", "", "-f", ssh_private_key_path],
             ["heroku", "keys:add", ssh_public_key_path],
             [
                 "heroku",
