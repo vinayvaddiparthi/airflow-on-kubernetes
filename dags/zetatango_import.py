@@ -1,5 +1,7 @@
 import logging
 import os
+import random
+import string
 import tempfile
 from pathlib import Path
 from typing import List
@@ -120,13 +122,17 @@ def decrypt_pii_columns(
             )
             df.to_parquet(path, engine="fastparquet", compression="gzip")
 
+            stage = "".join(
+                random.choice(string.ascii_uppercase) for _ in range(24)  # nosec
+            )
+
             logging.info(
                 [
                     tx.execute(stmt).fetchall()
                     for stmt in [
-                        f"""CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{cs.schema}__{cs.table} FILE_FORMAT=(TYPE=PARQUET)""",
-                        f"PUT file://{path} @{target_schema}.{cs.schema}__{cs.table}",
-                        f"""CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{target_schema}.{cs.schema}__{cs.table}""",
+                        f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} FILE_FORMAT=(TYPE=PARQUET)",
+                        f"PUT file://{path} @{target_schema}.{stage}",
+                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{stage}",
                     ]
                 ]
             )
