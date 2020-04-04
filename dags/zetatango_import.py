@@ -35,9 +35,10 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
     ssh_conn = SSHHook.get_connection("heroku_production_ssh_key")
 
-    ssh_private_key_path = Path.home() / ".ssh" / "id_rsa"
-    with ssh_private_key_path.open(mode="w") as private_key_file:
-        print(ssh_conn.extra["private_key"], file=private_key_file)
+    ssh_private_key_dir = Path.home() / ".ssh"
+    ssh_private_key_file = ssh_private_key_dir / "id_dsa"
+    ssh_private_key_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    ssh_private_key_file.write_text(ssh_conn.extra["private_key"])
 
     for completed_process in (
         subprocess.run(command, capture_output=True)  # nosec
