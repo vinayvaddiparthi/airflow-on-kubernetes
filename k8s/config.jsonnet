@@ -187,7 +187,6 @@ local airflowCfg = {
       max_threads:8,
       authenticate:false,
       use_job_schedule:true,
-
     },
     ldap:{ 
       #uri:null,
