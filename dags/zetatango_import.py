@@ -13,6 +13,7 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.hooks.base_hook import BaseHook
 from airflow.hooks.http_hook import HttpHook
+from airflow.operators.bash_operator import BashOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
 import subprocess  # nosec
@@ -29,16 +30,8 @@ class ColumnSpec:
     catalog: str = attr.ib(default=None)
 
 
-def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: str):
+def _bash_command(app, snowflake_connection, snowflake_schema):
     snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
-    ssh_conn = SSHHook.get_connection("heroku_production_ssh_key")
-
-    ssh_private_key_dir = Path.home() / ".ssh"
-    ssh_private_key_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    ssh_private_key_file = ssh_private_key_dir / "id_rsa"
-    ssh_private_key_file.write_text(ssh_conn.extra_dejson["private_key"])
-    ssh_private_key_file.chmod(0o600)
-
     env = ";".join(
         [
             f"{k}={v}"
@@ -52,31 +45,12 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
         ]
     )
 
-    completed_process = subprocess.run(  # nosec
-        [
-            "/usr/local/bin/heroku",
-            "run",
-            f"--app={app}",
-            "--exit-code",
-            f"--env={env}",
-            "python",
-            "extract.py",
-        ],
-        capture_output=True,
-        check=True,
-        text=True,
-        env={
-            **os.environ,
-            **{
-                "HEROKU_API_KEY": HttpHook.get_connection(
-                    "heroku_production_api_key"
-                ).password
-            },
-        },
-    )
-    logging.info(
-        f"stdout: {completed_process.stdout}\n" f"stderr: {completed_process.stderr}"
-    )
+    return f"""
+    mkdir --parents --mode=700 ~/.ssh &&\
+    echo $SSH_PRIVATE_KEY > ~/.ssh/id_rsa &&\
+    chmod 600 ~/.ssh/id_rsa &&\
+    /usr/local/bin/heroku run --app={app} --env={env} --exit-code python extract.py
+    """
 
 
 def decrypt_pii_columns(
@@ -150,14 +124,21 @@ with DAG(
     ),
     schedule_interval="0 0,8-20 * * 1-5",
 ) as dag:
-    dag << PythonOperator(
+    dag << BashOperator(
         task_id="zt-production-elt-core__import",
-        python_callable=run_heroku_command,
-        op_kwargs={
-            "app": "zt-production-elt-core",
-            "snowflake_connection": "snowflake_zetatango_production",
-            "snowflake_schema": "CORE_PRODUCTION",
+        env={
+            "SSH_PRIVATE_KEY": SSHHook.get_connection(
+                "heroku_production_ssh_key"
+            ).extra_dejson["private_key"],
+            "HEROKU_API_KEY": HttpHook.get_connection(
+                "heroku_production_api_key"
+            ).password,
         },
+        bash_command=_bash_command(
+            app="zt_production_elt_core",
+            snowflake_connection="snowflake_zetatango_production",
+            snowflake_schema="CORE_PRODUCTION",
+        ),
     ) >> PythonOperator(
         task_id="zt-production-elt-core__pii_decryption",
         python_callable=decrypt_pii_columns,
@@ -181,34 +162,55 @@ with DAG(
         },
     )
 
-    dag << PythonOperator(
+    dag << BashOperator(
         task_id="zt-production-elt-idp__import",
-        python_callable=run_heroku_command,
-        op_kwargs={
-            "app": "zt-production-elt-idp",
-            "snowflake_connection": "snowflake_zetatango_production",
-            "snowflake_schema": "IDP_PRODUCTION",
+        env={
+            "SSH_PRIVATE_KEY": SSHHook.get_connection(
+                "heroku_production_ssh_key"
+            ).extra_dejson["private_key"],
+            "HEROKU_API_KEY": HttpHook.get_connection(
+                "heroku_production_api_key"
+            ).password,
         },
+        bash_command=_bash_command(
+            app="zt_production_elt_idp",
+            snowflake_connection="snowflake_zetatango_production",
+            snowflake_schema="IDP_PRODUCTION",
+        ),
     )
 
-    dag << PythonOperator(
+    dag << BashOperator(
         task_id="zt-production-elt-kyc__import",
-        python_callable=run_heroku_command,
-        op_kwargs={
-            "app": "zt-production-elt-kyc",
-            "snowflake_connection": "snowflake_zetatango_production",
-            "snowflake_schema": "KYC_PRODUCTION",
+        env={
+            "SSH_PRIVATE_KEY": SSHHook.get_connection(
+                "heroku_production_ssh_key"
+            ).extra_dejson["private_key"],
+            "HEROKU_API_KEY": HttpHook.get_connection(
+                "heroku_production_api_key"
+            ).password,
         },
+        bash_command=_bash_command(
+            app="zt_production_elt_kyc",
+            snowflake_connection="snowflake_zetatango_production",
+            snowflake_schema="KYC_PRODUCTION",
+        ),
     )
 
-    dag << PythonOperator(
+    dag << BashOperator(
         task_id="zt-staging-elt-core__import",
-        python_callable=run_heroku_command,
-        op_kwargs={
-            "app": "zt-staging-elt-core",
-            "snowflake_connection": "snowflake_zetatango_staging",
-            "snowflake_schema": "CORE_STAGING",
+        env={
+            "SSH_PRIVATE_KEY": SSHHook.get_connection(
+                "heroku_production_ssh_key"
+            ).extra_dejson["private_key"],
+            "HEROKU_API_KEY": HttpHook.get_connection(
+                "heroku_production_api_key"
+            ).password,
         },
+        bash_command=_bash_command(
+            app="zt_staging_elt_core",
+            snowflake_connection="snowflake_zetatango_staging",
+            snowflake_schema="CORE_STAGING",
+        ),
     ) >> PythonOperator(
         task_id="zt-staging-elt-core__pii_decryption",
         python_callable=decrypt_pii_columns,
@@ -232,22 +234,36 @@ with DAG(
         },
     )
 
-    dag << PythonOperator(
+    dag << BashOperator(
         task_id="zt-staging-elt-idp__import",
-        python_callable=run_heroku_command,
-        op_kwargs={
-            "app": "zt-staging-elt-idp",
-            "snowflake_connection": "snowflake_zetatango_staging",
-            "snowflake_schema": "IDP_STAGING",
+        env={
+            "SSH_PRIVATE_KEY": SSHHook.get_connection(
+                "heroku_production_ssh_key"
+            ).extra_dejson["private_key"],
+            "HEROKU_API_KEY": HttpHook.get_connection(
+                "heroku_production_api_key"
+            ).password,
         },
+        bash_command=_bash_command(
+            app="zt_staging_elt_idp",
+            snowflake_connection="snowflake_zetatango_staging",
+            snowflake_schema="IDP_STAGING",
+        ),
     )
 
-    dag << PythonOperator(
+    BashOperator(
         task_id="zt-staging-elt-kyc__import",
-        python_callable=run_heroku_command,
-        op_kwargs={
-            "app": "zt-staging-elt-kyc",
-            "snowflake_connection": "snowflake_zetatango_staging",
-            "snowflake_schema": "KYC_STAGING",
+        env={
+            "SSH_PRIVATE_KEY": SSHHook.get_connection(
+                "heroku_production_ssh_key"
+            ).extra_dejson["private_key"],
+            "HEROKU_API_KEY": HttpHook.get_connection(
+                "heroku_production_api_key"
+            ).password,
         },
+        bash_command=_bash_command(
+            app="zt_staging_elt_kyc",
+            snowflake_connection="snowflake_zetatango_staging",
+            snowflake_schema="KYC_STAGING",
+        ),
     )
