@@ -49,7 +49,7 @@ def _bash_command(app, snowflake_connection, snowflake_schema):
     mkdir --parents --mode=700 ~/.ssh &&\
     echo $SSH_PRIVATE_KEY > ~/.ssh/id_rsa &&\
     chmod 600 ~/.ssh/id_rsa &&\
-    /usr/local/bin/heroku run -x --app={app} --env={env} -- python extract.py
+    /usr/local/bin/heroku run -x --app={app} --env={env} python extract.py
     """
 
 
