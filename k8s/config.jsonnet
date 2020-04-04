@@ -178,7 +178,7 @@ local airflowCfg = {
       child_process_log_directory:"/usr/local/airflow/logs/scheduler",
       scheduler_zombie_task_threshold:300,
       catchup_by_default:true,
-      max_tis_per_query:512,
+      max_tis_per_query:1024,
       statsd_on:false,
       statsd_host:"localhost",
       statsd_port:8125,
