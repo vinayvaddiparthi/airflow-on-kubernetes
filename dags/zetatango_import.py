@@ -136,7 +136,7 @@ with DAG(
             ).password,
         },
         bash_command=_bash_command(
-            app="zt_production_elt_core",
+            app="zt-production-elt-core",
             snowflake_connection="snowflake_zetatango_production",
             snowflake_schema="CORE_PRODUCTION",
         ),
@@ -175,7 +175,7 @@ with DAG(
             ).password,
         },
         bash_command=_bash_command(
-            app="zt_production_elt_idp",
+            app="zt-production-elt-idp",
             snowflake_connection="snowflake_zetatango_production",
             snowflake_schema="IDP_PRODUCTION",
         ),
@@ -193,7 +193,7 @@ with DAG(
             ).password,
         },
         bash_command=_bash_command(
-            app="zt_production_elt_kyc",
+            app="zt-production-elt-kyc",
             snowflake_connection="snowflake_zetatango_production",
             snowflake_schema="KYC_PRODUCTION",
         ),
@@ -211,7 +211,7 @@ with DAG(
             ).password,
         },
         bash_command=_bash_command(
-            app="zt_staging_elt_core",
+            app="zt-staging-elt-core",
             snowflake_connection="snowflake_zetatango_staging",
             snowflake_schema="CORE_STAGING",
         ),
@@ -250,7 +250,7 @@ with DAG(
             ).password,
         },
         bash_command=_bash_command(
-            app="zt_staging_elt_idp",
+            app="zt-staging-elt-idp",
             snowflake_connection="snowflake_zetatango_staging",
             snowflake_schema="IDP_STAGING",
         ),
@@ -268,7 +268,7 @@ with DAG(
             ).password,
         },
         bash_command=_bash_command(
-            app="zt_staging_elt_kyc",
+            app="zt-staging-elt-kyc",
             snowflake_connection="snowflake_zetatango_staging",
             snowflake_schema="KYC_STAGING",
         ),
