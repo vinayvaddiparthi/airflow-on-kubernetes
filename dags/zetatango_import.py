@@ -42,35 +42,18 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     ssh_private_key_file.chmod(0o600)
 
     for completed_process in (
-        subprocess.run(command, capture_output=True)  # nosec
+        subprocess.run(command, capture_output=True, shell=True)  # nosec
         for command in [
-            [
-                "heroku",
-                "run",
-                "-a",
-                app,
-                "--exit-code",
-                "-e",
-                f"SNOWFLAKE_PASSWORD={snowflake_conn.password}",
-                "python",
-                "extract.py",
-                "--snowflake-account",
-                "thinkingcapital.ca-central-1.aws",
-                "--snowflake-username",
-                snowflake_conn.login,
-                "--snowflake-password",
-                "$SNOWFLAKE_PASSWORD",
-                "--snowflake-database",
-                "ZETATANGO",
-                "--snowflake-schema",
-                snowflake_schema,
-                "--snowflake-schema",
-                snowflake_schema,
-            ]
+            f"heroku run -a {app} --exit-code -e SNOWFLAKE_PASSWORD={snowflake_conn.password} "
+            f"python extract.py "
+            f"--snowflake-account thinkingcapital.ca-central-1.aws "
+            f"--snowflake-username {snowflake_conn.login} "
+            f"--snowflake-password $SNOWFLAKE_PASSWORD "
+            f"--snowflake-database ZETATANGO "
+            f"--snowflake-schema {snowflake_schema} "
         ]
     ):
         logging.info(
-            f"process: {completed_process.args[0]}\n"
             f"stdout: {completed_process.stdout}\n"
             f"stderr: {completed_process.stderr}"
         )
