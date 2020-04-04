@@ -8,6 +8,7 @@ import attr
 import pandas as pd
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
@@ -26,16 +27,26 @@ class ColumnSpec:
 
 
 def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: str):
-    os.environ["HEROKU_API_KEY"] = HttpHook.get_connection("heroku_production").password
+    os.environ["HEROKU_API_KEY"] = HttpHook.get_connection(
+        "heroku_production_api_key"
+    ).password
     snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
+    ssh_conn = SSHHook.get_connection("heroku_production_ssh_key")
 
-    base_ssh_key_path = Path.home() / ".ssh" / "id_rsa"
+    ssh_private_key_path = Path.home() / ".ssh" / "id_rsa"
+    ssh_public_key_path = Path.home() / ".ssh" / "id_rsa.pub"
+
+    with ssh_private_key_path.open(mode="w") as private_key_file:
+        print(ssh_conn.extra["private_key"], file=private_key_file)
+
+    with ssh_public_key_path.open(mode="w") as public_key_file:
+        print(ssh_conn.extra["public_key"], file=public_key_file)
 
     for completed_process in (
         subprocess.run(command, capture_output=True)  # nosec
         for command in [
-            ["ssh-keygen", "-t", "rsa", "-N", "", "-f", base_ssh_key_path],
-            ["heroku", "keys:add", f"{base_ssh_key_path}.pub"],
+            ["ssh-keygen", "-t", "rsa", "-N", "", "-f", ssh_private_key_path],
+            ["heroku", "keys:add", ssh_public_key_path],
             [
                 "heroku",
                 "run",
@@ -61,7 +72,9 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
         ]
     ):
         logging.info(
-            f"process: {completed_process.args[0]}\nstdout: {completed_process.stdout}\nstderr: {completed_process.stderr}"
+            f"process: {completed_process.args[0]}\n"
+            f"stdout: {completed_process.stdout}\n"
+            f"stderr: {completed_process.stderr}"
         )
         completed_process.check_returncode()
 
@@ -118,9 +131,9 @@ def decrypt_pii_columns(
                 [
                     tx.execute(stmt).fetchall()
                     for stmt in [
-                        f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{cs.schema}__{cs.table} FILE_FORMAT=(TYPE=PARQUET)",
+                        f"""CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{cs.schema}__{cs.table} FILE_FORMAT=(TYPE=PARQUET)""",
                         f"PUT file://{path} @{target_schema}.{cs.schema}__{cs.table}",
-                        f"CREATE OR REPLACE TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{target_schema}.{cs.schema}__{cs.table}",
+                        f"""CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{target_schema}.{cs.schema}__{cs.table}""",
                     ]
                 ]
             )
