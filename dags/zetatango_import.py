@@ -132,7 +132,7 @@ def decrypt_pii_columns(
                     for stmt in [
                         f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} FILE_FORMAT=(TYPE=PARQUET)",
                         f"PUT file://{path} @{target_schema}.{stage}",
-                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{stage}",
+                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{target_schema}.{stage}",
                     ]
                 ]
             )
