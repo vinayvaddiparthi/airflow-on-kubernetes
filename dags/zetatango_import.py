@@ -66,11 +66,13 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
         check=True,
         text=True,
         env={
-            "HEROKU_API_KEY": HttpHook.get_connection(
-                "heroku_production_api_key"
-            ).password
-        }
-        + os.environ,
+            **os.environ,
+            **{
+                "HEROKU_API_KEY": HttpHook.get_connection(
+                    "heroku_production_api_key"
+                ).password
+            },
+        },
     )
     logging.info(
         f"stdout: {completed_process.stdout}\n" f"stderr: {completed_process.stderr}"
