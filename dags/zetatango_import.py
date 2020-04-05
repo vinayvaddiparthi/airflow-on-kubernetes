@@ -12,7 +12,6 @@ import pandas as pd
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
-from airflow.hooks.base_hook import BaseHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
