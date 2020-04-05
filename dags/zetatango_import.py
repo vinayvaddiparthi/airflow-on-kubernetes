@@ -12,7 +12,6 @@ import pandas as pd
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
-from airflow.hooks.base_hook import BaseHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
@@ -98,12 +97,12 @@ def decrypt_pii_columns(
     def __decrypt(row):
         list_ = [row[0]]
         for field in row[1:]:
-            crypto_material = json_loads(field)
+            crypto_material = {k: b64decode(v) for k, v in json_loads(field).items()}
             list_.append(
                 SymmetricPorky(aws_region="ca-central-1").decrypt(
-                    enciphered_dek=b64decode(crypto_material["key"]),
-                    enciphered_data=b64decode(crypto_material["data"]),
-                    nonce=b64decode(crypto_material["nonce"]),
+                    enciphered_dek=crypto_material["key"],
+                    enciphered_data=crypto_material["data"],
+                    nonce=crypto_material["nonce"],
                 )
             )
 
