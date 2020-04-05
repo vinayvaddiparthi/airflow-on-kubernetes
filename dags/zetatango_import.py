@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import random
@@ -36,7 +37,9 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     ssh_private_key_dir = Path.home() / ".ssh"
     ssh_private_key_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     ssh_private_key_file = ssh_private_key_dir / "id_rsa"
-    ssh_private_key_file.write_text(ssh_conn.extra_dejson["private_key"])
+    ssh_private_key_file.write_bytes(
+        base64.b64decode(ssh_conn.extra_dejson["private_key"])
+    )
     ssh_private_key_file.chmod(0o600)
 
     env = ";".join(
