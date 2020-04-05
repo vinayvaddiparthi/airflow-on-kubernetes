@@ -1,5 +1,8 @@
+import base64
 import logging
 import os
+import random
+import string
 import tempfile
 from pathlib import Path
 from typing import List
@@ -8,6 +11,8 @@ import attr
 import pandas as pd
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.contrib.hooks.ssh_hook import SSHHook
+from airflow.hooks.base_hook import BaseHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
@@ -26,44 +31,55 @@ class ColumnSpec:
 
 
 def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: str):
-    os.environ["HEROKU_API_KEY"] = HttpHook.get_connection("heroku_production").password
     snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
+    ssh_conn = SSHHook.get_connection("heroku_production_ssh_key")
 
-    base_ssh_key_path = Path.home() / ".ssh" / "id_rsa"
+    ssh_private_key_dir = Path.home() / ".ssh"
+    ssh_private_key_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    ssh_private_key_file = ssh_private_key_dir / "id_rsa"
+    ssh_private_key_file.write_bytes(
+        base64.b64decode(ssh_conn.extra_dejson["private_key"])
+    )
+    ssh_private_key_file.chmod(0o600)
 
-    for completed_process in (
-        subprocess.run(command, capture_output=True)  # nosec
-        for command in [
-            ["ssh-keygen", "-t", "rsa", "-N", "", "-f", base_ssh_key_path],
-            ["heroku", "keys:add", f"{base_ssh_key_path}.pub"],
-            [
-                "heroku",
-                "run",
-                "-a",
-                app,
-                "-e",
-                f"SNOWFLAKE_PASSWORD={snowflake_conn.password}",
-                "python",
-                "extract.py",
-                "--snowflake-account",
-                "thinkingcapital.ca-central-1.aws",
-                "--snowflake-username",
-                snowflake_conn.login,
-                "--snowflake-password",
-                "$SNOWFLAKE_PASSWORD",
-                "--snowflake-database",
-                "ZETATANGO",
-                "--snowflake-schema",
-                snowflake_schema,
-                "--snowflake-schema",
-                snowflake_schema,
-            ],
+    env = ";".join(
+        [
+            f"{k}={v}"
+            for k, v in {
+                "SNOWFLAKE_ACCOUNT": "thinkingcapital.ca-central-1.aws",
+                "SNOWFLAKE_USERNAME": snowflake_conn.login,
+                "SNOWFLAKE_PASSWORD": snowflake_conn.password,
+                "SNOWFLAKE_DATABASE": "ZETATANGO",
+                "SNOWFLAKE_SCHEMA": snowflake_schema,
+            }.items()
         ]
-    ):
-        logging.info(
-            f"process: {completed_process.args[0]}\nstdout: {completed_process.stdout}\nstderr: {completed_process.stderr}"
-        )
-        completed_process.check_returncode()
+    )
+
+    completed_process = subprocess.run(  # nosec
+        [
+            "/usr/local/bin/heroku",
+            "run",
+            f"--app={app}",
+            "--exit-code",
+            f"--env={env}",
+            "python",
+            "extract.py",
+        ],
+        capture_output=True,
+        check=True,
+        text=True,
+        env={
+            **os.environ,
+            **{
+                "HEROKU_API_KEY": HttpHook.get_connection(
+                    "heroku_production_api_key"
+                ).password
+            },
+        },
+    )
+    logging.info(
+        f"stdout: {completed_process.stdout}\n" f"stderr: {completed_process.stderr}"
+    )
 
 
 def decrypt_pii_columns(
@@ -114,13 +130,17 @@ def decrypt_pii_columns(
             )
             df.to_parquet(path, engine="fastparquet", compression="gzip")
 
+            stage = "".join(
+                random.choice(string.ascii_uppercase) for _ in range(24)  # nosec
+            )
+
             logging.info(
                 [
                     tx.execute(stmt).fetchall()
                     for stmt in [
-                        f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{cs.schema}__{cs.table} FILE_FORMAT=(TYPE=PARQUET)",
-                        f"PUT file://{path} @{target_schema}.{cs.schema}__{cs.table}",
-                        f"CREATE OR REPLACE TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{target_schema}.{cs.schema}__{cs.table}",
+                        f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} FILE_FORMAT=(TYPE=PARQUET)",
+                        f"PUT file://{path} @{target_schema}.{stage}",
+                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{target_schema}.{stage}",
                     ]
                 ]
             )
@@ -226,7 +246,7 @@ with DAG(
     )
 
     dag << PythonOperator(
-        task_id="zt-production-elt-kyc__import",
+        task_id="zt-staging-elt-kyc__import",
         python_callable=run_heroku_command,
         op_kwargs={
             "app": "zt-staging-elt-kyc",

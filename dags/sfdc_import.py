@@ -104,7 +104,7 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
         )
 
         tx.execute(
-            f"CREATE OR REPLACE TABLE {to_obj} AS {selectable} QUALIFY _RN = 1"
+            f"CREATE OR REPLACE TRANSIENT TABLE {to_obj} AS {selectable} QUALIFY _RN = 1"
         ).fetchall()
 
 
