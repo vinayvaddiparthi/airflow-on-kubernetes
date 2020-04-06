@@ -17,6 +17,7 @@ snowflake-sqlalchemy = "*"
 xmltodict = "*"
 pynacl = "*"
 fastparquet = "*"
+heroku3 = "*"
 
 [requires]
 python_version = "3.8"
