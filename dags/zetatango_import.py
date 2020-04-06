@@ -93,7 +93,7 @@ def export_to_snowflake(
     heroku_conn_string = (
         heroku3.from_key(HttpHook.get_connection("heroku_production_api_key").password)
         .app(heroku_app)
-        .config["DATABASE_URL"]
+        .config()["DATABASE_URL"]
     )
 
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
