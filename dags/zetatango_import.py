@@ -318,7 +318,7 @@ with DAG(
         task_id="zt-staging-elt-idp__import",
         python_callable=export_to_snowflake,
         op_kwargs={
-            "app": "zt-staging-elt-idp",
+            "heroku_app": "zt-staging-elt-idp",
             "snowflake_connection": "snowflake_zetatango_staging",
             "snowflake_schema": "IDP_STAGING",
         },
