@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List
 
 import attr
+import heroku3
 import pandas as pd
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -17,7 +18,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
 import subprocess  # nosec
 
-from sqlalchemy import text, func
+from sqlalchemy import text, func, engine, create_engine, column
 from sqlalchemy.sql import Select
 
 
@@ -29,7 +30,9 @@ class ColumnSpec:
     catalog: str = attr.ib(default=None)
 
 
-def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: str):
+def run_heroku_command(
+    heroku_app: str, snowflake_connection: str, snowflake_schema: str
+):
     snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
     ssh_conn = SSHHook.get_connection("heroku_production_ssh_key")
 
@@ -58,7 +61,7 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
         [
             "/usr/local/bin/heroku",
             "run",
-            f"--app={app}",
+            f"--app={heroku_app}",
             "--exit-code",
             f"--env={env}",
             "python",
@@ -79,6 +82,83 @@ def run_heroku_command(app: str, snowflake_connection: str, snowflake_schema: st
     logging.info(
         f"stdout: {completed_process.stdout}\n" f"stderr: {completed_process.stderr}"
     )
+
+
+def export_to_snowflake(
+    heroku_app: str,
+    snowflake_connection: str,
+    snowflake_schema: str,
+    source_schema: str = "public",
+):
+    heroku_conn_string = (
+        heroku3.from_key(HttpHook.get_connection("heroku_production_api_key").password)
+        .app(heroku_app)
+        .config["DATABASE_URL"]
+    )
+
+    snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+    source_engine = create_engine(heroku_conn_string)
+
+    with source_engine.begin() as tx:
+        tables = (
+            x[0]
+            for x in tx.execute(
+                Select(
+                    columns=[column("table_name")],
+                    from_obj=text('"information_schema"."tables"'),
+                    whereclause=column("table_schema") == text(f"'{source_schema}'"),
+                )
+            ).fetchall()
+        )
+
+        output = (
+            stage_table_in_snowflake(
+                source_engine, snowflake_engine, source_schema, snowflake_schema, table
+            )
+            for table in tables
+        )
+
+        print(*output, sep="\n")
+
+
+def stage_table_in_snowflake(
+    source_engine: engine,
+    snowflake_engine: engine,
+    source_schema: str,
+    destination_schema: str,
+    table: str,
+):
+    def __random():
+        return "".join(
+            random.choice(string.ascii_uppercase) for _ in range(24)  # nosec
+        )
+
+    with tempfile.TemporaryDirectory() as temp_dir_path:
+        stage_guid = __random()
+        with snowflake_engine.begin() as tx:
+            tx.execute(
+                f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=PARQUET)"
+            ).fetchall()
+
+            try:
+                for df in pd.read_sql_table(
+                    table, source_engine, source_schema, chunksize=10000
+                ):
+                    file_guid = __random()
+                    path = Path(temp_dir_path) / file_guid
+
+                    df.to_parquet(f"{path}", engine="fastparquet", compression="gzip")
+                    tx.execute(
+                        f"PUT file://{path} @{destination_schema}.{stage_guid}"
+                    ).fetchall()
+            except ValueError as ve:
+                return f"⚠️ Caught ValueError reading table {table}: {ve}"
+
+            tx.execute(
+                f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS SELECT * FROM @{destination_schema}.{stage_guid}"
+            ).fetchall()
+
+    return f"✔️ Done loading table {table}"
 
 
 def decrypt_pii_columns(
@@ -156,7 +236,7 @@ with DAG(
         task_id="zt-production-elt-core__import",
         python_callable=run_heroku_command,
         op_kwargs={
-            "app": "zt-production-elt-core",
+            "heroku_app": "zt-production-elt-core",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "CORE_PRODUCTION",
         },
@@ -187,7 +267,7 @@ with DAG(
         task_id="zt-production-elt-idp__import",
         python_callable=run_heroku_command,
         op_kwargs={
-            "app": "zt-production-elt-idp",
+            "heroku_app": "zt-production-elt-idp",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "IDP_PRODUCTION",
         },
@@ -197,7 +277,7 @@ with DAG(
         task_id="zt-production-elt-kyc__import",
         python_callable=run_heroku_command,
         op_kwargs={
-            "app": "zt-production-elt-kyc",
+            "heroku_app": "zt-production-elt-kyc",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "KYC_PRODUCTION",
         },
@@ -205,9 +285,9 @@ with DAG(
 
     dag << PythonOperator(
         task_id="zt-staging-elt-core__import",
-        python_callable=run_heroku_command,
+        python_callable=export_to_snowflake,
         op_kwargs={
-            "app": "zt-staging-elt-core",
+            "heroku_app": "zt-staging-elt-core",
             "snowflake_connection": "snowflake_zetatango_staging",
             "snowflake_schema": "CORE_STAGING",
         },
@@ -236,9 +316,9 @@ with DAG(
 
     dag << PythonOperator(
         task_id="zt-staging-elt-idp__import",
-        python_callable=run_heroku_command,
+        python_callable=export_to_snowflake,
         op_kwargs={
-            "app": "zt-staging-elt-idp",
+            "heroku_app": "zt-staging-elt-idp",
             "snowflake_connection": "snowflake_zetatango_staging",
             "snowflake_schema": "IDP_STAGING",
         },
@@ -246,9 +326,9 @@ with DAG(
 
     dag << PythonOperator(
         task_id="zt-staging-elt-kyc__import",
-        python_callable=run_heroku_command,
+        python_callable=export_to_snowflake,
         op_kwargs={
-            "app": "zt-staging-elt-kyc",
+            "heroku_app": "zt-staging-elt-kyc",
             "snowflake_connection": "snowflake_zetatango_staging",
             "snowflake_schema": "KYC_STAGING",
         },
