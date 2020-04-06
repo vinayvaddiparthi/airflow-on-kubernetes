@@ -177,14 +177,12 @@ def decrypt_pii_columns(
     def __decrypt(row):
         list_ = [row[0]]
         for field in row[1:]:
-            crypto_material = {
-                k: b64decode(v) for k, v in json_loads(b64decode(field)).items()
-            }
+            crypto_material = json_loads(field)
             list_.append(
                 SymmetricPorky(aws_region="ca-central-1").decrypt(
-                    enciphered_dek=crypto_material["key"],
-                    enciphered_data=crypto_material["data"],
-                    nonce=crypto_material["nonce"],
+                    enciphered_dek=b64decode(crypto_material["key"]),
+                    enciphered_data=b64decode(crypto_material["data"]),
+                    nonce=b64decode(crypto_material["nonce"]),
                 )
             )
 
@@ -320,7 +318,7 @@ with DAG(
         task_id="zt-staging-elt-idp__import",
         python_callable=export_to_snowflake,
         op_kwargs={
-            "heroku_app": "zt-staging-elt-idp",
+            "app": "zt-staging-elt-idp",
             "snowflake_connection": "snowflake_zetatango_staging",
             "snowflake_schema": "IDP_STAGING",
         },
