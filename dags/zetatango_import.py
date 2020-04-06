@@ -177,7 +177,9 @@ def decrypt_pii_columns(
     def __decrypt(row):
         list_ = [row[0]]
         for field in row[1:]:
-            crypto_material = {k: b64decode(v) for k, v in json_loads(field).items()}
+            crypto_material = {
+                k: b64decode(v) for k, v in json_loads(b64decode(field)).items()
+            }
             list_.append(
                 SymmetricPorky(aws_region="ca-central-1").decrypt(
                     enciphered_dek=crypto_material["key"],
