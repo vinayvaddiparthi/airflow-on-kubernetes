@@ -1,5 +1,3 @@
-import base64
-import itertools
 import logging
 import os
 import random
@@ -13,12 +11,10 @@ import heroku3
 import pandas as pd
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
-import subprocess  # nosec
 
 from sqlalchemy import (
     text,
@@ -39,60 +35,6 @@ class DecryptionSpec:
     columns: List[str] = attr.ib()
     catalog: str = attr.ib(default=None)
     whereclause: ClauseElement = attr.ib(default=None)
-
-
-def run_heroku_command(
-    heroku_app: str, snowflake_connection: str, snowflake_schema: str
-):
-    snowflake_conn = SnowflakeHook.get_connection(snowflake_connection)
-    ssh_conn = SSHHook.get_connection("heroku_production_ssh_key")
-
-    ssh_private_key_dir = Path.home() / ".ssh"
-    ssh_private_key_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    ssh_private_key_file = ssh_private_key_dir / "id_rsa"
-    ssh_private_key_file.write_bytes(
-        base64.b64decode(ssh_conn.extra_dejson["private_key"])
-    )
-    ssh_private_key_file.chmod(0o600)
-
-    env = ";".join(
-        [
-            f"{k}={v}"
-            for k, v in {
-                "SNOWFLAKE_ACCOUNT": "thinkingcapital.ca-central-1.aws",
-                "SNOWFLAKE_USERNAME": snowflake_conn.login,
-                "SNOWFLAKE_PASSWORD": snowflake_conn.password,
-                "SNOWFLAKE_DATABASE": "ZETATANGO",
-                "SNOWFLAKE_SCHEMA": snowflake_schema,
-            }.items()
-        ]
-    )
-
-    completed_process = subprocess.run(  # nosec
-        [
-            "/usr/local/bin/heroku",
-            "run",
-            f"--app={heroku_app}",
-            "--exit-code",
-            f"--env={env}",
-            "python",
-            "extract.py",
-        ],
-        capture_output=True,
-        check=True,
-        text=True,
-        env={
-            **os.environ,
-            **{
-                "HEROKU_API_KEY": HttpHook.get_connection(
-                    "heroku_production_api_key"
-                ).password
-            },
-        },
-    )
-    logging.info(
-        f"stdout: {completed_process.stdout}\n" f"stderr: {completed_process.stderr}"
-    )
 
 
 def export_to_snowflake(
@@ -262,9 +204,9 @@ with DAG(
 ) as dag:
     dag << PythonOperator(
         task_id="zt-production-elt-core__import",
-        python_callable=run_heroku_command,
+        python_callable=export_to_snowflake,
         op_kwargs={
-            "heroku_app": "zt-production-elt-core",
+            "heroku_postgres_connection": "heroku_postgres_core_production",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "CORE_PRODUCTION",
         },
@@ -296,7 +238,6 @@ with DAG(
         task_id="zt-production-elt-idp__import",
         python_callable=export_to_snowflake,
         op_kwargs={
-            "heroku_app": None,
             "heroku_postgres_connection": "heroku_postgres_idp_production",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "IDP_PRODUCTION",
@@ -305,9 +246,9 @@ with DAG(
 
     dag << PythonOperator(
         task_id="zt-production-elt-kyc__import",
-        python_callable=run_heroku_command,
+        python_callable=export_to_snowflake,
         op_kwargs={
-            "heroku_app": "zt-production-elt-kyc",
+            "heroku_postgres_connection": "heroku_postgres_kyc_production",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "KYC_PRODUCTION",
         },
