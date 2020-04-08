@@ -49,14 +49,17 @@ def export_to_snowflake(
         )
 
     source_engine = (
-        PostgresHook(heroku_postgres_connection).get_sqlalchemy_engine()
+        PostgresHook(heroku_postgres_connection).get_sqlalchemy_engine(
+            engine_kwargs={"isolation_level": "READ COMMITTED"}
+        )
         if heroku_postgres_connection
         else create_engine(
             heroku3.from_key(
                 HttpHook.get_connection("heroku_production_api_key").password
             )
             .app(heroku_app)
-            .config()[heroku_endpoint_url_env_var]
+            .config()[heroku_endpoint_url_env_var],
+            isolation_level="READ COMMITTED",
         )
     )
 
