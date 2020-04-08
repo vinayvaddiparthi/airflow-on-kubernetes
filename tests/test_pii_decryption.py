@@ -3,7 +3,7 @@ import os
 from snowflake.sqlalchemy import URL
 from sqlalchemy import create_engine
 
-from dags.zetatango_import import decrypt_pii_columns, ColumnSpec
+from dags.zetatango_import import decrypt_pii_columns, DecryptionSpec
 
 
 def test_pii_decryption(mocker):
@@ -23,7 +23,7 @@ def test_pii_decryption(mocker):
     decrypt_pii_columns(
         "abc",
         [
-            ColumnSpec(
+            DecryptionSpec(
                 schema="CORE_STAGING", table="MERCHANT_ATTRIBUTES", columns=["value"]
             )
         ],

@@ -1,4 +1,5 @@
 import base64
+import itertools
 import logging
 import os
 import random
@@ -24,7 +25,7 @@ from sqlalchemy.sql import Select, ClauseElement
 
 
 @attr.s
-class ColumnSpec:
+class DecryptionSpec:
     schema: str = attr.ib()
     table: str = attr.ib()
     columns: List[str] = attr.ib()
@@ -175,7 +176,9 @@ def stage_table_in_snowflake(
 
 
 def decrypt_pii_columns(
-    snowflake_connection: str, column_specs: List[ColumnSpec], target_schema: str
+    snowflake_connection: str,
+    decryption_specs: List[DecryptionSpec],
+    target_schema: str,
 ):
     from pyporky.symmetric import SymmetricPorky
     from json import loads as json_loads
@@ -201,22 +204,22 @@ def decrypt_pii_columns(
 
         return list_
 
-    for cs in column_specs:
+    for spec in decryption_specs:
         stmt = Select(
-            columns=[text(f"{cs.table}.$1:id AS id")]
+            columns=[text(f"{spec.table}.$1:id AS id")]
             + [
-                func.base64_decode_string(text(f"{cs.table}.$1:encrypted_{col}")).label(
-                    col
-                )
-                for col in cs.columns
+                func.base64_decode_string(
+                    text(f"{spec.table}.$1:encrypted_{col}")
+                ).label(col)
+                for col in spec.columns
             ],
-            from_obj=text(f"{cs.schema}.{cs.table}"),
-            whereclause=cs.whereclause,
+            from_obj=text(f"{spec.schema}.{spec.table}"),
+            whereclause=spec.whereclause,
         )
 
         engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
         with engine.begin() as tx, tempfile.TemporaryDirectory() as output_directory:
-            path = Path(output_directory) / f"{cs.table}.parquet"
+            path = Path(output_directory) / f"{spec.table}.parquet"
 
             df = pd.read_sql(stmt, con=tx).apply(
                 axis=1, func=__decrypt, result_type="broadcast"
@@ -233,7 +236,7 @@ def decrypt_pii_columns(
                     for stmt in [
                         f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} FILE_FORMAT=(TYPE=PARQUET)",
                         f"PUT file://{path} @{target_schema}.{stage}",
-                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{cs.schema}__{cs.table} AS SELECT * FROM @{target_schema}.{stage}",
+                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}__{spec.table} AS SELECT * FROM @{target_schema}.{stage}",
                     ]
                 ]
             )
@@ -259,12 +262,12 @@ with DAG(
         python_callable=decrypt_pii_columns,
         op_kwargs={
             "snowflake_connection": "snowflake_zetatango_production",
-            "column_specs": [
-                ColumnSpec(
+            "decryption_specs": [
+                DecryptionSpec(
                     schema="CORE_PRODUCTION",
                     table="MERCHANT_ATTRIBUTES",
                     columns=["value"],
-                    whereclause=column("$1:key").in_(["industry"])
+                    whereclause=column("$1:key").in_(["industry"]),
                 )
             ],
             "target_schema": "PII_PRODUCTION",
@@ -302,12 +305,12 @@ with DAG(
         python_callable=decrypt_pii_columns,
         op_kwargs={
             "snowflake_connection": "snowflake_zetatango_production",
-            "column_specs": [
-                ColumnSpec(
+            "decryption_specs": [
+                DecryptionSpec(
                     schema="KYC_PRODUCTION",
                     table="INDIVIDUAL_ATTRIBUTES",
                     columns=["value"],
-                    whereclause=column("$1:key").in_(["default_beacon_score"])
+                    whereclause=column("$1:key").in_(["default_beacon_score"]),
                 )
             ],
             "target_schema": "PII_PRODUCTION",
@@ -334,12 +337,12 @@ with DAG(
         python_callable=decrypt_pii_columns,
         op_kwargs={
             "snowflake_connection": "snowflake_zetatango_staging",
-            "column_specs": [
-                ColumnSpec(
+            "decryption_specs": [
+                DecryptionSpec(
                     schema="CORE_STAGING",
                     table="MERCHANT_ATTRIBUTES",
                     columns=["value"],
-                    whereclause=column("$1:key").in_(["industry"])
+                    whereclause=column("$1:key").in_(["industry"]),
                 )
             ],
             "target_schema": "PII_STAGING",
@@ -370,5 +373,27 @@ with DAG(
             "heroku_app": "zt-staging-elt-kyc",
             "snowflake_connection": "snowflake_zetatango_staging",
             "snowflake_schema": "KYC_STAGING",
+        },
+    ) >> PythonOperator(
+        task_id="zt-staging-elt-kyc__pii_decryption",
+        python_callable=decrypt_pii_columns,
+        op_kwargs={
+            "snowflake_connection": "snowflake_zetatango_staging",
+            "decryption_specs": [
+                DecryptionSpec(
+                    schema="KYC_STAGING",
+                    table="INDIVIDUAL_ATTRIBUTES",
+                    columns=["value"],
+                    whereclause=column("$1:key").in_(["default_beacon_score"]),
+                )
+            ],
+            "target_schema": "PII_STAGING",
+        },
+        executor_config={
+            "KubernetesExecutor": {
+                "annotations": {
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowNonProdZetatangoPiiRole"
+                }
+            }
         },
     )
