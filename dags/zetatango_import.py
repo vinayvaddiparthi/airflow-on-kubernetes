@@ -20,7 +20,15 @@ from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
 import subprocess  # nosec
 
-from sqlalchemy import text, func, engine, create_engine, column, literal_column
+from sqlalchemy import (
+    text,
+    func,
+    engine,
+    create_engine,
+    column,
+    literal_column,
+    literal,
+)
 from sqlalchemy.sql import Select, ClauseElement
 
 
@@ -121,7 +129,7 @@ def export_to_snowflake(
                     columns=[column("table_name")],
                     from_obj=text('"information_schema"."tables"'),
                     whereclause=literal_column("table_schema")
-                    == text(f"'{source_schema}'"),
+                    == literal(f"'{source_schema}'"),
                 )
             ).fetchall()
         )
@@ -207,7 +215,7 @@ def decrypt_pii_columns(
 
     for spec in decryption_specs:
         stmt = Select(
-            columns=[literal_column(f"{spec.table}.$1:id AS id")]
+            columns=[literal_column(f"{spec.table}.$1:id").label("id")]
             + [
                 func.base64_decode_string(
                     literal_column(f"{spec.table}.$1:encrypted_{col}")
@@ -231,7 +239,7 @@ def decrypt_pii_columns(
                 random.choice(string.ascii_uppercase) for _ in range(24)  # nosec
             )
 
-            logging.info(
+            logging.debug(
                 [
                     tx.execute(stmt).fetchall()
                     for stmt in [
@@ -241,6 +249,8 @@ def decrypt_pii_columns(
                     ]
                 ]
             )
+
+        logging.info(f"🔓 Successfully decrypted {spec}")
 
 
 with DAG(
