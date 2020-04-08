@@ -65,7 +65,7 @@ def export_to_snowflake(
 
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
 
-    with source_engine.begin() as tx, ThreadPoolExecutor() as executor:
+    with source_engine.begin() as tx, ThreadPoolExecutor(max_workers=4) as executor:
         tables = (
             x[0]
             for x in tx.execute(
