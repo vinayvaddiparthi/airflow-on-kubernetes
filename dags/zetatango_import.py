@@ -14,6 +14,7 @@ import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.hooks.http_hook import HttpHook
+from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
 import subprocess  # nosec
@@ -85,19 +86,30 @@ def run_heroku_command(
 
 
 def export_to_snowflake(
-    heroku_app: str,
     snowflake_connection: str,
     snowflake_schema: str,
     source_schema: str = "public",
+    heroku_app: str = None,
+    heroku_postgres_connection: str = None,
 ):
-    heroku_conn_string = (
-        heroku3.from_key(HttpHook.get_connection("heroku_production_api_key").password)
-        .app(heroku_app)
-        .config()["DATABASE_URL"]
+    if not (heroku_postgres_connection or heroku_app):
+        raise Exception(
+            "Must receive either `heroku_postgres_connection` or `heroku_app` as argument."
+        )
+
+    source_engine = (
+        PostgresHook(heroku_postgres_connection).get_sqlalchemy_engine()
+        if heroku_postgres_connection
+        else create_engine(
+            heroku3.from_key(
+                HttpHook.get_connection("heroku_production_api_key").password
+            )
+            .app(heroku_app)
+            .config()["DATABASE_URL"]
+        )
     )
 
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-    source_engine = create_engine(heroku_conn_string)
 
     with source_engine.begin() as tx:
         tables = (
@@ -265,9 +277,10 @@ with DAG(
 
     dag << PythonOperator(
         task_id="zt-production-elt-idp__import",
-        python_callable=run_heroku_command,
+        python_callable=export_to_snowflake,
         op_kwargs={
-            "heroku_app": "zt-production-elt-idp",
+            "heroku_app": None,
+            "heroku_postgres_connection": "heroku_postgres_idp_production",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "IDP_PRODUCTION",
         },
