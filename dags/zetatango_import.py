@@ -129,7 +129,7 @@ def export_to_snowflake(
                     columns=[column("table_name")],
                     from_obj=text('"information_schema"."tables"'),
                     whereclause=literal_column("table_schema")
-                    == literal(f"'{source_schema}'"),
+                    == literal(source_schema),
                 )
             ).fetchall()
         )
