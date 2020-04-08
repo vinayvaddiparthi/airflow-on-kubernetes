@@ -46,6 +46,7 @@ def export_to_snowflake(
     snowflake_schema: str,
     source_schema: str = "public",
     heroku_app: str = None,
+    heroku_endpoint_url_env_var: str = "DATABASE_URL",
     heroku_postgres_connection: str = None,
 ):
     if not (heroku_postgres_connection or heroku_app):
@@ -61,7 +62,7 @@ def export_to_snowflake(
                 HttpHook.get_connection("heroku_production_api_key").password
             )
             .app(heroku_app)
-            .config()["DATABASE_URL"]
+            .config()[heroku_endpoint_url_env_var]
         )
     )
 
@@ -203,7 +204,8 @@ with DAG(
         task_id="zt-production-elt-core__import",
         python_callable=export_to_snowflake,
         op_kwargs={
-            "heroku_postgres_connection": "heroku_postgres_core_production",
+            "heroku_app": "zt-production-elt-core",
+            "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_06926445112852C5F_URL",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "CORE_PRODUCTION",
         },
@@ -235,7 +237,8 @@ with DAG(
         task_id="zt-production-elt-idp__import",
         python_callable=export_to_snowflake,
         op_kwargs={
-            "heroku_postgres_connection": "heroku_postgres_idp_production",
+            "heroku_app": "zt-production-elt-idp",
+            "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_06730E622159E3664_URL",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "IDP_PRODUCTION",
         },
@@ -245,7 +248,8 @@ with DAG(
         task_id="zt-production-elt-kyc__import",
         python_callable=export_to_snowflake,
         op_kwargs={
-            "heroku_postgres_connection": "heroku_postgres_kyc_production",
+            "heroku_app": "zt-production-elt-kyc",
+            "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_075C067EF5D19D7F2_URL",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "KYC_PRODUCTION",
         },
