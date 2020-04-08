@@ -125,7 +125,7 @@ def stage_table_in_snowflake(
                 f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS SELECT * FROM @{destination_schema}.{stage_guid}"
             ).fetchall()
 
-    return f"✔️ Successfully loading table {table}"
+    return f"✔️ Successfully loaded table {table}"
 
 
 def decrypt_pii_columns(
