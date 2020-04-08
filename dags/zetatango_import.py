@@ -32,6 +32,12 @@ from sqlalchemy import (
 from sqlalchemy.sql import Select, ClauseElement
 
 
+def __random():
+    return "".join(
+        random.choice(string.ascii_uppercase) for _ in range(24)  # nosec
+    )
+
+
 @attr.s
 class DecryptionSpec:
     schema: str = attr.ib()
@@ -235,9 +241,7 @@ def decrypt_pii_columns(
             )
             df.to_parquet(path, engine="fastparquet", compression="gzip")
 
-            stage = "".join(
-                random.choice(string.ascii_uppercase) for _ in range(24)  # nosec
-            )
+            stage = __random()
 
             logging.debug(
                 [
