@@ -20,7 +20,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
 import subprocess  # nosec
 
-from sqlalchemy import text, func, engine, create_engine, column
+from sqlalchemy import text, func, engine, create_engine, column, literal_column
 from sqlalchemy.sql import Select, ClauseElement
 
 
@@ -120,7 +120,8 @@ def export_to_snowflake(
                 Select(
                     columns=[column("table_name")],
                     from_obj=text('"information_schema"."tables"'),
-                    whereclause=column("table_schema") == text(f"'{source_schema}'"),
+                    whereclause=literal_column("table_schema")
+                    == text(f"'{source_schema}'"),
                 )
             ).fetchall()
         )
@@ -206,10 +207,10 @@ def decrypt_pii_columns(
 
     for spec in decryption_specs:
         stmt = Select(
-            columns=[text(f"{spec.table}.$1:id AS id")]
+            columns=[literal_column(f"{spec.table}.$1:id AS id")]
             + [
                 func.base64_decode_string(
-                    text(f"{spec.table}.$1:encrypted_{col}")
+                    literal_column(f"{spec.table}.$1:encrypted_{col}")
                 ).label(col)
                 for col in spec.columns
             ],
@@ -267,7 +268,7 @@ with DAG(
                     schema="CORE_PRODUCTION",
                     table="MERCHANT_ATTRIBUTES",
                     columns=["value"],
-                    whereclause=column("$1:key").in_(["industry"]),
+                    whereclause=literal_column("$1:key").in_(["industry"]),
                 )
             ],
             "target_schema": "PII_PRODUCTION",
@@ -310,7 +311,7 @@ with DAG(
                     schema="KYC_PRODUCTION",
                     table="INDIVIDUAL_ATTRIBUTES",
                     columns=["value"],
-                    whereclause=column("$1:key").in_(["default_beacon_score"]),
+                    whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
                 )
             ],
             "target_schema": "PII_PRODUCTION",
@@ -342,7 +343,7 @@ with DAG(
                     schema="CORE_STAGING",
                     table="MERCHANT_ATTRIBUTES",
                     columns=["value"],
-                    whereclause=column("$1:key").in_(["industry"]),
+                    whereclause=literal_column("$1:key").in_(["industry"]),
                 )
             ],
             "target_schema": "PII_STAGING",
@@ -384,7 +385,7 @@ with DAG(
                     schema="KYC_STAGING",
                     table="INDIVIDUAL_ATTRIBUTES",
                     columns=["value"],
-                    whereclause=column("$1:key").in_(["default_beacon_score"]),
+                    whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
                 )
             ],
             "target_schema": "PII_STAGING",
