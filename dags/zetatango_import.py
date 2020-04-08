@@ -20,7 +20,7 @@ from airflow import DAG
 import subprocess  # nosec
 
 from sqlalchemy import text, func, engine, create_engine, column
-from sqlalchemy.sql import Select
+from sqlalchemy.sql import Select, ClauseElement
 
 
 @attr.s
@@ -29,6 +29,7 @@ class ColumnSpec:
     table: str = attr.ib()
     columns: List[str] = attr.ib()
     catalog: str = attr.ib(default=None)
+    whereclause: ClauseElement = attr.ib(default=None)
 
 
 def run_heroku_command(
@@ -170,7 +171,7 @@ def stage_table_in_snowflake(
                 f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS SELECT * FROM @{destination_schema}.{stage_guid}"
             ).fetchall()
 
-    return f"✔️ Done loading table {table}"
+    return f"✔️ Successfully loading table {table}"
 
 
 def decrypt_pii_columns(
@@ -210,6 +211,7 @@ def decrypt_pii_columns(
                 for col in cs.columns
             ],
             from_obj=text(f"{cs.schema}.{cs.table}"),
+            whereclause=cs.whereclause,
         )
 
         engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
@@ -262,6 +264,7 @@ with DAG(
                     schema="CORE_PRODUCTION",
                     table="MERCHANT_ATTRIBUTES",
                     columns=["value"],
+                    whereclause=column("$1:key").in_(["industry"])
                 )
             ],
             "target_schema": "PII_PRODUCTION",
@@ -294,6 +297,28 @@ with DAG(
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "KYC_PRODUCTION",
         },
+    ) >> PythonOperator(
+        task_id="zt-production-elt-kyc__pii_decryption",
+        python_callable=decrypt_pii_columns,
+        op_kwargs={
+            "snowflake_connection": "snowflake_zetatango_production",
+            "column_specs": [
+                ColumnSpec(
+                    schema="KYC_PRODUCTION",
+                    table="INDIVIDUAL_ATTRIBUTES",
+                    columns=["value"],
+                    whereclause=column("$1:key").in_(["default_beacon_score"])
+                )
+            ],
+            "target_schema": "PII_PRODUCTION",
+        },
+        executor_config={
+            "KubernetesExecutor": {
+                "annotations": {
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowProductionZetatangoPiiRole"
+                }
+            }
+        },
     )
 
     dag << PythonOperator(
@@ -314,6 +339,7 @@ with DAG(
                     schema="CORE_STAGING",
                     table="MERCHANT_ATTRIBUTES",
                     columns=["value"],
+                    whereclause=column("$1:key").in_(["industry"])
                 )
             ],
             "target_schema": "PII_STAGING",
