@@ -21,6 +21,8 @@ from sqlalchemy import text, func, create_engine, column, literal_column, litera
 from sqlalchemy.engine import Transaction, Engine
 from sqlalchemy.sql import Select, ClauseElement
 
+from rubymarshal.reader import loads as rubymashal_loads
+
 
 def __random():
     return "".join(random.choice(string.ascii_uppercase) for _ in range(24))  # nosec
@@ -31,6 +33,7 @@ class DecryptionSpec:
     schema: str = attr.ib()
     table: str = attr.ib()
     columns: List[str] = attr.ib()
+    marshaled: bool = attr.ib(default=False)
     catalog: str = attr.ib(default=None)
     whereclause: ClauseElement = attr.ib(default=None)
 
@@ -143,8 +146,8 @@ def decrypt_pii_columns(
     except KeyError:
         pass
 
-    def __decrypt(row):
-        list_ = [row[0]]
+    def __decrypt(row, marshaled=False):
+        list_ = []
         for field in row[1:]:
             crypto_material = json_loads(field)
             list_.append(
@@ -155,7 +158,10 @@ def decrypt_pii_columns(
                 )
             )
 
-        return list_
+        if marshaled:
+            list_ = [rubymashal_loads(field) for field in list_]
+
+        return [row[0]] + list_
 
     for spec in decryption_specs:
         stmt = Select(
@@ -174,8 +180,9 @@ def decrypt_pii_columns(
         with engine.begin() as tx, tempfile.TemporaryDirectory() as output_directory:
             path = Path(output_directory) / f"{spec.table}.parquet"
 
-            df = pd.read_sql(stmt, con=tx).apply(
-                axis=1, func=__decrypt, result_type="broadcast"
+            df = pd.read_sql(stmt, con=tx)
+            df = df.apply(
+                axis=1, func=__decrypt, result_type="broadcast", args=(spec.marshaled,)
             )
             df.to_parquet(path, engine="fastparquet", compression="gzip")
 
@@ -265,6 +272,7 @@ with DAG(
                     schema="KYC_PRODUCTION",
                     table="INDIVIDUAL_ATTRIBUTES",
                     columns=["value"],
+                    marshaled=True,
                     whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
                 )
             ],
