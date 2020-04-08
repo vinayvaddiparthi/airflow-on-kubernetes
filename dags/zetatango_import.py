@@ -32,6 +32,10 @@ from sqlalchemy import (
 from sqlalchemy.sql import Select, ClauseElement
 
 
+def __random():
+    return "".join(random.choice(string.ascii_uppercase) for _ in range(24))  # nosec
+
+
 @attr.s
 class DecryptionSpec:
     schema: str = attr.ib()
@@ -151,11 +155,6 @@ def stage_table_in_snowflake(
     destination_schema: str,
     table: str,
 ):
-    def __random():
-        return "".join(
-            random.choice(string.ascii_uppercase) for _ in range(24)  # nosec
-        )
-
     with tempfile.TemporaryDirectory() as temp_dir_path:
         stage_guid = __random()
         with snowflake_engine.begin() as tx:
@@ -235,9 +234,7 @@ def decrypt_pii_columns(
             )
             df.to_parquet(path, engine="fastparquet", compression="gzip")
 
-            stage = "".join(
-                random.choice(string.ascii_uppercase) for _ in range(24)  # nosec
-            )
+            stage = __random()
 
             logging.debug(
                 [
@@ -245,7 +242,7 @@ def decrypt_pii_columns(
                     for stmt in [
                         f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} FILE_FORMAT=(TYPE=PARQUET)",
                         f"PUT file://{path} @{target_schema}.{stage}",
-                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}__{spec.table} AS SELECT * FROM @{target_schema}.{stage}",
+                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}${spec.table} AS SELECT * FROM @{target_schema}.{stage}",
                     ]
                 ]
             )
