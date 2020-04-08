@@ -1,7 +1,7 @@
 import os
 
 from snowflake.sqlalchemy import URL
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, literal_column
 
 from dags.zetatango_import import decrypt_pii_columns, DecryptionSpec
 
@@ -24,7 +24,10 @@ def test_pii_decryption(mocker):
         "abc",
         [
             DecryptionSpec(
-                schema="CORE_STAGING", table="MERCHANT_ATTRIBUTES", columns=["value"]
+                schema="KYC_STAGING",
+                table="INDIVIDUAL_ATTRIBUTES",
+                columns=["value"],
+                whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
             )
         ],
     )

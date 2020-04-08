@@ -3,6 +3,7 @@ import os
 import random
 import string
 import tempfile
+from concurrent.futures.thread import ThreadPoolExecutor
 from pathlib import Path
 from typing import List
 
@@ -16,15 +17,8 @@ from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
 
-from sqlalchemy import (
-    text,
-    func,
-    engine,
-    create_engine,
-    column,
-    literal_column,
-    literal,
-)
+from sqlalchemy import text, func, create_engine, column, literal_column, literal
+from sqlalchemy.engine import Transaction, Engine
 from sqlalchemy.sql import Select, ClauseElement
 
 
@@ -55,20 +49,23 @@ def export_to_snowflake(
         )
 
     source_engine = (
-        PostgresHook(heroku_postgres_connection).get_sqlalchemy_engine()
+        PostgresHook(heroku_postgres_connection).get_sqlalchemy_engine(
+            engine_kwargs={"isolation_level": "READ COMMITTED"}
+        )
         if heroku_postgres_connection
         else create_engine(
             heroku3.from_key(
                 HttpHook.get_connection("heroku_production_api_key").password
             )
             .app(heroku_app)
-            .config()[heroku_endpoint_url_env_var]
+            .config()[heroku_endpoint_url_env_var],
+            isolation_level="READ COMMITTED",
         )
     )
 
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
 
-    with source_engine.begin() as tx:
+    with source_engine.begin() as tx, ThreadPoolExecutor() as executor:
         tables = (
             x[0]
             for x in tx.execute(
@@ -81,19 +78,24 @@ def export_to_snowflake(
             ).fetchall()
         )
 
-        output = (
-            stage_table_in_snowflake(
-                source_engine, snowflake_engine, source_schema, snowflake_schema, table
+        futures = [
+            executor.submit(
+                stage_table_in_snowflake,
+                tx,
+                snowflake_engine,
+                source_schema,
+                snowflake_schema,
+                table,
             )
             for table in tables
-        )
+        ]
 
-        print(*output, sep="\n")
+    print(*[future.result() for future in futures], sep="\n")
 
 
 def stage_table_in_snowflake(
-    source_engine: engine,
-    snowflake_engine: engine,
+    source_tx: Transaction,
+    snowflake_engine: Engine,
     source_schema: str,
     destination_schema: str,
     table: str,
@@ -107,7 +109,7 @@ def stage_table_in_snowflake(
 
             try:
                 for df in pd.read_sql_table(
-                    table, source_engine, source_schema, chunksize=10000
+                    table, source_tx, source_schema, chunksize=10000
                 ):
                     file_guid = __random()
                     path = Path(temp_dir_path) / file_guid
@@ -123,7 +125,7 @@ def stage_table_in_snowflake(
                 f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS SELECT * FROM @{destination_schema}.{stage_guid}"
             ).fetchall()
 
-    return f"✔️ Successfully loading table {table}"
+    return f"✔️ Successfully loaded table {table}"
 
 
 def decrypt_pii_columns(
