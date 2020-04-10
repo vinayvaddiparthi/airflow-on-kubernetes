@@ -347,6 +347,7 @@ with DAG(
                     schema="KYC_STAGING",
                     table="INDIVIDUAL_ATTRIBUTES",
                     columns=["value"],
+                    marshaled=True,
                     whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
                 )
             ],
