@@ -116,10 +116,11 @@ def stage_table_in_snowflake(
             except ValueError as ve:
                 return f"⚠️ {table}: {ve}"
 
-            tx.execute(
+            for stmt in [
                 f"PUT file://{temp_dir_path}/* @{destination_schema}.{stage_guid}",
                 f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS SELECT * FROM @{destination_schema}.{stage_guid}",
-            ).fetchall()
+            ]:
+                tx.execute(stmt).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
 
