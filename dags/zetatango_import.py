@@ -236,7 +236,8 @@ with DAG(
         executor_config={
             "KubernetesExecutor": {
                 "annotations": {
-                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowProductionZetatangoPiiRole"
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                    "KubernetesAirflowProductionZetatangoPiiRole"
                 }
             }
         },
@@ -281,7 +282,8 @@ with DAG(
         executor_config={
             "KubernetesExecutor": {
                 "annotations": {
-                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowProductionZetatangoPiiRole"
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                    "KubernetesAirflowProductionZetatangoPiiRole"
                 }
             }
         },
@@ -313,7 +315,8 @@ with DAG(
         executor_config={
             "KubernetesExecutor": {
                 "annotations": {
-                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowNonProdZetatangoPiiRole"
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                    "KubernetesAirflowNonProdZetatangoPiiRole"
                 }
             }
         },
@@ -356,7 +359,8 @@ with DAG(
         executor_config={
             "KubernetesExecutor": {
                 "annotations": {
-                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowNonProdZetatangoPiiRole"
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                    "KubernetesAirflowNonProdZetatangoPiiRole"
                 }
             }
         },
