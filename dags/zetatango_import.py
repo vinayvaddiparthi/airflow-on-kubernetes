@@ -68,7 +68,7 @@ def export_to_snowflake(
 
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
 
-    with source_engine.begin() as tx, ThreadPoolExecutor(max_workers=4) as executor:
+    with source_engine.begin() as tx:
         tables = (
             x[0]
             for x in tx.execute(
@@ -81,19 +81,14 @@ def export_to_snowflake(
             ).fetchall()
         )
 
-        futures = [
-            executor.submit(
-                stage_table_in_snowflake,
-                tx,
-                snowflake_engine,
-                source_schema,
-                snowflake_schema,
-                table,
+        output = [
+            stage_table_in_snowflake(
+                tx, snowflake_engine, source_schema, snowflake_schema, table
             )
             for table in tables
         ]
 
-    print(*[future.result() for future in futures], sep="\n")
+    print(*output, sep="\n")
 
 
 def stage_table_in_snowflake(
