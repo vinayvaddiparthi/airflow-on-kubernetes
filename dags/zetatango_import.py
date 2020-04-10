@@ -109,18 +109,19 @@ def stage_table_in_snowflake(
                 for df in pd.read_sql_table(
                     table, source_tx, source_schema, chunksize=10000
                 ):
-                    df.to_parquet(
-                        f"{Path(temp_dir_path) / __random()}",
-                        engine="fastparquet",
-                        compression="gzip",
-                    )
+                    file_guid = __random()
+                    path = Path(temp_dir_path) / file_guid
+
+                    df.to_parquet(f"{path}", engine="fastparquet", compression="gzip")
+                    tx.execute(
+                        f"PUT file://{path} @{destination_schema}.{stage_guid}"
+                    ).fetchall()
             except ValueError as ve:
-                return f"⚠️ {table}: {ve}"
+                return f"⚠️ Caught ValueError reading table {table}: {ve}"
 
             tx.execute(
-                f"PUT file://{temp_dir_path}/* @{destination_schema}.{stage_guid}",
                 f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS "
-                f"SELECT * FROM @{destination_schema}.{stage_guid}",
+                f"SELECT * FROM @{destination_schema}.{stage_guid}"
             ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
