@@ -107,7 +107,8 @@ def stage_table_in_snowflake(
         stage_guid = __random()
         with snowflake_engine.begin() as tx:
             tx.execute(
-                f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=PARQUET)"
+                f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} "
+                f"FILE_FORMAT=(TYPE=PARQUET)"
             ).fetchall()
 
             try:
@@ -125,7 +126,8 @@ def stage_table_in_snowflake(
                 return f"⚠️ Caught ValueError reading table {table}: {ve}"
 
             tx.execute(
-                f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS SELECT * FROM @{destination_schema}.{stage_guid}"
+                f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS "
+                f"SELECT * FROM @{destination_schema}.{stage_guid}"
             ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
@@ -192,9 +194,11 @@ def decrypt_pii_columns(
                 [
                     tx.execute(stmt).fetchall()
                     for stmt in [
-                        f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} FILE_FORMAT=(TYPE=PARQUET)",
+                        f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} "
+                        f"FILE_FORMAT=(TYPE=PARQUET)",
                         f"PUT file://{path} @{target_schema}.{stage}",
-                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}${spec.table} AS SELECT * FROM @{target_schema}.{stage}",
+                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}${spec.table} AS "
+                        f"SELECT * FROM @{target_schema}.{stage}",
                     ]
                 ]
             )
