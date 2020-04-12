@@ -173,7 +173,7 @@ def decrypt_pii_columns(
                 )
             )
 
-        return [row[0]] + postprocessors[format](list_) if format else list_
+        return [row[0]] + (postprocessors[format](list_) if format else list_)
 
     for spec in decryption_specs:
         stmt = Select(
