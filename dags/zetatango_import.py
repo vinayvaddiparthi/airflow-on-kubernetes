@@ -21,8 +21,6 @@ from sqlalchemy import text, func, create_engine, column, literal_column, litera
 from sqlalchemy.engine import Transaction, Engine
 from sqlalchemy.sql import Select, ClauseElement
 
-from rubymarshal.reader import loads as rubymashal_loads
-
 
 def __random():
     return "".join(random.choice(string.ascii_uppercase) for _ in range(24))  # nosec
@@ -141,9 +139,21 @@ def decrypt_pii_columns(
     from pyporky.symmetric import SymmetricPorky
     from json import loads as json_loads, dumps as json_dumps
     from base64 import b64decode
-    import yaml
 
-    yaml.add_constructor("!ruby/object:BigDecimal", pyyaml_ruby_bigdecimal_constructor)
+    def __postprocess_marshal(list_: List):
+        from rubymarshal.reader import loads as rubymarshal_loads
+
+        return [rubymarshal_loads(field) for field in list_]
+
+    def __postprocess_yaml(list_: List):
+        import yaml
+
+        yaml.add_constructor(
+            "!ruby/object:BigDecimal", pyyaml_ruby_bigdecimal_constructor
+        )
+        return [json_dumps(yaml.load(field)) for field in list_]  # nosec
+
+    postprocessors = {"marshal": __postprocess_marshal, "yaml": __postprocess_yaml}
 
     try:
         del os.environ["AWS_ACCESS_KEY_ID"]
@@ -163,12 +173,7 @@ def decrypt_pii_columns(
                 )
             )
 
-        if format == "marshal":
-            list_ = [rubymashal_loads(field) for field in list_]
-        elif format == "yaml":
-            list_ = [json_dumps(yaml.safe_load(field)) for field in list_]
-
-        return [row[0]] + list_
+        return [row[0]] + postprocessors[format] if format else list_
 
     for spec in decryption_specs:
         stmt = Select(
