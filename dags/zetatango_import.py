@@ -166,7 +166,7 @@ def decrypt_pii_columns(
         if format == "marshal":
             list_ = [rubymashal_loads(field) for field in list_]
         elif format == "yaml":
-            list_ = [json_dumps(yaml.load(field)) for field in list_]
+            list_ = [json_dumps(yaml.safe_load(field)) for field in list_]
 
         return [row[0]] + list_
 
