@@ -4,12 +4,13 @@ import random
 import string
 import tempfile
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import attr
 import heroku3
 import pandas as pd
 import pendulum
+import yaml
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.hooks.postgres_hook import PostgresHook
@@ -32,9 +33,14 @@ class DecryptionSpec:
     schema: str = attr.ib()
     table: str = attr.ib()
     columns: List[str] = attr.ib()
-    marshaled: bool = attr.ib(default=False)
+    format: Optional[str] = attr.ib(default=False)
     catalog: str = attr.ib(default=None)
-    whereclause: ClauseElement = attr.ib(default=None)
+    whereclause: Optional[ClauseElement] = attr.ib(default=None)
+
+
+def pyyaml_ruby_bigdecimal_constructor(loader, node):
+    precision, value = loader.construct_scalar(node).split(":")
+    return float(value)
 
 
 def export_to_snowflake(
@@ -133,8 +139,11 @@ def decrypt_pii_columns(
     target_schema: str,
 ):
     from pyporky.symmetric import SymmetricPorky
-    from json import loads as json_loads
+    from json import loads as json_loads, dumps as json_dumps
     from base64 import b64decode
+    import yaml
+
+    yaml.add_constructor("!ruby/object:BigDecimal", pyyaml_ruby_bigdecimal_constructor)
 
     try:
         del os.environ["AWS_ACCESS_KEY_ID"]
@@ -142,7 +151,7 @@ def decrypt_pii_columns(
     except KeyError:
         pass
 
-    def __decrypt(row, marshaled=False):
+    def __decrypt(row, format=None):
         list_ = []
         for field in row[1:]:
             crypto_material = json_loads(field)
@@ -154,8 +163,10 @@ def decrypt_pii_columns(
                 )
             )
 
-        if marshaled:
+        if format == "marshal":
             list_ = [rubymashal_loads(field) for field in list_]
+        elif format == "yaml":
+            list_ = [json_dumps(yaml.load(field)) for field in list_]
 
         return [row[0]] + list_
 
@@ -178,7 +189,7 @@ def decrypt_pii_columns(
 
             df = pd.read_sql(stmt, con=tx)
             df = df.apply(
-                axis=1, func=__decrypt, result_type="broadcast", args=(spec.marshaled,)
+                axis=1, func=__decrypt, result_type="broadcast", args=(spec.format,)
             )
             df.to_parquet(path, engine="fastparquet", compression="gzip")
 
@@ -225,7 +236,13 @@ with DAG(
                     table="MERCHANT_ATTRIBUTES",
                     columns=["value"],
                     whereclause=literal_column("$1:key").in_(["industry"]),
-                )
+                ),
+                DecryptionSpec(
+                    schema="CORE_PRODUCTION",
+                    table="LENDING_ADJUDICATIONS",
+                    columns=["offer_results"],
+                    format="yaml",
+                ),
             ],
             "target_schema": "PII_PRODUCTION",
         },
@@ -269,7 +286,7 @@ with DAG(
                     schema="KYC_PRODUCTION",
                     table="INDIVIDUAL_ATTRIBUTES",
                     columns=["value"],
-                    marshaled=True,
+                    format="marshal",
                     whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
                 )
             ],
@@ -304,7 +321,13 @@ with DAG(
                     table="MERCHANT_ATTRIBUTES",
                     columns=["value"],
                     whereclause=literal_column("$1:key").in_(["industry"]),
-                )
+                ),
+                DecryptionSpec(
+                    schema="CORE_STAGING",
+                    table="LENDING_ADJUDICATIONS",
+                    columns=["offer_results"],
+                    format="yaml",
+                ),
             ],
             "target_schema": "PII_STAGING",
         },
@@ -346,7 +369,7 @@ with DAG(
                     schema="KYC_STAGING",
                     table="INDIVIDUAL_ATTRIBUTES",
                     columns=["value"],
-                    marshaled=True,
+                    format="marshal",
                     whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
                 )
             ],
