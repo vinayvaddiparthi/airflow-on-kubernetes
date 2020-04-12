@@ -8,6 +8,8 @@ pytest = "*"
 pytest-cov = "*"
 pytest-mock = "*"
 mypy = "*"
+typing-extensions = "*"
+mypy-extensions = "*"
 
 [packages]
 pyporky = {git = "https://gitlab.com/tc-data/pyporky.git"}

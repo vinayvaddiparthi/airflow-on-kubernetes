@@ -4,7 +4,7 @@ import random
 import string
 import tempfile
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Callable, Dict, Literal
 
 import attr
 import heroku3
@@ -20,8 +20,6 @@ from sqlalchemy import text, func, create_engine, column, literal_column, litera
 from sqlalchemy.engine import Transaction, Engine
 from sqlalchemy.sql import Select, ClauseElement
 
-from rubymarshal.reader import loads as rubymashal_loads
-
 
 def __random():
     return "".join(random.choice(string.ascii_uppercase) for _ in range(24))  # nosec
@@ -32,9 +30,9 @@ class DecryptionSpec:
     schema: str = attr.ib()
     table: str = attr.ib()
     columns: List[str] = attr.ib()
-    marshaled: bool = attr.ib(default=False)
+    format: Optional[Literal["marshal", "yaml"]] = attr.ib(default=False)
     catalog: str = attr.ib(default=None)
-    whereclause: ClauseElement = attr.ib(default=None)
+    whereclause: Optional[ClauseElement] = attr.ib(default=None)
 
 
 def export_to_snowflake(
@@ -136,13 +134,24 @@ def decrypt_pii_columns(
     from json import loads as json_loads
     from base64 import b64decode
 
-    try:
-        del os.environ["AWS_ACCESS_KEY_ID"]
-        del os.environ["AWS_SECRET_ACCESS_KEY"]
-    except KeyError:
-        pass
+    def __postprocess_marshal(list_):
+        from rubymarshal.reader import loads as rubymashal_loads
 
-    def __decrypt(row, marshaled=False):
+        return [rubymashal_loads(field) for field in list_]
+
+    def __postprocess_yaml(list_):
+        def __pyyaml_ruby_bigdecimal_constructor(loader, node):
+            precision, value = loader.construct_scalar(node).split(":")
+            return float(value)
+
+        import yaml
+
+        yaml.add_constructor(
+            "!ruby/object:BigDecimal", __pyyaml_ruby_bigdecimal_constructor
+        )
+        return [json_dumps(yaml.load(field)) for field in list_]  # nosec
+
+    def __decrypt(row, format=None):
         list_ = []
         for field in row[1:]:
             crypto_material = json_loads(field)
@@ -154,10 +163,20 @@ def decrypt_pii_columns(
                 )
             )
 
-        if marshaled:
-            list_ = [rubymashal_loads(field) for field in list_]
+        list_ = postprocessors[spec.format](list_) if spec.format else list_
 
         return [row[0]] + list_
+
+    postprocessors: Dict[str, Callable] = {
+        "marshal": __postprocess_marshal,
+        "yaml": __postprocess_yaml,
+    }
+
+    try:
+        del os.environ["AWS_ACCESS_KEY_ID"]
+        del os.environ["AWS_SECRET_ACCESS_KEY"]
+    except KeyError:
+        pass
 
     for spec in decryption_specs:
         stmt = Select(
@@ -178,7 +197,7 @@ def decrypt_pii_columns(
 
             df = pd.read_sql(stmt, con=tx)
             df = df.apply(
-                axis=1, func=__decrypt, result_type="broadcast", args=(spec.marshaled,)
+                axis=1, func=__decrypt, result_type="broadcast", args=(spec.format,)
             )
             df.to_parquet(path, engine="fastparquet", compression="gzip")
 
@@ -225,7 +244,13 @@ with DAG(
                     table="MERCHANT_ATTRIBUTES",
                     columns=["value"],
                     whereclause=literal_column("$1:key").in_(["industry"]),
-                )
+                ),
+                DecryptionSpec(
+                    schema="CORE_PRODUCTION",
+                    table="LENDING_ADJUDICATIONS",
+                    columns=["offer_results"],
+                    format="yaml",
+                ),
             ],
             "target_schema": "PII_PRODUCTION",
         },
@@ -269,7 +294,7 @@ with DAG(
                     schema="KYC_PRODUCTION",
                     table="INDIVIDUAL_ATTRIBUTES",
                     columns=["value"],
-                    marshaled=True,
+                    format="marshal",
                     whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
                 )
             ],
@@ -304,7 +329,13 @@ with DAG(
                     table="MERCHANT_ATTRIBUTES",
                     columns=["value"],
                     whereclause=literal_column("$1:key").in_(["industry"]),
-                )
+                ),
+                DecryptionSpec(
+                    schema="CORE_STAGING",
+                    table="LENDING_ADJUDICATIONS",
+                    columns=["offer_results"],
+                    format="yaml",
+                ),
             ],
             "target_schema": "PII_STAGING",
         },
@@ -346,7 +377,7 @@ with DAG(
                     schema="KYC_STAGING",
                     table="INDIVIDUAL_ATTRIBUTES",
                     columns=["value"],
-                    marshaled=True,
+                    format="marshal",
                     whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
                 )
             ],
