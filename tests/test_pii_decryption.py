@@ -12,7 +12,7 @@ def test_pii_decryption(mocker):
         return_value=create_engine(
             URL(
                 account="thinkingcapital.ca-central-1.aws",
-                user="ZETATANGO_ELT_STAGING",
+                user="PGAGNON",
                 password=os.environ["SNOWFLAKE_PASSWORD"],
                 database="ZETATANGO",
                 warehouse="ETL",
@@ -27,7 +27,7 @@ def test_pii_decryption(mocker):
                 schema="KYC_STAGING",
                 table="INDIVIDUAL_ATTRIBUTES",
                 columns=["value"],
-                marshaled=True,
+                format="marshal",
                 whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
             )
         ],

@@ -148,8 +148,10 @@ def decrypt_pii_columns(
         import yaml
 
         yaml.add_constructor(
-            "!ruby/object:BigDecimal", pyyaml_ruby_bigdecimal_constructor
+            "!ruby/object:BigDecimal",
+            lambda loader, node: float(loader.construct_scalar(node).split(":")[1]),
         )
+
         return [json_dumps(yaml.load(field)) for field in list_]  # nosec
 
     postprocessors = {"marshal": __postprocess_marshal, "yaml": __postprocess_yaml}
@@ -165,6 +167,7 @@ def decrypt_pii_columns(
         for field in row[1:]:
             if not field:
                 list_.append(None)
+                continue
 
             crypto_material = json_loads(field)
             list_.append(
@@ -175,7 +178,7 @@ def decrypt_pii_columns(
                 )
             )
 
-        return [row[0]] + postprocessors[format] if format else list_
+        return [row[0]] + postprocessors[format](list_) if format else list_
 
     for spec in decryption_specs:
         stmt = Select(
