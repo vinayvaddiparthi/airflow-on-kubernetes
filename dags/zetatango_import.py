@@ -163,6 +163,9 @@ def decrypt_pii_columns(
     def __decrypt(row, format=None):
         list_ = []
         for field in row[1:]:
+            if not field:
+                list_.append(None)
+
             crypto_material = json_loads(field)
             list_.append(
                 SymmetricPorky(aws_region="ca-central-1").decrypt(
