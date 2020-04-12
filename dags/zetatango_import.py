@@ -137,7 +137,7 @@ def decrypt_pii_columns(
     def __postprocess_marshal(list_: List):
         from rubymarshal.reader import loads as rubymarshal_loads
 
-        return [rubymarshal_loads(field) for field in list_]
+        return [(lambda field: rubymarshal_loads(field))(field) for field in list_]
 
     def __postprocess_yaml(list_: List):
         import yaml
@@ -147,7 +147,12 @@ def decrypt_pii_columns(
             lambda loader, node: float(loader.construct_scalar(node).split(":")[1]),
         )
 
-        return [json_dumps(yaml.load(field)) for field in list_]  # nosec
+        return [
+            (lambda field: (json_dumps(yaml.load(field))) if field else None)(  # nosec
+                field
+            )
+            for field in list_
+        ]
 
     postprocessors = {"marshal": __postprocess_marshal, "yaml": __postprocess_yaml}
 
