@@ -30,7 +30,7 @@ class DecryptionSpec:
     schema: str = attr.ib()
     table: str = attr.ib()
     columns: List[str] = attr.ib()
-    format: Optional[str] = attr.ib(default=False)
+    format: Optional[str] = attr.ib(default=None)
     catalog: str = attr.ib(default=None)
     whereclause: Optional[ClauseElement] = attr.ib(default=None)
 
@@ -133,26 +133,21 @@ def decrypt_pii_columns(
     from pyporky.symmetric import SymmetricPorky
     from json import loads as json_loads, dumps as json_dumps
     from base64 import b64decode
+    import yaml
+    from rubymarshal.reader import loads as rubymarshal_loads
 
-    def __postprocess_marshal(list_: List):
-        from rubymarshal.reader import loads as rubymarshal_loads
+    yaml.add_constructor(
+        "!ruby/object:BigDecimal",
+        lambda loader, node: float(loader.construct_scalar(node).split(":")[1]),
+    )
 
-        return [(lambda x: rubymarshal_loads(x))(field) for field in list_]
+    def _postprocess_marshal(list_: List):
+        return [(rubymarshal_loads(field) if field else None) for field in list_]
 
-    def __postprocess_yaml(list_: List):
-        import yaml
+    def _postprocess_yaml(list_: List):
+        return [json_dumps(yaml.load(field)) for field in list_]  # nosec
 
-        yaml.add_constructor(
-            "!ruby/object:BigDecimal",
-            lambda loader, node: float(loader.construct_scalar(node).split(":")[1]),
-        )
-
-        return [
-            (lambda x: (json_dumps(yaml.load(x))) if x else None)(field)  # nosec
-            for field in list_
-        ]
-
-    postprocessors = {"marshal": __postprocess_marshal, "yaml": __postprocess_yaml}
+    postprocessors = {"marshal": _postprocess_marshal, "yaml": _postprocess_yaml}
 
     try:
         del os.environ["AWS_ACCESS_KEY_ID"]
@@ -160,7 +155,7 @@ def decrypt_pii_columns(
     except KeyError:
         pass
 
-    def __decrypt(row, format=None):
+    def _decrypt(row, format=None):
         list_ = []
         for field in row[1:]:
             if not field:
@@ -197,7 +192,7 @@ def decrypt_pii_columns(
 
             df = pd.read_sql(stmt, con=tx)
             df = df.apply(
-                axis=1, func=__decrypt, result_type="broadcast", args=(spec.format,)
+                axis=1, func=_decrypt, result_type="broadcast", args=(spec.format,)
             )
             df.to_parquet(path, engine="fastparquet", compression="gzip")
 
