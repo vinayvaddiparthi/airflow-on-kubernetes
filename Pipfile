@@ -10,7 +10,6 @@ pytest-mock = "*"
 mypy = "*"
 
 [packages]
-pyporky = {git = "https://gitlab.com/tc-data/pyporky.git"}
 apache-airflow = {version = ">=1.10.9<2",extra = ["kubernetes","redshift","presto"]}
 pyhive = {version = "*",extra = ["presto"]}
 snowflake-sqlalchemy = "*"

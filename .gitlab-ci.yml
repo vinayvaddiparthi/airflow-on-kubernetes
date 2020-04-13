@@ -45,14 +45,14 @@ sast:
     - pip install bandit
     - bandit -r .
 
-#check_dependencies:
-#  stage: test
-#  tags:
-#    - k8s
-#  image: python:${PYTHON_VERSION}
-#  script:
-#    - pip install pipenv
-#    - pipenv check
+check_dependencies:
+  stage: test
+  tags:
+    - k8s
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install safety pipenv
+    - pipenv lock --requirements | safety check --stdin
 
 deploy_production:
   stage: deploy
