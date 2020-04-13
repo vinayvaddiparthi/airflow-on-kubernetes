@@ -19,6 +19,7 @@ fastparquet = "*"
 heroku3 = "*"
 psycopg2 = "*"
 rubymarshal = "*"
+zeep = "*"
 
 [requires]
 python_version = "3.8"
