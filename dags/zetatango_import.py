@@ -145,7 +145,9 @@ def decrypt_pii_columns(
         return [(rubymarshal_loads(field) if field else None) for field in list_]
 
     def _postprocess_yaml(list_: List):
-        return [json_dumps(yaml.load(field)) for field in list_]  # nosec
+        return [
+            json_dumps(yaml.load(field) if field else None) for field in list_  # nosec
+        ]
 
     postprocessors = {"marshal": _postprocess_marshal, "yaml": _postprocess_yaml}
 
