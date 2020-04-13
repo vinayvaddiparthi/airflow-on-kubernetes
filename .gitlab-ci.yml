@@ -43,7 +43,13 @@ sast:
   image: python:${PYTHON_VERSION}
   script:
     - pip install bandit
-    - bandit -r .
+    - bandit -r . -f xml -o sast.xml
+  artifacts:
+    when: always
+    paths:
+      - sast.xml
+    reports:
+      junit: sast.xml
 
 check_dependencies:
   stage: test
