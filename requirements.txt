@@ -6,6 +6,7 @@ pynacl
 cffi<1.14
 heroku3
 rubymarshal
+zeep
 openpyxl
 email_validator
 python-slugify
