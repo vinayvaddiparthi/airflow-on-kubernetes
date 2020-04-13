@@ -8,7 +8,6 @@ ENV TERM linux
 ARG AIRFLOW_VERSION=1.10.10
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
 ARG AIRFLOW_DEPS="kubernetes,s3,snowflake"
-ARG PYTHON_DEPS="snowflake-sqlalchemy xmltodict fastparquet pandas pynacl cffi<1.14 heroku3 rubymarshal"
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
 
 # Define en_US.
@@ -52,6 +51,7 @@ RUN set -ex \
     && pip install pyasn1 \
     && pip install apache-airflow[crypto,postgres,hive,jdbc,mysql,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}]==${AIRFLOW_VERSION} \
     && if [ -n "${PYTHON_DEPS}" ]; then pip install ${PYTHON_DEPS}; fi \
+    && if [ -f "requirements.txt"]; then pip install -r requirements.txt; fi \
     && apt-get purge --auto-remove -yqq $buildDeps \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \
