@@ -52,6 +52,7 @@ RUN set -ex \
     && pip install ndg-httpsclient \
     && pip install pyasn1 \
     && pip install apache-airflow[crypto,postgres,hive,jdbc,mysql,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}]==${AIRFLOW_VERSION} \
+    && pip install dbt \
     && if [ -n "${PYTHON_DEPS}" ]; then pip install ${PYTHON_DEPS}; fi \
     && pip install -r requirements.txt \
     && apt-get purge --auto-remove -yqq $buildDeps \
