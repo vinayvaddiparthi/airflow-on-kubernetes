@@ -1,8 +1,11 @@
 import importlib
+import json
 
 import pendulum
 
 from airflow import DAG
+from airflow.hooks.base_hook import BaseHook
+from airflow.operators.bash_operator import BashOperator
 from airflow.operators.python_operator import PythonOperator
 
 import datetime
@@ -113,6 +116,10 @@ def create_dag(instance: str):
         f"salesforce_import_extras.sobjects.{instance}"
     ).sobjects
 
+    dbt_hook = BaseHook.get_connection("dbt_refresh")
+    gl_user = json.loads(dbt_hook.extra)["user"]
+    gl_token = json.loads(dbt_hook.extra)["token"]
+
     with DAG(
         f"{instance}_import",
         start_date=pendulum.datetime(
@@ -145,6 +152,30 @@ def create_dag(instance: str):
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
                 priority_weight=sobject.get("weight", 0),
+            ) >> BashOperator(
+                task_id="dbt_refresh",
+                pool="snowflake_pool",
+                execution_timeout=datetime.timedelta(hours=4),
+                retry_delay=datetime.timedelta(hours=1),
+                retries=3,
+                priority_weight=sobject.get("weight", 0),
+                bash_command="git clone https://${gl_user}:${gl_token}@gitlab.com/tc-data/curated-data-warehouse.git"
+                "&& cd curated-data-warehouse"
+                "&& dbt seed --profiles-dir . --target prod"
+                "&& dbt run --profiles-dir . --target prod"
+                "&& dbt snapshot --profiles-dir . --target prod",
+                env={
+                    "SNOWFLAKE_ACCOUNT": dbt_hook.host,
+                    "SNOWFLAKE_USERNAME": dbt_hook.login,
+                    "SNOWFLAKE_PASSWORD": dbt_hook.password,
+                    "SNOWFLAKE_DATABASE": "ANALYTICS_PRODUCTION",
+                    "SNOWFLAKE_SCHEMA": "DBT_ARIO",
+                    "SNOWFLAKE_ROLE": "DBT_PRODUCTION",
+                    "SNOWFLAKE_WAREHOUSE": "ETL",
+                    "ZETATANGO_ENV": "PRODUCTION",
+                    "gl_user": gl_user,
+                    "gl_token": gl_token,
+                },
             )
         return dag
 

@@ -6,3 +6,4 @@ pynacl
 cffi<1.14
 heroku3
 rubymarshal
+dbt
