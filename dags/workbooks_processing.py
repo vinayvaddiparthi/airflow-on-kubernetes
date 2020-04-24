@@ -82,7 +82,7 @@ with DAG(
         python_callable=import_workbooks,
         op_kwargs={
             "bucket": "zt-production-elt-core",
-            "snowflake_conn": "snowflake_default",
+            "snowflake_conn": "snowflake_tclegacy",
             "destination_schema": "PUBLIC",
             "destination_table": "WORKBOOKS",
         },
@@ -90,7 +90,7 @@ with DAG(
             "KubernetesExecutor": {
                 "annotations": {
                     "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                                              "KubernetesAirflowProductionWorkbooksRole"
+                    "KubernetesAirflowProductionWorkbooksRole"
                 }
             }
         },
