@@ -12,15 +12,12 @@ import boto3
 
 from utils import sf15to18, random_identifier
 
-s3 = boto3.resource("s3")
 
-
-def _process_excel_file(bucket: str, key: str):
-    bucket_ = s3.Bucket(name=bucket)
-    print(f"🧮 Processing {bucket_}/{key}...", sep=" ")
+def _process_excel_file(bucket, obj):
+    print(f"⚙️ Processing {obj}...", sep=" ")
 
     with tempfile.TemporaryFile() as f:
-        bucket_.download_fileobj(key, f)
+        bucket.download_fileobj(obj.key, f)
 
         try:
             workbook = load_workbook(filename=f, data_only=True, read_only=True)
@@ -28,10 +25,9 @@ def _process_excel_file(bucket: str, key: str):
             calc_sheet = {
                 k[0].value: v[0].value for k, v in zip(ws["A1":"A32"], ws["B1":"B32"])
             }
-            print("✔️")
             return calc_sheet
         except Exception as e:
-            print(f"❌ Error processing {key}: {e}")
+            print(f"❌ Error processing {obj}: {e}")
 
 
 def import_workbooks(
@@ -48,11 +44,13 @@ def import_workbooks(
     except KeyError:
         pass
 
+    s3 = boto3.resource("s3")
+
     stage_guid = random_identifier()
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = [
-            executor.submit(_process_excel_file, bucket, obj.key)
+            executor.submit(_process_excel_file, bucket, obj)
             for obj in s3.Bucket(name=bucket).objects.all()
             if (obj.key).lower().endswith(".xlsx") and not "~" in obj.key
         ]
