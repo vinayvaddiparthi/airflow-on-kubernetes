@@ -73,17 +73,25 @@ def import_workbooks(
 with DAG(
     dag_id="workbooks_processing",
     start_date=pendulum.datetime(
-        2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
+        2020, 4, 24, tzinfo=pendulum.timezone("America/Toronto")
     ),
     schedule_interval="0 0 * * *",
 ) as dag:
     dag << PythonOperator(
-        task_id="zt-production-elt-core__import",
+        task_id="process_workbooks",
         python_callable=import_workbooks,
         op_kwargs={
             "bucket": "zt-production-elt-core",
             "snowflake_conn": "snowflake_default",
             "destination_schema": "PUBLIC",
             "destination_table": "WORKBOOKS",
+        },
+        executor_config={
+            "KubernetesExecutor": {
+                "annotations": {
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                                              "KubernetesAirflowProductionWorkbooksRole"
+                }
+            }
         },
     )
