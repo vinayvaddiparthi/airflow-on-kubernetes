@@ -16,6 +16,13 @@ s3 = boto3.resource("s3")
 
 
 def _process_excel_file(bucket: str, key: str):
+    # Delete AWS credentials used to upload logs from this context
+    try:
+        del os.environ["AWS_ACCESS_KEY_ID"]
+        del os.environ["AWS_SECRET_ACCESS_KEY"]
+    except KeyError:
+        pass
+
     bucket_ = s3.Bucket(name=bucket)
     print(f"🧮 Processing {bucket_}/{key}...", sep=" ")
 
