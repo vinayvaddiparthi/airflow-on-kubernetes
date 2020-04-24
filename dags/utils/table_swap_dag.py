@@ -60,7 +60,7 @@ def create_table_swap_dag(
                 task_id=f'swap__{table["src"]["schema"]}__{table["src"]["table"]}',
                 python_callable=swap,
                 op_kwargs={
-                    "conn": "snowflake_default",
+                    "conn": "snowflake_salesforce",
                     "output_database": output_database,
                     "dst": table["dst"],
                 },
