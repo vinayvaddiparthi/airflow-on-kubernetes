@@ -75,7 +75,7 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 4, 24, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    schedule_interval="0 0 * * *",
+    schedule_interval="0 8 * * *",
 ) as dag:
     dag << PythonOperator(
         task_id="process_workbooks",
