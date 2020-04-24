@@ -69,7 +69,7 @@ def create_dag():
                 task_id=f"swap__{schema}__{table}",
                 python_callable=swap,
                 op_kwargs={
-                    "conn": "snowflake_default",
+                    "conn": "snowflake_salesforce",
                     "database": "production_appv3",
                     "schema": schema,
                     "table": table,

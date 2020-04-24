@@ -62,7 +62,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
 
         if not first_import:
             with SnowflakeHook(
-                "snowflake_default"
+                "snowflake_salesforce"
             ).get_sqlalchemy_engine().begin() as sf_tx:
                 max_date = sf_tx.execute(
                     Select(
@@ -136,7 +136,7 @@ def create_dag(instance: str):
                 task_id=f'snowflake_summary__{sobject["name"]}',
                 python_callable=create_sf_summary_table,
                 op_kwargs={
-                    "conn": "snowflake_default",
+                    "conn": "snowflake_salesforce",
                     "sfdc_instance": instance,
                     "sobject": sobject,
                 },
