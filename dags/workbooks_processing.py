@@ -14,20 +14,19 @@ from utils import sf15to18, random_identifier
 
 
 def _process_excel_file(bucket, obj):
-    print(f"⚙️ Processing {obj}...", sep=" ")
+    try:
+        with tempfile.TemporaryFile() as f:
+            bucket.download_fileobj(obj.key, f)
 
-    with tempfile.TemporaryFile() as f:
-        bucket.download_fileobj(obj.key, f)
-
-        try:
             workbook = load_workbook(filename=f, data_only=True, read_only=True)
             ws = workbook["Calculation Sheet"]
             calc_sheet = {
                 k[0].value: v[0].value for k, v in zip(ws["A1":"A32"], ws["B1":"B32"])
             }
             return calc_sheet
-        except Exception as e:
-            print(f"❌ Error processing {obj}: {e}")
+    except Exception as e:
+        print(f"❌ Error processing {obj}: {e}")
+        return {}
 
 
 def import_workbooks(
@@ -50,6 +49,7 @@ def import_workbooks(
     stage_guid = random_identifier()
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        print(f"⚙️ Processing {bucket_}...")
         futures = [
             executor.submit(_process_excel_file, bucket_, obj)
             for obj in bucket_.objects.all()
