@@ -16,6 +16,9 @@ local params = import "../params.libsonnet";
     "clusterServicePlanExternalName":
       if params.env == "production" then "production"
       else "custom",
-    "parameters": if params.env != "production" then { PreventDeletion: "False" },
+    "parameters": if params.env != "production" then {
+      PreventDeletion: "False",
+      EnableLogging: "False",
+    },
   }
 }
