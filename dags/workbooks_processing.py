@@ -45,13 +45,14 @@ def import_workbooks(
         pass
 
     s3 = boto3.resource("s3")
+    bucket_ = s3.Bucket(name=bucket)
 
     stage_guid = random_identifier()
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = [
-            executor.submit(_process_excel_file, bucket, obj)
-            for obj in s3.Bucket(name=bucket).objects.all()
+            executor.submit(_process_excel_file, bucket_, obj)
+            for obj in bucket_.objects.all()
             if (obj.key).lower().endswith(".xlsx") and not "~" in obj.key
         ]
 
