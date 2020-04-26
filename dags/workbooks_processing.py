@@ -1,3 +1,4 @@
+import logging
 import os
 import tempfile
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -17,8 +18,8 @@ from utils import sf15to18, random_identifier
 def _wrap_sf15to18(id: str) -> Optional[str]:
     try:
         return sf15to18(id)
-    except ValueError:
-        print(f"Error converting SFDC ID {id} from 15 to 18 chars.")
+    except Exception as e:
+        logging.error(f"❌ Error converting SFDC ID {id} from 15 to 18 chars: {e}")
         return None
 
 
@@ -30,11 +31,12 @@ def _process_excel_file(bucket, obj):
             workbook = load_workbook(filename=f, data_only=True, read_only=True)
             ws = workbook["Calculation Sheet"]
             calc_sheet = {
-                k[0].value: v[0].value for k, v in zip(ws["A1":"A32"], ws["B1":"B32"])
+                k[0].value.lower(): v[0].value
+                for k, v in zip(ws["A1":"A32"], ws["B1":"B32"])
             }
             return calc_sheet
     except Exception as e:
-        print(f"❌ Error processing {obj}: {e}")
+        logging.error(f"❌ Error processing {obj}: {e}")
         return {}
 
 
@@ -43,13 +45,13 @@ def import_workbooks(
     snowflake_conn: str,
     destination_schema: str,
     destination_table: str,
-    num_threads: int = 128,
+    num_threads: int = 4,
 ):
     # Delete AWS credentials used to upload logs from this context
     try:
         del os.environ["AWS_ACCESS_KEY_ID"]
         del os.environ["AWS_SECRET_ACCESS_KEY"]
-    except KeyError:
+    except Exception:  # nosec
         pass
 
     s3 = boto3.resource("s3")
@@ -67,8 +69,8 @@ def import_workbooks(
 
     df = pd.DataFrame([future.result() for future in futures])
     print(f"✔️ Done processing {len(futures)} workbooks")
-    df["Account ID - 18"] = df.apply(
-        lambda row: _wrap_sf15to18(row["Account ID"]), axis=1
+    df["account id 18"] = df.apply(
+        lambda row: _wrap_sf15to18(row["account id"]), axis=1
     )
     print(f"✔️ Done computing 18 characters SFDC object IDs")
 
@@ -102,6 +104,7 @@ with DAG(
             "snowflake_conn": "snowflake_tclegacy",
             "destination_schema": "PUBLIC",
             "destination_table": "WORKBOOKS",
+            "num_threads": 32,
         },
         executor_config={
             "KubernetesExecutor": {
