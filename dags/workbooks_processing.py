@@ -1,3 +1,4 @@
+import logging
 import os
 import tempfile
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -17,8 +18,8 @@ from utils import sf15to18, random_identifier
 def _wrap_sf15to18(id: str) -> Optional[str]:
     try:
         return sf15to18(id)
-    except ValueError:
-        print(f"Error converting SFDC ID {id} from 15 to 18 chars.")
+    except Exception:
+        logging.error(f"Error converting SFDC ID {id} from 15 to 18 chars.")
         return None
 
 
@@ -34,7 +35,7 @@ def _process_excel_file(bucket, obj):
             }
             return calc_sheet
     except Exception as e:
-        print(f"❌ Error processing {obj}: {e}")
+        logging.error(f"❌ Error processing {obj}: {e}")
         return {}
 
 
@@ -49,7 +50,7 @@ def import_workbooks(
     try:
         del os.environ["AWS_ACCESS_KEY_ID"]
         del os.environ["AWS_SECRET_ACCESS_KEY"]
-    except KeyError:
+    except Exception:
         pass
 
     s3 = boto3.resource("s3")
