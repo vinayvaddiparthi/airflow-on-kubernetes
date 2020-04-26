@@ -11,6 +11,7 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from openpyxl import load_workbook
 import boto3
+from slugify import slugify
 
 from utils import sf15to18, random_identifier
 
@@ -23,18 +24,22 @@ def _wrap_sf15to18(id: str) -> Optional[str]:
         return None
 
 
-def _process_excel_file(bucket, obj):
+def _process_excel_file(file):
+    workbook = load_workbook(filename=file, data_only=True, read_only=True)
+    ws = workbook["Calculation Sheet"]
+    calc_sheet = {
+        slugify(str(k[0].value), separator="_"): v[0].value
+        for k, v in zip(ws["A1":"A65535"], ws["B1":"B65535"])
+        if k and v
+    }
+    return calc_sheet
+
+
+def _get_and_process_workbook(bucket, obj):
     try:
         with tempfile.TemporaryFile() as f:
             bucket.download_fileobj(obj.key, f)
-
-            workbook = load_workbook(filename=f, data_only=True, read_only=True)
-            ws = workbook["Calculation Sheet"]
-            calc_sheet = {
-                k[0].value.lower(): v[0].value
-                for k, v in zip(ws["A1":"A32"], ws["B1":"B32"])
-            }
-            return calc_sheet
+            _process_excel_file(f)
     except Exception as e:
         logging.error(f"❌ Error processing {obj}: {e}")
         return {}
@@ -62,15 +67,15 @@ def import_workbooks(
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         print(f"⚙️ Processing {bucket_}...")
         futures = [
-            executor.submit(_process_excel_file, bucket_, obj)
+            executor.submit(_get_and_process_workbook, bucket_, obj)
             for obj in bucket_.objects.all()
             if (obj.key).lower().endswith(".xlsx") and not "~" in obj.key
         ]
 
     df = pd.DataFrame([future.result() for future in futures])
     print(f"✔️ Done processing {len(futures)} workbooks")
-    df["account id 18"] = df.apply(
-        lambda row: _wrap_sf15to18(row["account id"]), axis=1
+    df["account_id_18"] = df.apply(
+        lambda row: _wrap_sf15to18(row["account_id"]), axis=1
     )
     print(f"✔️ Done computing 18 characters SFDC object IDs")
 
