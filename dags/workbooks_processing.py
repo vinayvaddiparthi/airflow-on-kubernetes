@@ -18,8 +18,8 @@ from utils import sf15to18, random_identifier
 def _wrap_sf15to18(id: str) -> Optional[str]:
     try:
         return sf15to18(id)
-    except Exception:
-        logging.error(f"Error converting SFDC ID {id} from 15 to 18 chars.")
+    except Exception as e:
+        logging.error(f"❌ Error converting SFDC ID {id} from 15 to 18 chars: {e}")
         return None
 
 
