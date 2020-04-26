@@ -31,7 +31,8 @@ def _process_excel_file(bucket, obj):
             workbook = load_workbook(filename=f, data_only=True, read_only=True)
             ws = workbook["Calculation Sheet"]
             calc_sheet = {
-                k[0].value: v[0].value for k, v in zip(ws["A1":"A32"], ws["B1":"B32"])
+                k[0].value.lower(): v[0].value
+                for k, v in zip(ws["A1":"A32"], ws["B1":"B32"])
             }
             return calc_sheet
     except Exception as e:
@@ -50,7 +51,7 @@ def import_workbooks(
     try:
         del os.environ["AWS_ACCESS_KEY_ID"]
         del os.environ["AWS_SECRET_ACCESS_KEY"]
-    except Exception:
+    except Exception:  # nosec
         pass
 
     s3 = boto3.resource("s3")
@@ -68,8 +69,8 @@ def import_workbooks(
 
     df = pd.DataFrame([future.result() for future in futures])
     print(f"✔️ Done processing {len(futures)} workbooks")
-    df["Account ID - 18"] = df.apply(
-        lambda row: _wrap_sf15to18(row["Account ID"]), axis=1
+    df["account id 18"] = df.apply(
+        lambda row: _wrap_sf15to18(row["account id"]), axis=1
     )
     print(f"✔️ Done computing 18 characters SFDC object IDs")
 
