@@ -44,7 +44,7 @@ def import_workbooks(
     snowflake_conn: str,
     destination_schema: str,
     destination_table: str,
-    num_threads: int = 128,
+    num_threads: int = 4,
 ):
     # Delete AWS credentials used to upload logs from this context
     try:
@@ -103,6 +103,7 @@ with DAG(
             "snowflake_conn": "snowflake_tclegacy",
             "destination_schema": "PUBLIC",
             "destination_table": "WORKBOOKS",
+            "num_threads": 32,
         },
         executor_config={
             "KubernetesExecutor": {
