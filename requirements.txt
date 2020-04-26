@@ -8,3 +8,4 @@ heroku3
 rubymarshal
 openpyxl
 email_validator
+python-slugify
