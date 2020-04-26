@@ -1,6 +1,7 @@
 import os
 import tempfile
 from concurrent.futures.thread import ThreadPoolExecutor
+from typing import Optional
 
 import pandas as pd
 import pendulum
@@ -11,6 +12,14 @@ from openpyxl import load_workbook
 import boto3
 
 from utils import sf15to18, random_identifier
+
+
+def _wrap_sf15to18(id: str) -> Optional[str]:
+    try:
+        return sf15to18(id)
+    except ValueError:
+        print(f"Error converting SFDC ID {id} from 15 to 18 chars.")
+        return None
 
 
 def _process_excel_file(bucket, obj):
@@ -57,9 +66,11 @@ def import_workbooks(
         ]
 
     df = pd.DataFrame([future.result() for future in futures])
-    print(f"Done processing {len(futures)} workbooks")
-    df["Account ID - 18"] = df.apply(lambda row: sf15to18(row["Account ID"]), axis=1)
-    print(f"Done computing 18 characters SFDC object IDs")
+    print(f"✔️ Done processing {len(futures)} workbooks")
+    df["Account ID - 18"] = df.apply(
+        lambda row: _wrap_sf15to18(row["Account ID"]), axis=1
+    )
+    print(f"✔️ Done computing 18 characters SFDC object IDs")
 
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     with engine_.begin() as tx, tempfile.NamedTemporaryFile() as path:
