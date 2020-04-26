@@ -118,8 +118,8 @@ def stage_table_in_snowflake(
                 return f"⚠️ Caught ValueError reading table {table}: {ve}"
 
             tx.execute(
-                f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS "
-                f"SELECT * FROM @{destination_schema}.{stage_guid}"
+                f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS "  # nosec
+                f"SELECT * FROM @{destination_schema}.{stage_guid}"  # nosec
             ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
@@ -204,9 +204,9 @@ def decrypt_pii_columns(
                 [
                     tx.execute(stmt).fetchall()
                     for stmt in [
-                        f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} FILE_FORMAT=(TYPE=PARQUET)",
-                        f"PUT file://{path} @{target_schema}.{stage}",
-                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}${spec.table} AS SELECT * FROM @{target_schema}.{stage}",
+                        f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} FILE_FORMAT=(TYPE=PARQUET)",  # nosec
+                        f"PUT file://{path} @{target_schema}.{stage}",  # nosec
+                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}${spec.table} AS SELECT * FROM @{target_schema}.{stage}",  # nosec
                     ]
                 ]
             )

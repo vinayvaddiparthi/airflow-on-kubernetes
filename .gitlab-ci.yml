@@ -6,7 +6,7 @@ stages:
   - cleanup
 
 variables:
-  PYTHON_VERSION: "3.8"
+  PYTHON_VERSION: "3.7"
   DOCKER_DRIVER: overlay2
   DOCKER_HOST: tcp://docker:2376
   DOCKER_TLS_CERTDIR: "/certs"
@@ -43,7 +43,7 @@ sast:
   image: python:${PYTHON_VERSION}
   script:
     - pip install bandit
-    - bandit -r . -f xml -o sast.xml
+    - bandit -r . -f xml -ll -o sast.xml
   artifacts:
     when: always
     paths:
