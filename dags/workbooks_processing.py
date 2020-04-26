@@ -75,7 +75,7 @@ def import_workbooks(
     df = pd.DataFrame([future.result() for future in futures])
     print(f"✔️ Done processing {len(futures)} workbooks")
     df["account_id_18"] = df.apply(
-        lambda row: _wrap_sf15to18(row["account_id"]), axis=1
+        lambda row: _wrap_sf15to18(row.get("account_id")), axis=1
     )
     print(f"✔️ Done computing 18 characters SFDC object IDs")
 
