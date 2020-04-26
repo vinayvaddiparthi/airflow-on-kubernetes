@@ -85,9 +85,9 @@ def import_workbooks(
         print("Dataframe converted to parquet")
 
         stmts = [
-            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=PARQUET)",
-            f"PUT file://{path} @{destination_schema}.{stage_guid}",
-            f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{destination_table} AS SELECT * FROM @{destination_schema}.{stage_guid}",
+            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=PARQUET)",  # nosec
+            f"PUT file://{path} @{destination_schema}.{stage_guid}",  # nosec
+            f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{destination_table} AS SELECT * FROM @{destination_schema}.{stage_guid}",  # nosec
         ]
 
         print("Uploading results to Snowflake ❄️")

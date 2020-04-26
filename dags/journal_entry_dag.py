@@ -57,7 +57,7 @@ with DAG(
                 created_date=cd, env=env, execution_time=execution_time
             )
 
-            count_all = f"select count(*) from erp.{env}.tli_raw;"
+            count_all = f"select count(*) from erp.{env}.tli_raw;"  # nosec
             with snowflake.connector.connect(
                 user=snowflake_hook.login,
                 password=snowflake_hook.password,
