@@ -10,4 +10,3 @@ zeep
 openpyxl
 email_validator
 python-slugify
-pyarrow
