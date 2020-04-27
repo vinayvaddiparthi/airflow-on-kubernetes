@@ -80,14 +80,14 @@ def import_workbooks(
     print(f"✔️ Done computing 18 characters SFDC object IDs")
 
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
-    with engine_.begin() as tx, tempfile.NamedTemporaryFile() as path:
+    with engine_.begin() as tx, tempfile.NamedTemporaryFile() as file:
         df.columns = df.columns.astype(str)
-        df.to_parquet(f"{path}", engine="fastparquet", compression="gzip")
+        df.to_parquet(f"{file}", engine="fastparquet", compression="gzip")
         print("Dataframe converted to parquet")
 
         stmts = [
             f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=PARQUET)",  # nosec
-            f"PUT file://{path} @{destination_schema}.{stage_guid}",  # nosec
+            f"PUT file://{file.name} @{destination_schema}.{stage_guid}",  # nosec
             f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{destination_table} AS SELECT * FROM @{destination_schema}.{stage_guid}",  # nosec
         ]
 
