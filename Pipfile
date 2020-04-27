@@ -21,6 +21,7 @@ heroku3 = "*"
 psycopg2 = "*"
 rubymarshal = "*"
 openpyxl = "*"
+pyarrow = "*"
 
 [requires]
 python_version = "3.7"
