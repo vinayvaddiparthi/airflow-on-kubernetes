@@ -81,11 +81,12 @@ def import_workbooks(
 
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     with engine_.begin() as tx, tempfile.NamedTemporaryFile() as file:
-        df.to_csv(path_or_buf=file, compression="gzip")
+        df.columns = df.columns.astype(str)
+        df.to_parquet(f"{file}", engine="fastparquet", compression="gzip")
         print("Dataframe converted to parquet")
 
         stmts = [
-            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=CSV)",  # nosec
+            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=PARQUET)",  # nosec
             f"PUT file://{file.name} @{destination_schema}.{stage_guid}",  # nosec
             f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{destination_table} AS SELECT * FROM @{destination_schema}.{stage_guid}",  # nosec
         ]
