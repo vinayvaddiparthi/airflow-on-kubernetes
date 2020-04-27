@@ -21,7 +21,6 @@ psycopg2 = "*"
 rubymarshal = "*"
 zeep = "*"
 openpyxl = "*"
-pyarrow = "*"
 
 [requires]
 python_version = "3.7"
