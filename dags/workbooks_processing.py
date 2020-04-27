@@ -80,9 +80,9 @@ def import_workbooks(
     print(f"✔️ Done computing 18 characters SFDC object IDs")
 
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
-    with engine_.begin() as tx, tempfile.NamedTemporaryFile() as file:
-        df.to_csv(path_or_buf=file, compression="gzip")
-        print("Dataframe converted to parquet")
+    with engine_.begin() as tx, tempfile.NamedTemporaryFile("w") as file:
+        df.to_csv(path_or_buf=file)
+        print("Dataframe converted to CSV")
 
         stmts = [
             f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=CSV)",  # nosec
