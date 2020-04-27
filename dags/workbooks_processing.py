@@ -110,7 +110,7 @@ with DAG(
             "snowflake_conn": "snowflake_tclegacy",
             "destination_schema": "PUBLIC",
             "destination_table": "WORKBOOKS",
-            "num_threads": 32,
+            "num_threads": 10,
         },
         executor_config={
             "KubernetesExecutor": {
