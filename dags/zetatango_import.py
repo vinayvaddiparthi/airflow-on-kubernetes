@@ -95,7 +95,7 @@ def stage_table_in_snowflake(
     destination_schema: str,
     table: str,
 ):
-    with tempfile.TemporaryDirectory() as temp_dir_path:
+    with tempfile.NamedTemporaryFile() as tempfile_:
         stage_guid = __random()
         with snowflake_engine.begin() as tx:
             tx.execute(
@@ -104,16 +104,12 @@ def stage_table_in_snowflake(
             ).fetchall()
 
             try:
-                for df in pd.read_sql_table(
-                    table, source_tx, source_schema, chunksize=10000
-                ):
-                    file_guid = __random()
-                    path = Path(temp_dir_path) / file_guid
+                df = pd.read_sql_table(table, source_tx, source_schema)
+                df.to_parquet(tempfile_.name, engine="fastparquet", compression="gzip")
 
-                    df.to_parquet(f"{path}", engine="fastparquet", compression="gzip")
-                    tx.execute(
-                        f"PUT file://{path} @{destination_schema}.{stage_guid}"
-                    ).fetchall()
+                tx.execute(
+                    f"PUT file://{tempfile_.name} @{destination_schema}.{stage_guid}"
+                ).fetchall()
             except ValueError as ve:
                 return f"⚠️ Caught ValueError reading table {table}: {ve}"
 
@@ -189,14 +185,12 @@ def decrypt_pii_columns(
         )
 
         engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-        with engine.begin() as tx, tempfile.TemporaryDirectory() as output_directory:
-            path = Path(output_directory) / f"{spec.table}.parquet"
-
+        with engine.begin() as tx, tempfile.NamedTemporaryFile() as tempfile_:
             df = pd.read_sql(stmt, con=tx)
             df = df.apply(
                 axis=1, func=_decrypt, result_type="broadcast", args=(spec.format,)
             )
-            df.to_parquet(path, engine="fastparquet", compression="gzip")
+            df.to_parquet(tempfile_.name, engine="fastparquet", compression="gzip")
 
             stage = __random()
 
@@ -205,7 +199,7 @@ def decrypt_pii_columns(
                     tx.execute(stmt).fetchall()
                     for stmt in [
                         f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} FILE_FORMAT=(TYPE=PARQUET)",  # nosec
-                        f"PUT file://{path} @{target_schema}.{stage}",  # nosec
+                        f"PUT file://{tempfile_.name} @{target_schema}.{stage}",  # nosec
                         f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}${spec.table} AS SELECT * FROM @{target_schema}.{stage}",  # nosec
                     ]
                 ]
