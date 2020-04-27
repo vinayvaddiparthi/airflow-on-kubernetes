@@ -3,6 +3,7 @@ import os
 import random
 import string
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 from typing import List, Optional
 
@@ -220,6 +221,7 @@ with DAG(
         2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
     ),
     schedule_interval="0 0,8-20 * * 1-5",
+    default_args={"retries": 3, "retry_delay": timedelta(minutes=5)},
 ) as dag:
     dag << PythonOperator(
         task_id="zt-production-elt-core__import",
