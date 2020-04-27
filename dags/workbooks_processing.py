@@ -82,7 +82,7 @@ def import_workbooks(
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     with engine_.begin() as tx, tempfile.NamedTemporaryFile() as file:
         df.columns = df.columns.astype(str)
-        df.to_parquet(f"{file}", engine="fastparquet", compression="gzip")
+        df.to_parquet(file.name, engine="pyarrow", compression="gzip")
         print("Dataframe converted to parquet")
 
         stmts = [
