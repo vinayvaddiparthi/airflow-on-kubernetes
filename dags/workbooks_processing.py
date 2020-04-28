@@ -85,10 +85,11 @@ def import_workbooks(
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     with engine_.begin() as tx, tempfile.TemporaryDirectory() as path:
         file = Path(path) / random_identifier()
-        df.to_parquet(fname=file, engine="fastparquet", compression="gzip")
+        df.to_parquet(fname=str(file), engine="fastparquet", compression="gzip")
         print("Dataframe converted to Parquet")
 
-        bucket_.upload_file(file.name, "_summary.parquet.gz")
+        bucket_.upload_file(str(file), "_summary.parquet.gz")
+        print(f"📦 {file} uploaded to S3")
 
         stmts = [
             f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=PARQUET)",  # nosec
