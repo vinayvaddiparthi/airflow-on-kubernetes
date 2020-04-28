@@ -1,3 +1,5 @@
+import gzip
+import json
 import logging
 import os
 import tempfile
@@ -73,7 +75,15 @@ def import_workbooks(
             if (obj.key).lower().endswith(".xlsx") and not "~" in obj.key
         ]
 
-    df = pd.DataFrame([future.result() for future in futures])
+        results = [future.result() for future in futures]
+
+        with tempfile.TemporaryDirectory() as path:
+            path_ = Path(path) / random_identifier()
+            with gzip.open(path_, "w") as file_:
+                json.dump(results, file_)
+            bucket_.upload_file(str(file_), "_summary.json.gz")
+
+    df = pd.DataFrame(results)
     print(f"✔️ Done processing {len(futures)} workbooks")
     df["account_id_18"] = df.apply(
         lambda row: _wrap_sf15to18(row.get("account_id")), axis=1
@@ -98,7 +108,7 @@ def import_workbooks(
         ]
 
         print("Uploading results to Snowflake ❄️")
-        return [tx.execute(stmt).fetchall() for stmt in stmts]
+        print([tx.execute(stmt).fetchall() for stmt in stmts])
 
 
 with DAG(
