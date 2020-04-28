@@ -79,7 +79,7 @@ def import_workbooks(
 
         with tempfile.TemporaryDirectory() as path:
             path_ = Path(path) / random_identifier()
-            with gzip.open(path_, "w") as file_:
+            with gzip.open(path_, "w+b") as file_:
                 json.dump(results, file_)
             bucket_.upload_file(str(file_), "_summary.json.gz")
 
