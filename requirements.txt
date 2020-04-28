@@ -10,3 +10,4 @@ zeep
 openpyxl
 email_validator
 python-slugify
+flask-appbuilder==2.3.2
