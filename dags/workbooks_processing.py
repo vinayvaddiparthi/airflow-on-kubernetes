@@ -80,6 +80,8 @@ def import_workbooks(
     )
     print(f"✔️ Done computing 18 characters SFDC object IDs")
 
+    df.columns = df.columns.astype(str)
+
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     with engine_.begin() as tx, tempfile.TemporaryDirectory() as path:
         file = Path(path) / random_identifier()
