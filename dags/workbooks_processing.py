@@ -77,12 +77,6 @@ def import_workbooks(
 
         results = [future.result() for future in futures]
 
-        with tempfile.TemporaryDirectory() as path:
-            path_ = Path(path) / random_identifier()
-            with gzip.open(path_, "wt") as file_:
-                json.dump(results, file_)
-            bucket.upload_file(str(path_), "_summary.json.gz")
-
     df = pd.DataFrame(results)
     print(f"✔️ Done processing {len(futures)} workbooks")
     df["account_id_18"] = df.apply(
