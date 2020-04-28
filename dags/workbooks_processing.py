@@ -27,7 +27,7 @@ def _wrap_sf15to18(id: str) -> Optional[str]:
         return None
 
 
-def _process_excel_file(file):
+def _process_excel_file(file) -> dict:
     workbook = load_workbook(filename=file, data_only=True, read_only=True)
     ws = workbook["Calculation Sheet"]
     calc_sheet = {
@@ -38,11 +38,11 @@ def _process_excel_file(file):
     return calc_sheet
 
 
-def _get_and_process_workbook(bucket, obj):
+def _get_and_process_workbook(bucket, obj) -> dict:
     try:
         with tempfile.TemporaryFile() as f:
             bucket.download_fileobj(obj.key, f)
-            _process_excel_file(f)
+            return _process_excel_file(f)
     except Exception as e:
         logging.error(f"❌ Error processing {obj}: {e}")
         return {}
