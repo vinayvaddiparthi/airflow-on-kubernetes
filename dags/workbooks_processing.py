@@ -49,7 +49,7 @@ def _get_and_process_workbook(bucket, obj):
 
 
 def import_workbooks(
-    bucket: str,
+    bucket_name: str,
     snowflake_conn: str,
     destination_schema: str,
     destination_table: str,
@@ -63,15 +63,15 @@ def import_workbooks(
         pass
 
     s3 = boto3.resource("s3")
-    bucket_ = s3.Bucket(name=bucket)
+    bucket = s3.Bucket(name=bucket_name)
 
     stage_guid = random_identifier()
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        print(f"⚙️ Processing {bucket_}...")
+        print(f"⚙️ Processing {bucket}...")
         futures = [
-            executor.submit(_get_and_process_workbook, bucket_, obj)
-            for obj in bucket_.objects.all()
+            executor.submit(_get_and_process_workbook, bucket, obj)
+            for obj in bucket.objects.all()
             if (obj.key).lower().endswith(".xlsx") and not "~" in obj.key
         ]
 
@@ -79,9 +79,9 @@ def import_workbooks(
 
         with tempfile.TemporaryDirectory() as path:
             path_ = Path(path) / random_identifier()
-            with gzip.open(path_, "w+b") as file_:
+            with gzip.open(path_, "wt") as file_:
                 json.dump(results, file_)
-            bucket_.upload_file(str(file_), "_summary.json.gz")
+            bucket.upload_file(str(path_), "_summary.json.gz")
 
     df = pd.DataFrame(results)
     print(f"✔️ Done processing {len(futures)} workbooks")
@@ -98,7 +98,7 @@ def import_workbooks(
         df.to_parquet(fname=str(file), engine="fastparquet", compression="gzip")
         print("Dataframe converted to Parquet")
 
-        bucket_.upload_file(str(file), "_summary.parquet.gz")
+        bucket.upload_file(str(file), "_summary.parquet.gz")
         print(f"📦 {file} uploaded to S3")
 
         stmts = [
@@ -122,7 +122,7 @@ with DAG(
         task_id="process_workbooks",
         python_callable=import_workbooks,
         op_kwargs={
-            "bucket": "tc-workbooks",
+            "bucket_name": "tc-workbooks",
             "snowflake_conn": "snowflake_tclegacy",
             "destination_schema": "PUBLIC",
             "destination_table": "WORKBOOKS",
