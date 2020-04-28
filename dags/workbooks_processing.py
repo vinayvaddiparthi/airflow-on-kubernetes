@@ -2,6 +2,7 @@ import logging
 import os
 import tempfile
 from concurrent.futures.thread import ThreadPoolExecutor
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -80,13 +81,14 @@ def import_workbooks(
     print(f"✔️ Done computing 18 characters SFDC object IDs")
 
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
-    with engine_.begin() as tx, tempfile.NamedTemporaryFile("w") as file:
-        df.to_csv(path_or_buf=file)
-        print("Dataframe converted to CSV")
+    with engine_.begin() as tx, tempfile.TemporaryDirectory() as path:
+        file = Path(path) / random_identifier()
+        df.to_json(path_or_buf=file, orient="records", compression="gzip")
+        print("Dataframe converted to JSON")
 
         stmts = [
-            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=CSV)",  # nosec
-            f"PUT file://{file.name} @{destination_schema}.{stage_guid}",  # nosec
+            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=JSON)",  # nosec
+            f"PUT file://{file} @{destination_schema}.{stage_guid}",  # nosec
             f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{destination_table} AS SELECT * FROM @{destination_schema}.{stage_guid}",  # nosec
         ]
 
