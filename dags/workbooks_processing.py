@@ -88,7 +88,8 @@ def import_workbooks(
         df.to_parquet(fname=file, engine="fastparquet", compression="gzip")
         print("Dataframe converted to Parquet")
 
-        bucket_.upload_file(file.name, "_summary.parquet.gz")
+        bucket_.upload_file(file, "_summary.parquet.gz")
+        print(f"📦 {file} uploaded to S3")
 
         stmts = [
             f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=PARQUET)",  # nosec
