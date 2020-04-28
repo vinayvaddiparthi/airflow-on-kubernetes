@@ -79,24 +79,29 @@ def import_workbooks(
 
     df = pd.DataFrame(results)
     print(f"✔️ Done processing {len(futures)} workbooks")
+
     df["account_id_18"] = df.apply(
         lambda row: _wrap_sf15to18(row.get("account_id")), axis=1
     )
     print(f"✔️ Done computing 18 characters SFDC object IDs")
 
-    df.columns = df.columns.astype(str)
+    with tempfile.TemporaryDirectory() as path:
+        file = Path(path) / random_identifier()
+        df.to_pickle(str(file), compression="gzip")  # nosec
+        bucket.upload_file(str(file), "_summary.pickle.gz")
+    print(f"📦 Uploaded intermediate results to S3")
 
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     with engine_.begin() as tx, tempfile.TemporaryDirectory() as path:
         file = Path(path) / random_identifier()
-        df.to_parquet(fname=str(file), engine="fastparquet", compression="gzip")
-        print("Dataframe converted to Parquet")
+        df.to_json(str(file), compression="gzip", orient="records")
+        print("Dataframe converted to JSON")
 
-        bucket.upload_file(str(file), "_summary.parquet.gz")
+        bucket.upload_file(str(file), "_summary.json.gz")
         print(f"📦 {file} uploaded to S3")
 
         stmts = [
-            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=PARQUET)",  # nosec
+            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=JSON)",  # nosec
             f"PUT file://{file} @{destination_schema}.{stage_guid}",  # nosec
             f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{destination_table} AS SELECT * FROM @{destination_schema}.{stage_guid}",  # nosec
         ]
