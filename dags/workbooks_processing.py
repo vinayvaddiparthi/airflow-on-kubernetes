@@ -83,11 +83,11 @@ def import_workbooks(
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     with engine_.begin() as tx, tempfile.TemporaryDirectory() as path:
         file = Path(path) / random_identifier()
-        df.to_json(path_or_buf=file, orient="records", compression="gzip")
-        print("Dataframe converted to JSON")
+        df.to_parquet(fname=file, engine="fastparquet", compression="gzip")
+        print("Dataframe converted to Parquet")
 
         stmts = [
-            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=JSON)",  # nosec
+            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=PARQUET)",  # nosec
             f"PUT file://{file} @{destination_schema}.{stage_guid}",  # nosec
             f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{destination_table} AS SELECT * FROM @{destination_schema}.{stage_guid}",  # nosec
         ]
