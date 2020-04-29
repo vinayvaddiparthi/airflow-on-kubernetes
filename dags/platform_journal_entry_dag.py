@@ -114,91 +114,85 @@ def create_journal_entry_for_transaction(**context):
             f'"{snowflake_vars["src_database"]}".{snowflake_vars["src_schema"]}.fct_platform_erp_transactions'
         ),
     ).where(cast(column("created_at"), Date) == text(f"'{created_date}'"))
-    print(f"{snowflake_hook.login}")
-    print(f"{snowflake_hook.host}")
-    print(f"{snowflake_vars['dest_database']}")
-    print(f"{snowflake_vars['dest_schema']}")
-    print(f"{snowflake_vars['warehouse']}")
-    with create_engine(
+
+    conn = create_engine(
         f"snowflake://{snowflake_hook.login}:{snowflake_hook.password}@{snowflake_hook.host}/{snowflake_vars['dest_database']}/{snowflake_vars['dest_schema']}?warehouse={snowflake_vars['warehouse']}"
-    ) as conn:
-        df = pd.read_sql(
-            selectable,
-            conn,
-            columns=(
-                "correlation_guid",
-                "posted_at",
-                "credit_amount",
-                "debit_amount",
-                "account_number",
-                "facility",
-                "ns_account_internal_id",
-                "ns_subsidiary_id",
-            ),
-        )
-        groups = df.groupby("correlation_guid")
-        succeeded = []
-        failed = []
-        # login SOAP client
-        client = Client(netsuite_vars["wsdl"])
+    )
+    df = pd.read_sql(
+        selectable,
+        conn,
+        columns=(
+            "correlation_guid",
+            "posted_at",
+            "credit_amount",
+            "debit_amount",
+            "account_number",
+            "facility",
+            "ns_account_internal_id",
+            "ns_subsidiary_id",
+        ),
+    )
+    groups = df.groupby("correlation_guid")
+    succeeded = []
+    failed = []
+    # login SOAP client
+    client = Client(netsuite_vars["wsdl"])
 
-        passport_type = client.get_type("ns0:Passport")
-        passport = passport_type(
-            email=netsuite_vars["email"],
-            password=netsuite_vars["password"],
-            account=netsuite_vars["account"],
-        )
+    passport_type = client.get_type("ns0:Passport")
+    passport = passport_type(
+        email=netsuite_vars["email"],
+        password=netsuite_vars["password"],
+        account=netsuite_vars["account"],
+    )
 
-        app_info_type = client.get_type("ns4:ApplicationInfo")
-        app_info = app_info_type(applicationId=netsuite_vars["app_id"])
+    app_info_type = client.get_type("ns4:ApplicationInfo")
+    app_info = app_info_type(applicationId=netsuite_vars["app_id"])
 
-        client.service.login(
-            passport=passport, _soapheaders={"applicationInfo": app_info}
-        )
+    client.service.login(passport=passport, _soapheaders={"applicationInfo": app_info})
 
-        print_endpoint(client)
-        data_center_urls = client.service.getDataCenterUrls(netsuite_vars["account"])
-        print(
-            f"Use DataCenterUrl: {data_center_urls.body.getDataCenterUrlsResult.dataCenterUrls.webservicesDomain}"
-        )
+    print_endpoint(client)
+    data_center_urls = client.service.getDataCenterUrls(netsuite_vars["account"])
+    print(
+        f"Use DataCenterUrl: {data_center_urls.body.getDataCenterUrlsResult.dataCenterUrls.webservicesDomain}"
+    )
 
-        for group in groups:
-            correlation_guid = group[0]
-            try:
-                journal_entry_internal_id = process_grouped_transactions(
-                    correlation_guid, group[1], client, passport, app_info, created_date
-                )
-                print(
-                    f"Journal Entry uploaded: {correlation_guid} - {journal_entry_internal_id}"
-                )
-                succeeded.append(
-                    {
-                        "uploaded_at": datetime.utcnow(),
-                        "ns_journal_entry_internal_id": journal_entry_internal_id,
-                        "correlation_guid": correlation_guid,
-                    }
-                )
-            except ValueError as e:
-                print(f"Error: Journal Entry failed: {correlation_guid} - {e}")
-                failed.append(
-                    {
-                        "uploaded_at": datetime.utcnow(),
-                        "error": e,
-                        "correlation_guid": correlation_guid,
-                    }
-                )
-        metadata = MetaData().reflect(bind=conn)
-        with conn.begin() as tx:
-            if succeeded:
-                # log results in erp.platform so we can filtered them in re-run dataset
-                table_uploaded = metadata.tables["uploaded"]
-                tx.execute(table_uploaded.insert(), succeeded)
-                print(f"succeeded: {len(succeeded)}")
-            if failed:
-                # log failures in erp.platform
-                table_failed = metadata.tables["failed"]
-                tx.execute(table_failed.insert(), failed)
-                print(f"failed: {len(failed)}")
+    for group in groups:
+        correlation_guid = group[0]
+        try:
+            journal_entry_internal_id = process_grouped_transactions(
+                correlation_guid, group[1], client, passport, app_info, created_date
+            )
+            print(
+                f"Journal Entry uploaded: {correlation_guid} - {journal_entry_internal_id}"
+            )
+            succeeded.append(
+                {
+                    "uploaded_at": datetime.utcnow(),
+                    "ns_journal_entry_internal_id": journal_entry_internal_id,
+                    "correlation_guid": correlation_guid,
+                }
+            )
+        except ValueError as e:
+            print(f"Error: Journal Entry failed: {correlation_guid} - {e}")
+            failed.append(
+                {
+                    "uploaded_at": datetime.utcnow(),
+                    "error": e,
+                    "correlation_guid": correlation_guid,
+                }
+            )
+    metadata = MetaData().reflect(bind=conn)
+    with conn.begin() as tx:
+        if succeeded:
+            # log results in erp.platform so we can filtered them in re-run dataset
+            table_uploaded = metadata.tables["uploaded"]
+            tx.execute(table_uploaded.insert(), succeeded)
+            print(f"succeeded: {len(succeeded)}")
+        if failed:
+            # log failures in erp.platform
+            table_failed = metadata.tables["failed"]
+            tx.execute(table_failed.insert(), failed)
+            print(f"failed: {len(failed)}")
 
 
 with DAG(
