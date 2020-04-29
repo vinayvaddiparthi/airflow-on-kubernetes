@@ -4,10 +4,20 @@ import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 import pandas as pd
-import snowflake.connector
 from airflow import DAG
 from airflow.hooks.base_hook import BaseHook
-from sqlalchemy import text, cast, column, Date, MetaData, create_engine
+from sqlalchemy import (
+    text,
+    cast,
+    column,
+    Date,
+    MetaData,
+    create_engine,
+    Table,
+    String,
+    Column,
+    Integer,
+)
 from sqlalchemy.sql import Select
 from zeep import Client
 
@@ -58,7 +68,7 @@ def process_grouped_transactions(
                 journal_entry_line(
                     account=record_ref(internalId=values[2], type="account"),
                     credit=values[0],
-                    memo=f"Platform Transaction - {correlation_guid} - {created_at}",
+                    memo=f"Transaction ID: {correlation_guid}",
                 )
             )
         if values[1]:
@@ -66,7 +76,7 @@ def process_grouped_transactions(
                 journal_entry_line(
                     account=record_ref(internalId=values[2], type="account"),
                     debit=values[1],
-                    memo=f"Platform Transaction - {correlation_guid} - {created_at}",
+                    memo=f"Transaction ID: {correlation_guid}",
                 )
             )
     journal_entry_line_list = client.get_type("ns31:JournalEntryLineList")
@@ -80,7 +90,7 @@ def process_grouped_transactions(
             subsidiary=subsidiary,
             lineList=journal_entry_line_list(line=line_list),
             tranDate=tran_date,
-            memo=f"Platform Transaction - {correlation_guid} - {created_at}",
+            memo=f"Platform Transaction - {created_at}",
         ),
         _soapheaders={"passport": passport, "applicationInfo": app_info},
     )
@@ -115,82 +125,93 @@ def create_journal_entry_for_transaction(**context):
         ),
     ).where(cast(column("created_at"), Date) == text(f"'{created_date}'"))
 
-    conn = create_engine(
-        f"snowflake://{snowflake_hook.login}:{snowflake_hook.password}@{snowflake_hook.host}/{snowflake_vars['dest_database']}/{snowflake_vars['dest_schema']}?warehouse={snowflake_vars['warehouse']}"
-    )
-    df = pd.read_sql(
-        selectable,
-        conn,
-        columns=(
-            "correlation_guid",
-            "posted_at",
-            "credit_amount",
-            "debit_amount",
-            "account_number",
-            "facility",
-            "ns_account_internal_id",
-            "ns_subsidiary_id",
-        ),
-    )
-    groups = df.groupby("correlation_guid")
-    succeeded = []
-    failed = []
-    # login SOAP client
-    client = Client(netsuite_vars["wsdl"])
+    with SnowflakeHook("snowflake_platform_erp").get_sqlalchemy_engine().begin() as tx:
+        df = pd.read_sql(
+            selectable,
+            tx,
+            columns=(
+                "correlation_guid",
+                "posted_at",
+                "credit_amount",
+                "debit_amount",
+                "account_number",
+                "facility",
+                "ns_account_internal_id",
+                "ns_subsidiary_id",
+            ),
+        )
+        groups = df.groupby("correlation_guid")
+        succeeded = []
+        failed = []
+        # login SOAP client
+        client = Client(netsuite_vars["wsdl"])
 
-    passport_type = client.get_type("ns0:Passport")
-    passport = passport_type(
-        email=netsuite_vars["email"],
-        password=netsuite_vars["password"],
-        account=netsuite_vars["account"],
-    )
+        passport_type = client.get_type("ns0:Passport")
+        passport = passport_type(
+            email=netsuite_vars["email"],
+            password=netsuite_vars["password"],
+            account=netsuite_vars["account"],
+        )
 
-    app_info_type = client.get_type("ns4:ApplicationInfo")
-    app_info = app_info_type(applicationId=netsuite_vars["app_id"])
+        app_info_type = client.get_type("ns4:ApplicationInfo")
+        app_info = app_info_type(applicationId=netsuite_vars["app_id"])
 
-    client.service.login(passport=passport, _soapheaders={"applicationInfo": app_info})
+        client.service.login(
+            passport=passport, _soapheaders={"applicationInfo": app_info}
+        )
 
-    print_endpoint(client)
-    data_center_urls = client.service.getDataCenterUrls(netsuite_vars["account"])
-    print(
-        f"Use DataCenterUrl: {data_center_urls.body.getDataCenterUrlsResult.dataCenterUrls.webservicesDomain}"
-    )
+        print_endpoint(client)
+        data_center_urls = client.service.getDataCenterUrls(netsuite_vars["account"])
+        print(
+            f"Use DataCenterUrl: {data_center_urls.body.getDataCenterUrlsResult.dataCenterUrls.webservicesDomain}"
+        )
 
-    for group in groups:
-        correlation_guid = group[0]
-        try:
-            journal_entry_internal_id = process_grouped_transactions(
-                correlation_guid, group[1], client, passport, app_info, created_date
-            )
-            print(
-                f"Journal Entry uploaded: {correlation_guid} - {journal_entry_internal_id}"
-            )
-            succeeded.append(
-                {
-                    "uploaded_at": datetime.utcnow(),
-                    "ns_journal_entry_internal_id": journal_entry_internal_id,
-                    "correlation_guid": correlation_guid,
-                }
-            )
-        except ValueError as e:
-            print(f"Error: Journal Entry failed: {correlation_guid} - {e}")
-            failed.append(
-                {
-                    "uploaded_at": datetime.utcnow(),
-                    "error": e,
-                    "correlation_guid": correlation_guid,
-                }
-            )
-    metadata = MetaData().reflect(bind=conn)
-    with conn.begin() as tx:
+        for group in groups:
+            correlation_guid = group[0]
+            try:
+                journal_entry_internal_id = process_grouped_transactions(
+                    correlation_guid, group[1], client, passport, app_info, created_date
+                )
+                print(
+                    f"Journal Entry uploaded: {correlation_guid} - {journal_entry_internal_id}"
+                )
+                succeeded.append(
+                    {
+                        "uploaded_at": datetime.utcnow(),
+                        "ns_journal_entry_internal_id": journal_entry_internal_id,
+                        "correlation_guid": correlation_guid,
+                    }
+                )
+            except ValueError as e:
+                print(f"Error: Journal Entry failed: {correlation_guid} - {e}")
+                failed.append(
+                    {
+                        "uploaded_at": datetime.utcnow(),
+                        "error": e,
+                        "correlation_guid": correlation_guid,
+                    }
+                )
+        metadata = MetaData()
         if succeeded:
             # log results in erp.platform so we can filtered them in re-run dataset
-            table_uploaded = metadata.tables["uploaded"]
+            table_uploaded = Table(
+                "uploaded",
+                metadata,
+                Column("uploaded_at", Date),
+                Column("ns_journal_entry_internal_id"),
+                Column("correlation_guid", String, primary_key=True),
+            )
             tx.execute(table_uploaded.insert(), succeeded)
             print(f"succeeded: {len(succeeded)}")
         if failed:
             # log failures in erp.platform
-            table_failed = metadata.tables["failed"]
+            table_failed = Table(
+                "failed",
+                metadata,
+                Column("uploaded_at", Date),
+                Column("error", String),
+                Column("correlation_guid", String, primary_key=True),
+            )
             tx.execute(table_failed.insert(), failed)
             print(f"failed: {len(failed)}")
 
