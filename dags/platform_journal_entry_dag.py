@@ -7,7 +7,7 @@ import pandas as pd
 import snowflake.connector
 from airflow import DAG
 from airflow.hooks.base_hook import BaseHook
-from sqlalchemy import text, cast, column, Date, MetaData
+from sqlalchemy import text, cast, column, Date, MetaData, create_engine
 from sqlalchemy.sql import Select
 from zeep import Client
 
@@ -15,8 +15,8 @@ snowflake_hook = BaseHook.get_connection("snowflake_platform_erp")
 snowflake_vars = {
     "src_schema": snowflake_hook.extra_dejson.get("src_schema"),
     "src_database": snowflake_hook.extra_dejson.get("src_database"),
-    "dest_schema": snowflake_hook.extra_dejson.get("dest_schema"),
-    "dest_database": snowflake_hook.extra_dejson.get("dest_database"),
+    "dest_schema": snowflake_hook.extra_dejson.get("schema"),
+    "dest_database": snowflake_hook.extra_dejson.get("database"),
     "warehouse": snowflake_hook.extra_dejson.get("warehouse"),
 }
 
@@ -115,7 +115,10 @@ def create_journal_entry_for_transaction(**context):
         ),
     ).where(cast(column("created_at"), Date) == text(f"'{created_date}'"))
 
-    with SnowflakeHook("snowflake_platform_erp").get_sqlalchemy_engine() as conn:
+    with create_engine(
+        f"snowflake://{snowflake_hook.login}:{snowflake_hook.password}@{snowflake_hook.host}/"
+        f"{snowflake_vars['dest_database']}/{snowflake_vars['dest_schema']}?warehouse={snowflake_vars['warehouse']}"
+    ) as conn:
         df = pd.read_sql(
             selectable,
             conn,
