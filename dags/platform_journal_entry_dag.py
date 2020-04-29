@@ -1,23 +1,11 @@
 from datetime import datetime
 
 import pendulum
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 import pandas as pd
 from airflow import DAG
 from airflow.hooks.base_hook import BaseHook
-from sqlalchemy import (
-    text,
-    cast,
-    column,
-    Date,
-    MetaData,
-    create_engine,
-    Table,
-    String,
-    Column,
-    Integer,
-)
+from sqlalchemy import text, cast, column, Date, MetaData, create_engine
 from sqlalchemy.sql import Select
 from zeep import Client
 
@@ -125,7 +113,9 @@ def create_journal_entry_for_transaction(**context):
         ),
     ).where(cast(column("created_at"), Date) == text(f"'{created_date}'"))
 
-    with SnowflakeHook("snowflake_platform_erp").get_sqlalchemy_engine().begin() as tx:
+    with create_engine(
+        f"snowflake://{snowflake_hook.login}:{snowflake_hook.password}@{snowflake_hook.host}/{snowflake_vars['dest_database']}/{snowflake_vars['dest_schema']}?warehouse={snowflake_vars['warehouse']}"
+    ).begin() as tx:
         df = pd.read_sql(
             selectable,
             tx,
