@@ -1,5 +1,3 @@
-import gzip
-import json
 import logging
 import os
 import tempfile
@@ -11,6 +9,8 @@ import pandas as pd
 import pendulum
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.contrib.kubernetes.secret import Secret
+from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
 from airflow.operators.python_operator import PythonOperator
 from openpyxl import load_workbook
 import boto3
@@ -111,7 +111,38 @@ with DAG(
     ),
     schedule_interval=None,
 ) as dag:
-    dag << PythonOperator(
+    cmdargs = [
+        "apt-get update && "
+        "apt-get install -y cifs-utils wget && "
+        "wget https://dl.min.io/client/mc/release/linux-amd64/mc && "
+        "chmod +x mc && mv mc /usr/local/bin && "
+        "mkdir /workbooks && "
+        'mount -t cifs "//10.10.1.110/Working Files" /workbooks -o credentials=/secrets/auth && '
+        "mc config host add s3 https://s3.amazonaws.com && "
+        "mc mirror --overwrite /workbooks s3://tc-workbooks && "
+        "umount /workbooks"
+    ]
+
+    grab_workbooks = KubernetesPodOperator(
+        task_id="grab_workbooks",
+        namespace="airflow",
+        image="ubuntu:16.04",
+        cmds=["bash", "-cx"],
+        arguments=cmdargs,
+        secrets=[Secret("volume", "/secrets", "workbooks-secret")],
+        name="grab_workbooks",
+        is_delete_operator_pod=True,
+        security_context={"privileged": True},
+        annotations={
+            "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+            "KubernetesAirflowProductionWorkbooksRole"
+        },
+        executor_config={
+            "KubernetesExecutor": {"service_account_name": "airflow-scheduler"}
+        },
+    )
+
+    process_workbooks = PythonOperator(
         task_id="process_workbooks",
         python_callable=import_workbooks,
         op_kwargs={
@@ -130,3 +161,5 @@ with DAG(
             }
         },
     )
+
+    dag << grab_workbooks >> process_workbooks
