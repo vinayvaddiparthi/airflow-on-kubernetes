@@ -113,7 +113,7 @@ def create_journal_entry_for_transaction(**context):
         from_obj=text(
             f'"{snowflake_vars["src_database"]}".{snowflake_vars["src_schema"]}.fct_platform_erp_transactions'
         ),
-    ).where(cast(column("created_at"), Date) == cast(text(f"'{created_date}'"), Date))
+    ).where(cast(column("created_at"), Date) == text(f"'{created_date}'"))
 
     with SnowflakeHook("snowflake_platform_erp").get_sqlalchemy_engine() as conn:
         df = pd.read_sql(
@@ -166,12 +166,22 @@ def create_journal_entry_for_transaction(**context):
                     f"Journal Entry uploaded: {correlation_guid} - {journal_entry_internal_id}"
                 )
                 succeeded.append(
-                    (datetime.utcnow(), journal_entry_internal_id, correlation_guid)
+                    {
+                        "uploaded_at": datetime.utcnow(),
+                        "ns_journal_entry_internal_id": journal_entry_internal_id,
+                        "correlation_guid": correlation_guid,
+                    }
                 )
             except ValueError as e:
                 print(f"Error: Journal Entry failed: {correlation_guid} - {e}")
-                failed.append((datetime.utcnow(), e, correlation_guid))
-        metadata = MetaData(conn).reflect()
+                failed.append(
+                    {
+                        "uploaded_at": datetime.utcnow(),
+                        "error": e,
+                        "correlation_guid": correlation_guid,
+                    }
+                )
+        metadata = MetaData().reflect(bind=conn)
         with conn.begin() as tx:
             if succeeded:
                 # log results in erp.platform so we can filtered them in re-run dataset
