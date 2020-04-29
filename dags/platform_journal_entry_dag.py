@@ -114,7 +114,11 @@ def create_journal_entry_for_transaction(**context):
             f'"{snowflake_vars["src_database"]}".{snowflake_vars["src_schema"]}.fct_platform_erp_transactions'
         ),
     ).where(cast(column("created_at"), Date) == text(f"'{created_date}'"))
-
+    print(f"{snowflake_hook.login}")
+    print(f"{snowflake_hook.host}")
+    print(f"{snowflake_vars['dest_database']}")
+    print(f"{snowflake_vars['dest_schema']}")
+    print(f"{snowflake_vars['warehouse']}")
     with create_engine(
         f"snowflake://{snowflake_hook.login}:{snowflake_hook.password}@{snowflake_hook.host}/{snowflake_vars['dest_database']}/{snowflake_vars['dest_schema']}?warehouse={snowflake_vars['warehouse']}"
     ) as conn:
