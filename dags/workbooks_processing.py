@@ -85,19 +85,13 @@ def import_workbooks(
     )
     print(f"✔️ Done computing 18 characters SFDC object IDs")
 
-    with tempfile.TemporaryDirectory() as path:
-        file = Path(path) / random_identifier()
-        df.to_pickle(str(file), compression="gzip")  # nosec
-        bucket.upload_file(str(file), "_summary.pickle.gz")
-    print(f"📦 Uploaded intermediate results to S3")
-
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     with engine_.begin() as tx, tempfile.TemporaryDirectory() as path:
         file = Path(path) / random_identifier()
-        df.to_json(str(file), compression="gzip", orient="records")
+        df.to_json(str(file), orient="records", lines=True)
         print("Dataframe converted to JSON")
 
-        bucket.upload_file(str(file), "_summary.json.gz")
+        bucket.upload_file(str(file), "_summary.json")
         print(f"📦 {file} uploaded to S3")
 
         stmts = [
@@ -113,7 +107,7 @@ def import_workbooks(
 with DAG(
     dag_id="workbooks_processing",
     start_date=pendulum.datetime(
-        2020, 4, 24, tzinfo=pendulum.timezone("America/Toronto")
+        2020, 4, 28, tzinfo=pendulum.timezone("America/Toronto")
     ),
     schedule_interval=None,
 ) as dag:
