@@ -132,13 +132,11 @@ with DAG(
         secrets=[Secret("volume", "/secrets", "workbooks-secret")],
         name="grab_workbooks",
         is_delete_operator_pod=True,
-        security_context={"privileged": True},
+        privileged=True,
+        service_account_name="airflow-scheduler",
         annotations={
             "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
             "KubernetesAirflowProductionWorkbooksRole"
-        },
-        executor_config={
-            "KubernetesExecutor": {"service_account_name": "airflow-scheduler"}
         },
     )
 

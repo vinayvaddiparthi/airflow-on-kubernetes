@@ -1,4 +1,5 @@
 FROM python:3.7-slim-stretch
+ARG CI_JOB_TOKEN
 
 # Never prompts the user for choices on installation/configuration of packages
 ENV DEBIAN_FRONTEND noninteractive
@@ -51,7 +52,7 @@ RUN set -ex \
     && pip install pyOpenSSL \
     && pip install ndg-httpsclient \
     && pip install pyasn1 \
-    && pip install apache-airflow[crypto,postgres,hive,jdbc,mysql,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}]==${AIRFLOW_VERSION} \
+    && pip install git+https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/tc-data/airflow-fork.git#egg=apache-airflow[crypto,postgres,hive,jdbc,mysql,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}]==${AIRFLOW_VERSION} \
     && if [ -n "${PYTHON_DEPS}" ]; then pip install ${PYTHON_DEPS}; fi \
     && pip install -r requirements.txt \
     && apt-get purge --auto-remove -yqq $buildDeps \
