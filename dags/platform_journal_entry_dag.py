@@ -180,7 +180,7 @@ def create_journal_entry_for_transaction(**context):
                 failed.append(
                     {
                         "uploaded_at": datetime.utcnow(),
-                        "error": e,
+                        "error": str(e),
                         "correlation_guid": correlation_guid,
                     }
                 )
