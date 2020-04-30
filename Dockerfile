@@ -1,3 +1,16 @@
+FROM ubuntu as build
+ARG GIT_USERNAME
+ARG GIT_PASSWORD
+ENV DEBIAN_FRONTEND noninteractive
+ENV TERM linux
+RUN apt-get update && apt-get install -y python3 python3-pip curl git
+RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+RUN echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+RUN apt-get update && apt-get install -y yarn
+RUN git clone https://${GIT_USERNAME}:${GIT_PASSWORD}@gitlab.com/tc-data/airflow-fork.git
+WORKDIR airflow-fork
+RUN python3 setup.py compile_assets && python3 setup.py sdist bdist_wheel
+
 FROM python:3.7-slim-stretch
 ARG CI_JOB_TOKEN
 
@@ -19,6 +32,7 @@ ENV LC_CTYPE en_US.UTF-8
 ENV LC_MESSAGES en_US.UTF-8
 
 COPY requirements.txt .
+COPY --from=build dist/apache_airflow-${AIRFLOW_VERSION}-py2.py3-none-any.whl .
 
 RUN set -ex \
     && buildDeps=' \
@@ -58,10 +72,7 @@ RUN set -ex \
     && pip install pyOpenSSL \
     && pip install ndg-httpsclient \
     && pip install pyasn1 \
-    && git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/tc-data/airflow-fork.git \
-    && cd airflow-fork \
-    && python setup.py compile_assets \
-    && pip install .[crypto,postgres,hive,jdbc,mysql,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}]==${AIRFLOW_VERSION} \
+    && pip install apache_airflow-${AIRFLOW_VERSION}-py2.py3-none-any.whl[crypto,postgres,hive,jdbc,mysql,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}] \
     && cd .. \
     && rm -rf airflow-fork \
     && if [ -n "${PYTHON_DEPS}" ]; then pip install ${PYTHON_DEPS}; fi \
