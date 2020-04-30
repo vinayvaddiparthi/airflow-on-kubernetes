@@ -88,7 +88,10 @@ def process_grouped_transactions(
     if status.isSuccess and re.body.writeResponse.baseRef.internalId:
         return re.body.writeResponse.baseRef.internalId
     else:
-        raise ValueError(f"{status.statusDetail.message}")
+        if "message" in status.statusDetail:
+            print(ValueError(f"{status.statusDetail.message}"))
+            raise ValueError(f"{status.statusDetail.message}")
+        raise ValueError(f"{status.statusDetail[0].message}")
 
 
 def print_endpoint(client):
