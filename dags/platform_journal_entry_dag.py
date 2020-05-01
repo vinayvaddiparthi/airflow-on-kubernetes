@@ -179,7 +179,7 @@ def create_journal_entry_for_transaction(**context):
                 print(f"Error: Journal Entry failed: {correlation_guid} - {e}")
                 failed.append(
                     {
-                        "uploaded_at": datetime.utcnow(),
+                        "failed_at": datetime.utcnow(),
                         "error": str(e),
                         "correlation_guid": correlation_guid,
                     }
