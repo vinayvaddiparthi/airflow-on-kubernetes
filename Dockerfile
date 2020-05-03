@@ -73,6 +73,7 @@ RUN set -ex \
     && pip install ndg-httpsclient \
     && pip install pyasn1 \
     && pip install apache_airflow-${AIRFLOW_VERSION}-py2.py3-none-any.whl[crypto,postgres,hive,jdbc,mysql,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}] \
+    && rm apache_airflow-${AIRFLOW_VERSION}-py2.py3-none-any.whl \
     && cd .. \
     && rm -rf airflow-fork \
     && if [ -n "${PYTHON_DEPS}" ]; then pip install ${PYTHON_DEPS}; fi \
@@ -87,9 +88,6 @@ RUN set -ex \
         /usr/share/man \
         /usr/share/doc \
         /usr/share/doc-base
-
-RUN curl https://cli-assets.heroku.com/heroku-linux-x64.tar.gz | tar xzf - -C /usr/local \
-    && ln -s /usr/local/heroku/bin/heroku /usr/local/bin/heroku
 
 RUN chown -R airflow: ${AIRFLOW_USER_HOME}
 
