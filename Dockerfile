@@ -32,7 +32,7 @@ ENV LC_CTYPE en_US.UTF-8
 ENV LC_MESSAGES en_US.UTF-8
 
 COPY requirements.txt .
-COPY --from=build dist/apache_airflow-${AIRFLOW_VERSION}-py2.py3-none-any.whl .
+COPY --from=build airflow-fork/dist/apache_airflow-${AIRFLOW_VERSION}-py2.py3-none-any.whl .
 
 RUN set -ex \
     && buildDeps=' \
