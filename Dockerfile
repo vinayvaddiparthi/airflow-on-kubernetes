@@ -46,7 +46,6 @@ RUN set -ex \
     ' \
     && apt-get update -yqq \
     && apt-get upgrade -yqq \
-    && apt-get install -yqq apt-transport-https ca-certificates \
     && apt-get install -yqq --no-install-recommends \
         $buildDeps \
         freetds-bin \
@@ -58,11 +57,6 @@ RUN set -ex \
         netcat \
         locales \
         openssh-client \
-        yarn \
-        gnupg \
-    && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
-    && echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
-    && apt-get update \
     && sed -i 's/^# en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/g' /etc/locale.gen \
     && locale-gen \
     && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
