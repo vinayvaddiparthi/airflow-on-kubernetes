@@ -109,9 +109,9 @@ def import_workbooks(
 with DAG(
     dag_id="workbooks_processing",
     start_date=pendulum.datetime(
-        2020, 4, 28, tzinfo=pendulum.timezone("America/Toronto")
+        2020, 5, 3, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    schedule_interval=None,
+    schedule_interval="* 6 * * 1-5",
 ) as dag:
     cmdargs = [
         "apt-get update && "
