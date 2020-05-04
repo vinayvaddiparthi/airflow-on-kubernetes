@@ -122,7 +122,7 @@ with DAG(
         "cp /secrets/mc-config ~/.mc/config.json && "
         "mkdir /workbooks && "
         'mount -t cifs "//10.10.1.110/Working Files" /workbooks -o credentials=/secrets/auth && '
-        "mc mirror --overwrite /workbooks s3://tc-workbooks && "
+        "mc mirror --overwrite /workbooks s3/tc-workbooks && "
         "umount /workbooks"
     ]
 
