@@ -2,6 +2,7 @@ import logging
 import os
 import tempfile
 from concurrent.futures.thread import ThreadPoolExecutor
+from datetime import timedelta
 from pathlib import Path
 from typing import Optional, IO
 
@@ -111,7 +112,8 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 5, 3, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    schedule_interval="* 6 * * 1-5",
+    schedule_interval="0 6 * * 1-5",
+    default_args={"retries": 3, "retry_delay": timedelta(minutes=5)},
 ) as dag:
     cmdargs = [
         "apt-get update && "
