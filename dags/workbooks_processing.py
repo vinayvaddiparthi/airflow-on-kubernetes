@@ -3,7 +3,7 @@ import os
 import tempfile
 from concurrent.futures.thread import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
+from typing import Optional, IO
 
 import pandas as pd
 import pendulum
@@ -27,7 +27,7 @@ def _wrap_sf15to18(id: str) -> Optional[str]:
         return None
 
 
-def _process_excel_file(file) -> dict:
+def _process_excel_file(key: str, file: IO[bytes]) -> dict:
     workbook = load_workbook(filename=file, data_only=True, read_only=True)
     ws = workbook["Calculation Sheet"]
     calc_sheet = {
@@ -35,6 +35,8 @@ def _process_excel_file(file) -> dict:
         for k, v in zip(ws["A1":"A65535"], ws["B1":"B65535"])
         if k and v
     }
+    calc_sheet["key"] = key
+
     return calc_sheet
 
 
@@ -42,7 +44,7 @@ def _get_and_process_workbook(bucket, obj) -> dict:
     try:
         with tempfile.TemporaryFile() as f:
             bucket.download_fileobj(obj.key, f)
-            return _process_excel_file(f)
+            return _process_excel_file(obj.key, f)
     except Exception as e:
         logging.error(f"❌ Error processing {obj}: {e}")
         return {}
