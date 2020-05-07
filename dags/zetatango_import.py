@@ -244,6 +244,14 @@ with DAG(
                     columns=["offer_results"],
                     format="yaml",
                 ),
+                DecryptionSpec(
+                    schema="CORE_PRODUCTION",
+                    table="LENDING_LOAN_ATTRIBUTES",
+                    columns=["value"],
+                    whereclause=literal_column("$1:key").in_(
+                        ["external_id", "merchant_external_id"]
+                    ),
+                ),
             ],
             "target_schema": "PII_PRODUCTION",
         },
@@ -328,6 +336,14 @@ with DAG(
                     table="LENDING_ADJUDICATIONS",
                     columns=["offer_results"],
                     format="yaml",
+                ),
+                DecryptionSpec(
+                    schema="CORE_STAGING",
+                    table="LENDING_LOAN_ATTRIBUTES",
+                    columns=["value"],
+                    whereclause=literal_column("$1:key").in_(
+                        ["external_id", "merchant_external_id"]
+                    ),
                 ),
             ],
             "target_schema": "PII_STAGING",
