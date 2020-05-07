@@ -96,28 +96,30 @@ def stage_table_in_snowflake(
     destination_schema: str,
     table: str,
 ):
-    with tempfile.NamedTemporaryFile() as tempfile_:
-        stage_guid = __random()
-        with snowflake_engine.begin() as tx:
-            tx.execute(
-                f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} "
-                f"FILE_FORMAT=(TYPE=PARQUET)"
-            ).fetchall()
+    stage_guid = __random()
+    with snowflake_engine.begin() as tx:
+        tx.execute(
+            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} "
+            f"FILE_FORMAT=(TYPE=PARQUET)"
+        ).fetchall()
 
-            try:
-                df = pd.read_sql_table(table, source_tx, source_schema)
-                df.to_parquet(tempfile_.name, engine="fastparquet", compression="gzip")
+        try:
+            dfs = pd.read_sql_table(table, source_tx, source_schema, chunksize=10000)
+            for df in dfs:
+                with tempfile.NamedTemporaryFile() as tempfile_:
+                    df.to_parquet(
+                        tempfile_.name, engine="fastparquet", compression="gzip"
+                    )
+                    tx.execute(
+                        f"PUT file://{tempfile_.name} @{destination_schema}.{stage_guid}"
+                    ).fetchall()
+        except ValueError as ve:
+            return f"⚠️ Caught ValueError reading table {table}: {ve}"
 
-                tx.execute(
-                    f"PUT file://{tempfile_.name} @{destination_schema}.{stage_guid}"
-                ).fetchall()
-            except ValueError as ve:
-                return f"⚠️ Caught ValueError reading table {table}: {ve}"
-
-            tx.execute(
-                f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS "  # nosec
-                f"SELECT * FROM @{destination_schema}.{stage_guid}"  # nosec
-            ).fetchall()
+        tx.execute(
+            f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS "  # nosec
+            f"SELECT * FROM @{destination_schema}.{stage_guid}"  # nosec
+        ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
 
@@ -173,6 +175,9 @@ def decrypt_pii_columns(
         return [row[0]] + (postprocessors[format](list_) if format else list_)
 
     for spec in decryption_specs:
+        stage = __random()
+        engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+
         stmt = Select(
             columns=[literal_column(f"{spec.table}.$1:id").label("id")]
             + [
@@ -185,28 +190,34 @@ def decrypt_pii_columns(
             whereclause=spec.whereclause,
         )
 
-        engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-        with engine.begin() as tx, tempfile.NamedTemporaryFile() as tempfile_:
-            df = pd.read_sql(stmt, con=tx)
-            df = df.apply(
-                axis=1, func=_decrypt, result_type="broadcast", args=(spec.format,)
-            )
-            df.to_parquet(tempfile_.name, engine="fastparquet", compression="gzip")
+        with engine.begin() as tx:
+            tx.execute(
+                f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} "  # nosec
+                f"FILE_FORMAT=(TYPE=PARQUET)"  # nosec
+            ).fetchall()
 
-            stage = __random()
+            dfs = pd.read_sql(stmt, con=tx, chunksize=10000)
+            for df in dfs:
+                with tempfile.NamedTemporaryFile() as tempfile_:
+                    df = df.apply(
+                        axis=1,
+                        func=_decrypt,
+                        result_type="broadcast",
+                        args=(spec.format,),
+                    )
+                    df.to_parquet(
+                        tempfile_.name, engine="fastparquet", compression="gzip"
+                    )
+                    tx.execute(
+                        f"PUT file://{tempfile_.name} @{target_schema}.{stage}"  # nosec
+                    ).fetchall()
 
-            logging.debug(
-                [
-                    tx.execute(stmt).fetchall()
-                    for stmt in [
-                        f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{stage} FILE_FORMAT=(TYPE=PARQUET)",  # nosec
-                        f"PUT file://{tempfile_.name} @{target_schema}.{stage}",  # nosec
-                        f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}${spec.table} AS SELECT * FROM @{target_schema}.{stage}",  # nosec
-                    ]
-                ]
-            )
+            tx.execute(
+                f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}${spec.table} AS "  # nosec
+                f"SELECT * FROM @{target_schema}.{stage}"  # nosec
+            ).fetchall()
 
-        logging.info(f"🔓 Successfully decrypted {spec}")
+            logging.info(f"🔓 Successfully decrypted {spec}")
 
 
 with DAG(
