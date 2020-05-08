@@ -115,7 +115,7 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 5, 3, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    schedule_interval="0 6 * * 1-5",
+    schedule_interval="0 6 * * *",
     default_args={"retries": 3, "retry_delay": timedelta(minutes=5)},
 ) as dag:
     cmdargs = [
