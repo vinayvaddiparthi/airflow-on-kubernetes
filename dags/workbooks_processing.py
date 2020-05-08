@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import tempfile
 from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import timedelta
@@ -75,7 +76,9 @@ def import_workbooks(
         futures = [
             executor.submit(_get_and_process_workbook, bucket, obj)
             for obj in bucket.objects.all()
-            if (obj.key).lower().endswith(".xlsx") and not "~" in obj.key
+            if not re.match("^.*_+[0-9]+.xlsx$", obj.key.lower())
+            and "/" not in obj.key
+            and not obj.key.lower().startswith("~$")
         ]
 
         results = [future.result() for future in futures]
