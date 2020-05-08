@@ -225,7 +225,7 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    schedule_interval="0 0,8-20/4 * * 1-5",
+    schedule_interval="0 0,8-20/4 * * *",
     default_args={"retries": 3, "retry_delay": timedelta(minutes=5)},
 ) as dag:
     dag << PythonOperator(
