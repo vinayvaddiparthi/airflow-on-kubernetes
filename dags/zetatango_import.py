@@ -196,7 +196,7 @@ def decrypt_pii_columns(
                 f"FILE_FORMAT=(TYPE=PARQUET)"  # nosec
             ).fetchall()
 
-            dfs = pd.read_sql(stmt, con=tx, chunksize=10000)
+            dfs = pd.read_sql(stmt, con=tx, chunksize=500)
             for df in dfs:
                 with tempfile.NamedTemporaryFile() as tempfile_:
                     df = df.apply(
