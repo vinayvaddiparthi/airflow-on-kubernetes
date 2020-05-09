@@ -174,10 +174,9 @@ def decrypt_pii_columns(
 
         return [row[0]] + (postprocessors[format](list_) if format else list_)
 
+    engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     for spec in decryption_specs:
         stage = __random()
-        engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-
         stmt = Select(
             columns=[literal_column(f"{spec.table}.$1:id").label("id")]
             + [
