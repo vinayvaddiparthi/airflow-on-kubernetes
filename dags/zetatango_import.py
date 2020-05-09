@@ -33,12 +33,7 @@ class DecryptionSpec:
     columns: List[str] = attr.ib()
     format: Optional[str] = attr.ib(default=None)
     catalog: str = attr.ib(default=None)
-    whereclause: Optional[ClauseElement] = attr.ib(
-        default=None,
-        repr=lambda clause: str(clause.compile(compile_kwargs={"literal_binds": True}))
-        if clause
-        else None,
-    )
+    whereclause: Optional[ClauseElement] = attr.ib(default=None)
 
 
 def export_to_snowflake(
