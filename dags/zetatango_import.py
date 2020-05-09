@@ -33,7 +33,12 @@ class DecryptionSpec:
     columns: List[str] = attr.ib()
     format: Optional[str] = attr.ib(default=None)
     catalog: str = attr.ib(default=None)
-    whereclause: Optional[ClauseElement] = attr.ib(default=None)
+    whereclause: Optional[ClauseElement] = attr.ib(
+        default=None,
+        repr=lambda clause: str(clause.compile(compile_kwargs={"literal_binds": True}))
+        if clause
+        else None,
+    )
 
 
 def export_to_snowflake(
@@ -174,10 +179,9 @@ def decrypt_pii_columns(
 
         return [row[0]] + (postprocessors[format](list_) if format else list_)
 
+    engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     for spec in decryption_specs:
         stage = __random()
-        engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-
         stmt = Select(
             columns=[literal_column(f"{spec.table}.$1:id").label("id")]
             + [
@@ -196,7 +200,7 @@ def decrypt_pii_columns(
                 f"FILE_FORMAT=(TYPE=PARQUET)"  # nosec
             ).fetchall()
 
-            dfs = pd.read_sql(stmt, con=tx, chunksize=10000)
+            dfs = pd.read_sql(stmt, con=tx, chunksize=500)
             for df in dfs:
                 with tempfile.NamedTemporaryFile() as tempfile_:
                     df = df.apply(
