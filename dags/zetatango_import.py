@@ -269,7 +269,8 @@ with DAG(
                     "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                     "KubernetesAirflowProductionZetatangoPiiRole"
                 }
-            }
+            },
+            "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
         },
     )
 
@@ -315,7 +316,8 @@ with DAG(
                     "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                     "KubernetesAirflowProductionZetatangoPiiRole"
                 }
-            }
+            },
+            "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
         },
     )
 
@@ -359,7 +361,8 @@ with DAG(
                 "annotations": {
                     "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                     "KubernetesAirflowNonProdZetatangoPiiRole"
-                }
+                },
+                "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
             }
         },
     )
@@ -403,7 +406,8 @@ with DAG(
                 "annotations": {
                     "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                     "KubernetesAirflowNonProdZetatangoPiiRole"
-                }
+                },
+                "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
             }
         },
     )
