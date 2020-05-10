@@ -11,16 +11,25 @@ mypy = "*"
 
 [packages]
 apache-airflow = {version = ">=1.10.9<2",extra = ["kubernetes","redshift","presto"]}
-pyhive = {version = "*",extra = ["presto"]}
 snowflake-sqlalchemy = "*"
 xmltodict = "*"
-pynacl = "*"
 fastparquet = "*"
 heroku3 = "*"
 psycopg2 = "*"
 rubymarshal = "*"
 zeep = "*"
 openpyxl = "*"
+pandas = "*"
+cffi = "<1.14"
+email-validator = "*"
+python-slugify = "*"
+psycopg2-binary = "*"
+pytest = "*"
+pytest-mock = "*"
+pytest-cov = "*"
+PyNaCl = "*"
+Flask-AppBuilder = "==2.3.2"
+PyHive = {extra = ["presto"],version = "*"}
 
 [requires]
 python_version = "3.7"

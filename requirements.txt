@@ -11,3 +11,8 @@ openpyxl
 email_validator
 python-slugify
 flask-appbuilder==2.3.2
+psycopg2-binary
+pytest
+pytest-mock
+pytest-cov
+fastparquet
