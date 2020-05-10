@@ -1,5 +1,6 @@
 import os
 
+import boto3
 from snowflake.sqlalchemy import URL
 from sqlalchemy import create_engine, literal_column
 
@@ -7,12 +8,12 @@ from dags.zetatango_import import decrypt_pii_columns, DecryptionSpec
 
 
 def test_pii_decryption(mocker):
-    hook_mock = mocker.patch(
+    mocker.patch(
         "dags.zetatango_import.SnowflakeHook.get_sqlalchemy_engine",
         return_value=create_engine(
             URL(
                 account="thinkingcapital.ca-central-1.aws",
-                user="PGAGNON",
+                user=os.environ["SNOWFLAKE_USERNAME"],
                 password=os.environ["SNOWFLAKE_PASSWORD"],
                 database="ZETATANGO",
                 warehouse="ETL",
