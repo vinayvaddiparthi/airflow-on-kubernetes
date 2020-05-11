@@ -18,11 +18,11 @@ local params = import "../params.libsonnet";
   spec: {
     rules: [
       {
-        host: "airflow.tcdata.co",
+        host: params.webserver.host,
         http: {
           paths: [
             {
-              path: "/" + params.env,
+              path: params.webserver.path,
               backend: {
                 serviceName: params.app + "-" + params.env + "-" + "webserver",
                 servicePort: 8080

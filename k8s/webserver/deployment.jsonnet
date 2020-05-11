@@ -80,6 +80,15 @@ local params = import "../params.libsonnet";
             ],
             env: [
               {
+                name: "AIRFLOW__WEBSERVER__SECRET_KEY",
+                valueFrom: {
+                  secretKeyRef: {
+                    name: params.app + "-" + params.env + "-" + $.metadata.labels.component,
+                    key: "secretKey",
+                  },
+                },
+              },
+              {
                 name: "AWS_ACCESS_KEY_ID",
                 value: "$(S3_AWS_ACCESS_KEY_ID)",
               },
