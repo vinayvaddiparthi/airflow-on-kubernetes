@@ -113,7 +113,11 @@ local params = import "../params.libsonnet";
                 name: "config-volume",
                 mountPath: "/usr/local/airflow/webserver_config.py",
                 subPath: "webserver_config.py",
-              }
+              },
+              {
+                name: "secrets-volume",
+                mountPath: "/secrets",
+              },
             ],
           },
         ],
@@ -122,6 +126,12 @@ local params = import "../params.libsonnet";
             name: "config-volume",
             configMap: {
               name: params.app + "-" + params.env,
+            },
+          },
+          {
+            name: "secrets-volume",
+            configMap: {
+              name: params.app + "-" + params.env + "-" + $.metadata.labels.component,
             },
           },
         ],
