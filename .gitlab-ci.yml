@@ -78,6 +78,8 @@ deploy_production:
         -V WEBSERVER_SECRET_KEY \
         -V AWS_SES_USERNAME \
         -V AWS_SES_PASSWORD \
+        -V OIDC_CLIENT_ID \
+        -V OIDC_CLIENT_SECRET \
         -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
   environment:
     name: production
@@ -103,6 +105,8 @@ deploy_review:
         -V WEBSERVER_SECRET_KEY \
         -V AWS_SES_USERNAME \
         -V AWS_SES_PASSWORD \
+        -V OIDC_CLIENT_ID \
+        -V OIDC_CLIENT_SECRET \
         -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
   environment:
     name: review/$CI_COMMIT_REF_NAME

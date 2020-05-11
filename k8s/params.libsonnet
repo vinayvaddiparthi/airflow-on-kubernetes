@@ -7,7 +7,18 @@
         tag: std.extVar("DOCKER_IMAGE_TAG"),
     },
 
-    webserverSecretKey: std.extVar("WEBSERVER_SECRET_KEY"),
+    webserver: {
+      host: "airflow.tcdata.co",
+      path: "/" + $.env,
+
+      oidc: {
+        issuer: "https://iam-production.tcdata.co/auth/realms/ztt-internal",
+        clientId: std.extVar("OIDC_CLIENT_ID"),
+        clientSecret: std.extVar("OIDC_CLIENT_SECRET"),
+      },
+      secretKey: std.extVar("WEBSERVER_SECRET_KEY"),
+    },
+
     fernetKey: std.extVar("FERNET_KEY"),
 
     smtp: {
