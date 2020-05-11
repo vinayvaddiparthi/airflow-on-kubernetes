@@ -19,10 +19,11 @@
 
 import os
 from airflow import configuration as conf
+from fab_oidc.security import AirflowOIDCSecurityManager
 from flask_appbuilder.security.manager import AUTH_DB
 
 # from flask_appbuilder.security.manager import AUTH_LDAP
-from flask_appbuilder.security.manager import AUTH_OAUTH
+# from flask_appbuilder.security.manager import AUTH_OAUTH
 
 # from flask_appbuilder.security.manager import AUTH_OID
 # from flask_appbuilder.security.manager import AUTH_REMOTE_USER
@@ -47,7 +48,7 @@ CSRF_ENABLED = True
 # AUTH_LDAP : Is for LDAP
 # AUTH_REMOTE_USER : Is for using REMOTE_USER from web server
 # AUTH_OAUTH : Is for OAuth
-AUTH_TYPE = AUTH_OAUTH
+# AUTH_TYPE = AUTH_OAUTH
 
 # Uncomment to setup Full admin role name
 # AUTH_ROLE_ADMIN = 'Admin'
@@ -81,23 +82,23 @@ AUTH_TYPE = AUTH_OAUTH
 #         }
 # }]
 
-OAUTH_PROVIDERS = [
-    {
-        "name": "ztt_data",
-        "whitelist": ["@thinkingcapital.ca", "@arioplatform.com"],
-        "token_key": "access_token",
-        "icon": "fa-google",
-        "remote_app": {
-            "base_url": "https://iam-production.tcdata.co/auth/realms/ztt-internal/",
-            "request_token_params": {"scope": "email profile"},
-            "access_token_url": "https://iam-production.tcdata.co/auth/realms/ztt-internal/protocol/openid-connect/token",
-            "authorize_url": "https://iam-production.tcdata.co/auth/realms/ztt-internal/protocol/openid-connect/auth",
-            "request_token_url": None,
-            "consumer_key": "airflow-production",
-            "consumer_secret": "c48d6f58-5098-43f0-833f-430c42edfceb",
-        },
-    }
-]
+# OAUTH_PROVIDERS = [
+#     {
+#         "name": "ztt_data",
+#         "whitelist": ["@thinkingcapital.ca", "@arioplatform.com"],
+#         "token_key": "access_token",
+#         "icon": "fa-google",
+#         "remote_app": {
+#             "base_url": "https://iam-production.tcdata.co/auth/realms/ztt-internal/",
+#             "request_token_params": {"scope": "email profile"},
+#             "access_token_url": "https://iam-production.tcdata.co/auth/realms/ztt-internal/protocol/openid-connect/token",
+#             "authorize_url": "https://iam-production.tcdata.co/auth/realms/ztt-internal/protocol/openid-connect/auth",
+#             "request_token_url": None,
+#             "consumer_key": "airflow-production",
+#             "consumer_secret": "c48d6f58-5098-43f0-833f-430c42edfceb",
+#         },
+#     }
+# ]
 
 # When using LDAP Auth, setup the ldap server
 # AUTH_LDAP_SERVER = "ldap://ldapserver.new"
@@ -109,3 +110,6 @@ OAUTH_PROVIDERS = [
 #    { 'name': 'AOL', 'url': 'http://openid.aol.com/<username>' },
 #    { 'name': 'Flickr', 'url': 'http://www.flickr.com/<username>' },
 #    { 'name': 'MyOpenID', 'url': 'https://www.myopenid.com' }]
+
+SECURITY_MANAGER_CLASS = AirflowOIDCSecurityManager
+OIDC_CLIENT_SECRETS = "/secrets/client_secret.json"
