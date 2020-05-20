@@ -9,33 +9,8 @@ from sqlalchemy import text, cast, column, Date, MetaData, create_engine
 from sqlalchemy.sql import Select
 from zeep import Client
 
-snowflake_hook = BaseHook.get_connection("snowflake_platform_erp")
-snowflake_vars = {
-    "src_schema": snowflake_hook.extra_dejson.get("src_schema"),
-    "src_database": snowflake_hook.extra_dejson.get("src_database"),
-    "dest_schema": snowflake_hook.extra_dejson.get("schema"),
-    "dest_database": snowflake_hook.extra_dejson.get("database"),
-    "warehouse": snowflake_hook.extra_dejson.get("warehouse"),
-}
 
-netsuite_hook = BaseHook.get_connection("netsuite")
-netsuite_vars = {
-    "email": netsuite_hook.login,
-    "password": netsuite_hook.password,
-    "account": netsuite_hook.schema,
-    "app_id": netsuite_hook.extra_dejson.get("app_id"),
-    "endpoint": netsuite_hook.host,
-    "wsdl": netsuite_hook.extra_dejson.get("wsdl"),
-}
-
-
-def process_grouped_transactions(
-    correlation_guid, grouped_transactions, client, passport, app_info, created_at
-) -> str:
-    # check subsidiary: allow only one subsidiary value
-    if grouped_transactions["ns_subsidiary_id"].nunique() != 1:
-        raise ValueError("Different subsidiary")
-
+def build_journal_entry(correlation_guid, grouped_transactions, client, created_at):
     # get subsidiary
     record_ref = client.get_type("ns0:RecordRef")
     subsidiary = record_ref(
@@ -71,15 +46,24 @@ def process_grouped_transactions(
 
     # get journal_entry type
     journal_entry = client.get_type("ns31:JournalEntry")
+    return journal_entry(
+        subsidiary=subsidiary,
+        lineList=journal_entry_line_list(line=line_list),
+        tranDate=tran_date,
+        memo=f"Platform Transaction - {created_at}",
+    )
+
+
+def process_grouped_transactions(
+    correlation_guid, grouped_transactions, client, passport, app_info, created_at
+) -> str:
+    # check subsidiary: allow only one subsidiary value
+    if grouped_transactions["ns_subsidiary_id"].nunique() != 1:
+        raise ValueError("Different subsidiary")
 
     # call Add(journal_entry)
     re = client.service.add(
-        journal_entry(
-            subsidiary=subsidiary,
-            lineList=journal_entry_line_list(line=line_list),
-            tranDate=tran_date,
-            memo=f"Platform Transaction - {created_at}",
-        ),
+        build_journal_entry(correlation_guid, grouped_transactions, client, created_at),
         _soapheaders={"passport": passport, "applicationInfo": app_info},
     )
 
@@ -106,6 +90,25 @@ def print_endpoint(client):
 
 
 def create_journal_entry_for_transaction(**context):
+    snowflake_hook = BaseHook.get_connection("snowflake_platform_erp")
+    snowflake_vars = {
+        "src_schema": snowflake_hook.extra_dejson.get("src_schema"),
+        "src_database": snowflake_hook.extra_dejson.get("src_database"),
+        "dest_schema": snowflake_hook.extra_dejson.get("schema"),
+        "dest_database": snowflake_hook.extra_dejson.get("database"),
+        "warehouse": snowflake_hook.extra_dejson.get("warehouse"),
+    }
+
+    netsuite_hook = BaseHook.get_connection("netsuite")
+    netsuite_vars = {
+        "email": netsuite_hook.login,
+        "password": netsuite_hook.password,
+        "account": netsuite_hook.schema,
+        "app_id": netsuite_hook.extra_dejson.get("app_id"),
+        "endpoint": netsuite_hook.host,
+        "wsdl": netsuite_hook.extra_dejson.get("wsdl"),
+    }
+
     created_date = context["ds"]
     print(f"Created_date: {context['ds']}")
 
