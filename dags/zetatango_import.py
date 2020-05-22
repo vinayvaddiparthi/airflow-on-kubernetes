@@ -232,7 +232,7 @@ with DAG(
         python_callable=export_to_snowflake,
         op_kwargs={
             "heroku_app": "zt-production-elt-core",
-            "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_06926445112852C5F_URL",
+            "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "CORE_PRODUCTION",
         },
@@ -279,7 +279,7 @@ with DAG(
         python_callable=export_to_snowflake,
         op_kwargs={
             "heroku_app": "zt-production-elt-idp",
-            "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_06730E622159E3664_URL",
+            "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0DB594617CE5BEC42_URL",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "IDP_PRODUCTION",
         },
@@ -290,7 +290,7 @@ with DAG(
         python_callable=export_to_snowflake,
         op_kwargs={
             "heroku_app": "zt-production-elt-kyc",
-            "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_075C067EF5D19D7F2_URL",
+            "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0467EC30D24A2723A_URL",
             "snowflake_connection": "snowflake_zetatango_production",
             "snowflake_schema": "KYC_PRODUCTION",
         },
