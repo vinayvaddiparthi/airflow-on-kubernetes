@@ -103,7 +103,7 @@ def import_workbooks(
         stmts = [
             f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} FILE_FORMAT=(TYPE=JSON)",  # nosec
             f"PUT file://{file} @{destination_schema}.{stage_guid}",  # nosec
-            f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{destination_table} AS SELECT * FROM @{destination_schema}.{stage_guid}",  # nosec
+            f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{destination_table} AS SELECT $1 AS FIELDS FROM @{destination_schema}.{stage_guid}",  # nosec
         ]
 
         print("Uploading results to Snowflake ❄️")
