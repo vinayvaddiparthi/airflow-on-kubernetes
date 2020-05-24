@@ -118,7 +118,7 @@ def stage_table_in_snowflake(
 
         tx.execute(
             f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS "  # nosec
-            f"SELECT * FROM @{destination_schema}.{stage_guid}"  # nosec
+            f"SELECT $1 AS FIELDS FROM @{destination_schema}.{stage_guid}"  # nosec
         ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
@@ -213,7 +213,7 @@ def decrypt_pii_columns(
 
             tx.execute(
                 f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}${spec.table} AS "  # nosec
-                f"SELECT * FROM @{target_schema}.{stage}"  # nosec
+                f"SELECT $1 AS FIELDS FROM @{target_schema}.{stage}"  # nosec
             ).fetchall()
 
             logging.info(f"🔓 Successfully decrypted {spec}")
