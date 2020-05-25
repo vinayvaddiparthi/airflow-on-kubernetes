@@ -75,6 +75,7 @@ def process_grouped_transactions(
     # call Add(journal_entry)
     re = client.service.add(
         journal_entry(
+            external_id=correlation_guid,
             subsidiary=subsidiary,
             lineList=journal_entry_line_list(line=line_list),
             tranDate=tran_date,
@@ -184,32 +185,7 @@ def create_journal_entry_for_transaction(**context):
                         "correlation_guid": correlation_guid,
                     }
                 )
-        metadata = MetaData()
-        metadata.reflect(bind=tx.engine)
-        if succeeded:
-            # log results in erp.platform so we can filtered them in re-run dataset
-            # table_uploaded = Table(
-            #     "uploaded",
-            #     metadata,
-            #     Column("uploaded_at", Date),
-            #     Column("ns_journal_entry_internal_id"),
-            #     Column("correlation_guid", String, primary_key=True),
-            # )
-            table_uploaded = metadata.tables["uploaded"]
-            tx.execute(table_uploaded.insert(), succeeded)
-            print(f"succeeded: {len(succeeded)}")
-        if failed:
-            # log failures in erp.platform
-            # table_failed = Table(
-            #     "failed",
-            #     metadata,
-            #     Column("uploaded_at", Date),
-            #     Column("error", String),
-            #     Column("correlation_guid", String, primary_key=True),
-            # )
-            table_failed = metadata.tables["failed"]
-            tx.execute(table_failed.insert(), failed)
-            print(f"failed: {len(failed)}")
+        print(f"Total succeeded: {len(succeeded)} - Total failed: {len(failed)}")
 
 
 with DAG(
