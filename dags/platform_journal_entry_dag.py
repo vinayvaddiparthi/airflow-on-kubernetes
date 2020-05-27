@@ -9,24 +9,50 @@ from sqlalchemy import text, cast, column, Date, MetaData, create_engine
 from sqlalchemy.sql import Select
 from zeep import Client
 
-snowflake_hook = BaseHook.get_connection("snowflake_platform_erp")
-snowflake_vars = {
-    "src_schema": snowflake_hook.extra_dejson.get("src_schema"),
-    "src_database": snowflake_hook.extra_dejson.get("src_database"),
-    "dest_schema": snowflake_hook.extra_dejson.get("schema"),
-    "dest_database": snowflake_hook.extra_dejson.get("database"),
-    "warehouse": snowflake_hook.extra_dejson.get("warehouse"),
-}
 
-netsuite_hook = BaseHook.get_connection("netsuite")
-netsuite_vars = {
-    "email": netsuite_hook.login,
-    "password": netsuite_hook.password,
-    "account": netsuite_hook.schema,
-    "app_id": netsuite_hook.extra_dejson.get("app_id"),
-    "endpoint": netsuite_hook.host,
-    "wsdl": netsuite_hook.extra_dejson.get("wsdl"),
-}
+def build_journal_entry(correlation_guid, grouped_transactions, client, created_at):
+    # get subsidiary
+    recordref_type = client.get_type("ns0:RecordRef")
+    subsidiary = recordref_type(
+        internalId=grouped_transactions["ns_subsidiary_id"].iloc[0], type="subsidiary"
+    )
+    # get transaction_date
+    datetime_type = client.get_type("xsd:dateTime")
+    transaction_date = datetime_type(grouped_transactions["posted_at"].max())
+
+    # build journal_entry_line_list
+    journalentryline_type = client.get_type("ns31:JournalEntryLine")
+    line_list = []
+    for values in grouped_transactions[
+        ["credit_amount", "debit_amount", "ns_account_internal_id"]
+    ].values:
+        if values[0]:
+            line_list.append(
+                journalentryline_type(
+                    account=recordref_type(internalId=values[2], type="account"),
+                    credit=values[0],
+                    memo=f"Transaction ID: {correlation_guid}",
+                )
+            )
+        if values[1]:
+            line_list.append(
+                journalentryline_type(
+                    account=recordref_type(internalId=values[2], type="account"),
+                    debit=values[1],
+                    memo=f"Transaction ID: {correlation_guid}",
+                )
+            )
+    journalentrylinelist_type = client.get_type("ns31:JournalEntryLineList")
+
+    # get journal_entry type
+    journalentry_type = client.get_type("ns31:JournalEntry")
+    return journalentry_type(
+        externalId=correlation_guid,
+        subsidiary=subsidiary,
+        lineList=journalentrylinelist_type(line=line_list),
+        tranDate=transaction_date,
+        memo=f"Platform Transaction - {created_at}",
+    )
 
 
 def process_grouped_transactions(
@@ -36,50 +62,9 @@ def process_grouped_transactions(
     if grouped_transactions["ns_subsidiary_id"].nunique() != 1:
         raise ValueError("Different subsidiary")
 
-    # get subsidiary
-    record_ref = client.get_type("ns0:RecordRef")
-    subsidiary = record_ref(
-        internalId=grouped_transactions["ns_subsidiary_id"].iloc[0], type="subsidiary"
-    )
-    # get tranDate
-    dateTime = client.get_type("xsd:dateTime")
-    tran_date = dateTime(grouped_transactions["posted_at"].max())
-
-    # build journal_entry_line_list
-    journal_entry_line = client.get_type("ns31:JournalEntryLine")
-    line_list = []
-    for values in grouped_transactions[
-        ["credit_amount", "debit_amount", "ns_account_internal_id"]
-    ].values:
-        if values[0]:
-            line_list.append(
-                journal_entry_line(
-                    account=record_ref(internalId=values[2], type="account"),
-                    credit=values[0],
-                    memo=f"Transaction ID: {correlation_guid}",
-                )
-            )
-        if values[1]:
-            line_list.append(
-                journal_entry_line(
-                    account=record_ref(internalId=values[2], type="account"),
-                    debit=values[1],
-                    memo=f"Transaction ID: {correlation_guid}",
-                )
-            )
-    journal_entry_line_list = client.get_type("ns31:JournalEntryLineList")
-
-    # get journal_entry type
-    journal_entry = client.get_type("ns31:JournalEntry")
-
     # call Add(journal_entry)
     re = client.service.add(
-        journal_entry(
-            subsidiary=subsidiary,
-            lineList=journal_entry_line_list(line=line_list),
-            tranDate=tran_date,
-            memo=f"Platform Transaction - {created_at}",
-        ),
+        build_journal_entry(correlation_guid, grouped_transactions, client, created_at),
         _soapheaders={"passport": passport, "applicationInfo": app_info},
     )
 
@@ -106,6 +91,25 @@ def print_endpoint(client):
 
 
 def create_journal_entry_for_transaction(**context):
+    snowflake_hook = BaseHook.get_connection("snowflake_platform_erp")
+    snowflake_vars = {
+        "src_schema": snowflake_hook.extra_dejson.get("src_schema"),
+        "src_database": snowflake_hook.extra_dejson.get("src_database"),
+        "dest_schema": snowflake_hook.extra_dejson.get("schema"),
+        "dest_database": snowflake_hook.extra_dejson.get("database"),
+        "warehouse": snowflake_hook.extra_dejson.get("warehouse"),
+    }
+
+    netsuite_hook = BaseHook.get_connection("netsuite")
+    netsuite_vars = {
+        "email": netsuite_hook.login,
+        "password": netsuite_hook.password,
+        "account": netsuite_hook.schema,
+        "app_id": netsuite_hook.extra_dejson.get("app_id"),
+        "endpoint": netsuite_hook.host,
+        "wsdl": netsuite_hook.extra_dejson.get("wsdl"),
+    }
+
     created_date = context["ds"]
     print(f"Created_date: {context['ds']}")
 
@@ -146,8 +150,8 @@ def create_journal_entry_for_transaction(**context):
             account=netsuite_vars["account"],
         )
 
-        app_info_type = client.get_type("ns4:ApplicationInfo")
-        app_info = app_info_type(applicationId=netsuite_vars["app_id"])
+        applicationinfo_type = client.get_type("ns4:ApplicationInfo")
+        app_info = applicationinfo_type(applicationId=netsuite_vars["app_id"])
 
         client.service.login(
             passport=passport, _soapheaders={"applicationInfo": app_info}
@@ -184,32 +188,7 @@ def create_journal_entry_for_transaction(**context):
                         "correlation_guid": correlation_guid,
                     }
                 )
-        metadata = MetaData()
-        metadata.reflect(bind=tx.engine)
-        if succeeded:
-            # log results in erp.platform so we can filtered them in re-run dataset
-            # table_uploaded = Table(
-            #     "uploaded",
-            #     metadata,
-            #     Column("uploaded_at", Date),
-            #     Column("ns_journal_entry_internal_id"),
-            #     Column("correlation_guid", String, primary_key=True),
-            # )
-            table_uploaded = metadata.tables["uploaded"]
-            tx.execute(table_uploaded.insert(), succeeded)
-            print(f"succeeded: {len(succeeded)}")
-        if failed:
-            # log failures in erp.platform
-            # table_failed = Table(
-            #     "failed",
-            #     metadata,
-            #     Column("uploaded_at", Date),
-            #     Column("error", String),
-            #     Column("correlation_guid", String, primary_key=True),
-            # )
-            table_failed = metadata.tables["failed"]
-            tx.execute(table_failed.insert(), failed)
-            print(f"failed: {len(failed)}")
+        print(f"Total succeeded: {len(succeeded)} - Total failed: {len(failed)}")
 
 
 with DAG(
