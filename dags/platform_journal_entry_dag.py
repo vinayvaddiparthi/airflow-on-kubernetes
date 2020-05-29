@@ -23,13 +23,17 @@ def build_journal_entry(correlation_guid, grouped_transactions, client, created_
     # build journal_entry_line_list
     journalentryline_type = client.get_type("ns31:JournalEntryLine")
     line_list = []
-    for values in grouped_transactions[
-        ["credit_amount", "debit_amount", "ns_account_internal_id"]
-    ].values:
+    for values in (
+        grouped_transactions[
+            ["credit_amount", "debit_amount", "ns_account_internal_id"]
+        ]
+        .fillna(0)
+        .values
+    ):
         if values[0]:
             line_list.append(
                 journalentryline_type(
-                    account=recordref_type(internalId=values[2], type="account"),
+                    account=recordref_type(internalId=int(values[2]), type="account"),
                     credit=values[0],
                     memo=f"Transaction ID: {correlation_guid}",
                 )
@@ -37,7 +41,7 @@ def build_journal_entry(correlation_guid, grouped_transactions, client, created_
         if values[1]:
             line_list.append(
                 journalentryline_type(
-                    account=recordref_type(internalId=values[2], type="account"),
+                    account=recordref_type(internalId=int(values[2]), type="account"),
                     debit=values[1],
                     memo=f"Transaction ID: {correlation_guid}",
                 )
