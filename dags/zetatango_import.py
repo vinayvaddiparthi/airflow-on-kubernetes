@@ -304,7 +304,6 @@ with DAG(
                     schema="KYC_PRODUCTION",
                     table="INDIVIDUALS_APPLICANTS",
                     columns=["date_of_birth", "first_name", "last_name", "middle_name"],
-                    format="marshal",
                 ),
                 DecryptionSpec(
                     schema="KYC_PRODUCTION",
