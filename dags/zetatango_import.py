@@ -302,11 +302,17 @@ with DAG(
             "decryption_specs": [
                 DecryptionSpec(
                     schema="KYC_PRODUCTION",
+                    table="INDIVIDUALS_APPLICANTS",
+                    columns=["date_of_birth", "first_name", "last_name", "middle_name"],
+                    format="marshal",
+                ),
+                DecryptionSpec(
+                    schema="KYC_PRODUCTION",
                     table="INDIVIDUAL_ATTRIBUTES",
                     columns=["value"],
                     format="marshal",
                     whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
-                )
+                ),
             ],
             "target_schema": "PII_PRODUCTION",
         },
