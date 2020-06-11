@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import pendulum
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 import pandas as pd
 from airflow import DAG
@@ -96,9 +97,6 @@ def create_journal_entry_for_transaction(**context):
     snowflake_vars = {
         "src_schema": snowflake_hook.extra_dejson.get("src_schema"),
         "src_database": snowflake_hook.extra_dejson.get("src_database"),
-        "dest_schema": snowflake_hook.extra_dejson.get("schema"),
-        "dest_database": snowflake_hook.extra_dejson.get("database"),
-        "warehouse": snowflake_hook.extra_dejson.get("warehouse"),
     }
 
     netsuite_hook = BaseHook.get_connection("netsuite")
@@ -121,9 +119,7 @@ def create_journal_entry_for_transaction(**context):
         ),
     ).where(cast(column("created_at"), Date) == text(f"'{created_date}'"))
 
-    with create_engine(
-        f"snowflake://{snowflake_hook.login}:{snowflake_hook.password}@{snowflake_hook.host}/{snowflake_vars['dest_database']}/{snowflake_vars['dest_schema']}?warehouse={snowflake_vars['warehouse']}"
-    ).begin() as tx:
+    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as tx:
         df = pd.read_sql(
             selectable,
             tx,
