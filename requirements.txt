@@ -17,3 +17,4 @@ pytest-mock
 pytest-cov
 fastparquet
 fab_oidc
+dbt
