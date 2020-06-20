@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
