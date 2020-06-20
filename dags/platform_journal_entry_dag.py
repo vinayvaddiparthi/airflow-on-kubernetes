@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -195,7 +195,6 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 4, 21, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    default_args={"retries": 3, "retry_delay": timedelta(minutes=10)},
 ) as dag:
     dag << PythonOperator(
         task_id="get_transactions_by_created_date",
