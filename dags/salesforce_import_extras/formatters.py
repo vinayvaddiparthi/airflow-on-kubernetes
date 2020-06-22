@@ -23,7 +23,7 @@ def format_wide_table_select(
         column_chunks = [
             x
             for x in chunks(
-                [column(x[0]) for x in tx.execute(stmt) if x[0] != "Id"], 256
+                [column(x[0]) for x in tx.execute(stmt) if x[0] != "id"], 256
             )
         ]
 
