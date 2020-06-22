@@ -253,7 +253,7 @@ def get_sobjects(
     return (future.result() for future in futures)
 
 
-def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema_name: str):
+def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str):
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     salesforce_connection = BaseHook.get_connection(salesforce_conn)
     salesforce = Salesforce(
@@ -276,7 +276,7 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema_name: str):
                 sobject,
                 salesforce_bulk,
                 engine_,
-                schema_name,
+                schema,
                 pk_chunking=sobject.count > 2_000_000,
             )
             for sobject in get_sobjects(metadata_executor, salesforce)
