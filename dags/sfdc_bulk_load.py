@@ -7,7 +7,7 @@ from concurrent.futures._base import Executor
 from concurrent.futures.thread import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Union, Callable, Iterator, List, Tuple, Optional
+from typing import Union, Callable, Iterator, List
 
 import attr
 import pendulum
@@ -18,15 +18,12 @@ import urllib.parse as urlparse
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
-from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from pyarrow._csv import ParseOptions
 from salesforce_bulk.bulk_states import NOT_PROCESSED
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce import Salesforce, SalesforceMalformedRequest
 from salesforce_bulk import SalesforceBulk, BulkApiError
-from sqlalchemy import create_engine
-from snowflake.sqlalchemy import URL
 from sqlalchemy.engine import Engine
 
 
@@ -69,15 +66,24 @@ class SobjectBucket:
     sobjects: List[SobjectDescriptor] = attr.ib(default=attr.Factory(list))
 
 
-def stmt_filter(sobject_name: str) -> str:
-    filters = {"Account": "Test_Account__c = FALSE"}
-    return f"WHERE {filters[sobject_name]}" if sobject_name in filters.keys() else ""
+def stmt_filter(schema: str, sobject_name: str) -> str:
+    filters = {"sfoi": {{"Account": "Test_Account__c = FALSE"}}}
+    return (
+        f"WHERE {filters.get(schema, {})[sobject_name]}"
+        if sobject_name in filters.get(schema, {}).keys()
+        else ""
+    )
 
 
 def get_resps_from_fields(
-    sobject: str, fields: str, bulk: SalesforceBulk, pk_chunking=False
+    sobject: str,
+    fields: str,
+    bulk: SalesforceBulk,
+    schema: str,
+    pk_chunking: bool = False,
 ) -> Iterator[requests.Response]:
-    stmt = f"SELECT {','.join(fields)} FROM {sobject} {stmt_filter(sobject)}"
+
+    stmt = f"SELECT {','.join(fields)} FROM {sobject} {stmt_filter(schema, sobject)}"
 
     if pk_chunking:
         for suffix in ["History", "Share"]:
@@ -193,7 +199,7 @@ def process_sobject(
     sobject: SobjectDescriptor,
     bulk: SalesforceBulk,
     engine_: Engine,
-    snowflake_schema,
+    schema: str,
     pk_chunking: Union[bool, str] = False,
 ):
     print(f"Processing sobject {sobject.name}")
@@ -209,13 +215,13 @@ def process_sobject(
 
         try:
             resps = get_resps_from_fields(
-                sobject.name, fields, bulk, pk_chunking=pk_chunking
+                sobject.name, fields, bulk, schema, pk_chunking=pk_chunking,
             )
         except BulkApiError as exc:
             print(exc)
             return
 
-        put_resps_on_snowflake(snowflake_schema, destination_table, engine_, resps)
+        put_resps_on_snowflake(schema, destination_table, engine_, resps)
 
 
 def get_sobjects(
