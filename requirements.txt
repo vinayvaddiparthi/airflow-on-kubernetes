@@ -152,3 +152,5 @@ zeep==3.4.0
 zipp==3.1.0
 zope.deprecation==4.4.0
 pyarrow==0.17.1
+simple-salesforce<1.0
+salesforce-bulk==2.1.0
