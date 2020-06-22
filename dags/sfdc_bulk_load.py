@@ -286,7 +286,7 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema_name: str):
         futures.wait(futures_)
 
 
-def create_dag(instances: List[str]):
+def create_dag(instances: List[str]) -> DAG:
     with DAG(
         f"salesforce_bulk_import",
         start_date=pendulum.datetime(
@@ -308,6 +308,8 @@ def create_dag(instances: List[str]):
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
             )
+
+        return dag
 
 
 globals()[f"salesforce_bulk_import_dag"] = create_dag(["sfoi", "sfni"])
