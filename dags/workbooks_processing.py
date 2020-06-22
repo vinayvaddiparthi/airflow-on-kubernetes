@@ -75,7 +75,7 @@ def import_workbooks(
         print(f"⚙️ Processing {bucket}...")
         futures = [
             executor.submit(_get_and_process_workbook, bucket, obj)
-            for obj in bucket.objects.all()
+            for obj in bucket.sobjects.all()
             if not re.match("^.*_+[0-9]+.xlsx$", obj.key.lower())
             and "/" not in obj.key
             and not obj.key.lower().startswith("~$")
@@ -122,7 +122,7 @@ with DAG(
         "apt-get update && "
         "apt-get install -y cifs-utils wget && "
         "wget https://dl.min.io/client/mc/release/linux-amd64/mc && "
-        "chmod +x mc && mv mc /usr/local/bin && "
+        "chmod +sobject mc && mv mc /usr/local/bin && "
         "mkdir ~/.mc &&"
         "cp /secrets/mc-config ~/.mc/config.json && "
         "mkdir /workbooks && "

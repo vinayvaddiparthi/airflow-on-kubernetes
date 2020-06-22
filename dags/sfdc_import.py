@@ -125,7 +125,7 @@ def create_dag(instance: str):
             dag << PythonOperator(
                 task_id=f'snowflake__{sobject["name"]}',
                 python_callable=ctas_to_snowflake,
-                op_kwargs={"sfdc_instance": instance, "sobject": sobject},
+                op_kwargs={"sfdc_instance": instance, "name": sobject},
                 pool=f"{instance}_pool",
                 execution_timeout=datetime.timedelta(hours=4),
                 retry_delay=datetime.timedelta(hours=1),
@@ -138,7 +138,7 @@ def create_dag(instance: str):
                 op_kwargs={
                     "conn": "snowflake_salesforce",
                     "sfdc_instance": instance,
-                    "sobject": sobject,
+                    "name": sobject,
                 },
                 pool="snowflake_pool",
                 execution_timeout=datetime.timedelta(hours=4),
