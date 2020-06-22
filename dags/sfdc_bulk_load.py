@@ -67,7 +67,7 @@ class SobjectBucket:
 
 
 def stmt_filter(schema: str, sobject_name: str) -> str:
-    filters = {"sfoi": {{"Account": "Test_Account__c = FALSE"}}}.get(schema, {})
+    filters = {"sfoi": {"Account": "Test_Account__c = FALSE"}}.get(schema, {})
     return f"WHERE {filters[sobject_name]}" if sobject_name in filters.keys() else ""
 
 
