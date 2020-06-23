@@ -1,6 +1,5 @@
 import datetime
 import itertools
-import os
 import types
 from concurrent import futures
 from concurrent.futures._base import Executor
@@ -12,7 +11,6 @@ from typing import Union, Callable, Iterator, List, Optional
 import attr
 import pendulum
 import pyarrow.csv as pv, pyarrow.parquet as pq
-import pytz
 import requests
 import urllib.parse as urlparse
 
@@ -24,11 +22,10 @@ from pyarrow._csv import ParseOptions
 from salesforce_bulk.bulk_states import NOT_PROCESSED
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce import Salesforce, SalesforceMalformedRequest
-from salesforce_bulk import SalesforceBulk, BulkApiError
-from slugify import slugify
+from salesforce_bulk import SalesforceBulk
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
-
+from sqlalchemy.exc import DBAPIError
 
 WIDE_THRESHOLD = 50
 
@@ -79,13 +76,13 @@ def get_resps_from_fields(
     fields: str,
     bulk: SalesforceBulk,
     schema: str,
-    max_date_col: Optional[str] = None,
+    max_date_col: str,
     max_date: Optional[datetime.datetime] = None,
     pk_chunking: bool = False,
 ) -> Iterator[requests.Response]:
     filters = stmt_filters(schema, sobject)
 
-    if max_date_col and max_date:
+    if max_date:
         filters.append(
             f"{max_date_col} >= {max_date.replace(tzinfo=datetime.timezone.utc).isoformat()}"
         )
@@ -196,8 +193,7 @@ def put_resps_on_snowflake(
 
                 print(
                     tx.execute(
-                        f"PUT file://{pq_filepath} @{destination_schema}.{destination_table} "
-                        f"OVERWRITE=TRUE"
+                        f"PUT file://{pq_filepath} @{destination_schema}.{destination_table}"
                     ).fetchall()
                 )
 
@@ -222,10 +218,7 @@ def process_sobject(
     max_date_col = (
         "SystemModstamp" if not sobject.name.endswith("__History") else "CreatedDate"
     )
-    stmt = select(
-        columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
-        from_obj=text(f"{schema}.{sobject.name}___PART_0"),
-    )
+    max_date: Optional[datetime.datetime] = None
 
     #  Split Columns into chunks of WIDE_THRESHOLD
     chunks_ = chunks(
@@ -233,15 +226,20 @@ def process_sobject(
         WIDE_THRESHOLD,
     )
 
-    try:
-        with engine_.begin() as tx:
-            max_date: datetime.datetime = tx.execute(stmt).fetchall()[0][0]
-    except Exception as exc:
-        print(f"Executing {stmt} raised \n{exc}")
-
     for i, chunk in enumerate(chunks_):
         fields = ["Id", max_date_col] + chunk
         destination_table = f"{sobject.name}___PART_{i}"
+
+        stmt = select(
+            columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
+            from_obj=text(destination_table),
+        )
+
+        try:
+            with engine_.begin() as tx:
+                max_date = tx.execute(stmt).fetchall()[0][0]
+        except DBAPIError as exc:
+            print(f"Executing {stmt} raised \n{exc}")
 
         try:
             resps = get_resps_from_fields(
@@ -250,14 +248,9 @@ def process_sobject(
                 bulk,
                 schema,
                 pk_chunking=pk_chunking,
-                max_date_col=max_date_col or None,
-                max_date=max_date or None,
+                max_date_col=max_date_col,
+                max_date=max_date,
             )
-        except Exception as exc:
-            print(exc)
-            return
-
-        try:
             put_resps_on_snowflake(schema, destination_table, engine_, resps)
         except Exception as exc:
             print(f"put_resps_on_snowflake raised \n{exc}")
