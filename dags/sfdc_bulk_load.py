@@ -251,7 +251,7 @@ def process_sobject(
                 max_date_col=max_date_col or None,
                 max_date=max_date.replace(tzinfo=datetime.timezone.utc) or None,
             )
-        except BulkApiError as exc:
+        except Exception as exc:
             print(exc)
             return
 
