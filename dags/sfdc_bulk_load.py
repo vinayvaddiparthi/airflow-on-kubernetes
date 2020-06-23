@@ -169,15 +169,14 @@ def put_resps_on_snowflake(
             ).fetchall()
         )  # nosec
 
+    dt_suffix = pendulum.datetime.now().isoformat()
     with engine_.begin() as tx:
         for i, resp in enumerate(resps):
             with TemporaryDirectory() as tempdir:
                 tempdir = Path(tempdir)
-                json_filepath = (tempdir / destination_table).with_suffix(
-                    f".{pendulum.datetime.now().isoformat()}.{i}.json"
-                )
+                json_filepath = (tempdir / destination_table).with_suffix(f".{i}.json")
                 pq_filepath = (tempdir / destination_table).with_suffix(
-                    f".{pendulum.datetime.now().isoformat()}.{i}.pq"
+                    f".{dt_suffix}.{i}.pq"
                 )
 
                 with open(json_filepath, "w+b") as csv_file:
