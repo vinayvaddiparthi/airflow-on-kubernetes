@@ -1,6 +1,5 @@
 import datetime
 import itertools
-import os
 import types
 from concurrent import futures
 from concurrent.futures._base import Executor
@@ -12,7 +11,6 @@ from typing import Union, Callable, Iterator, List, Optional
 import attr
 import pendulum
 import pyarrow.csv as pv, pyarrow.parquet as pq
-import pytz
 import requests
 import urllib.parse as urlparse
 
