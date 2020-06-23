@@ -86,7 +86,9 @@ def get_resps_from_fields(
     filters = stmt_filters(schema, sobject)
 
     if max_date_col and max_date:
-        filters.append(f"{max_date_col} >= {max_date.isoformat()}")
+        filters.append(
+            f"{max_date_col} >= {max_date.replace(tzinfo=datetime.timezone.utc).isoformat()}"
+        )
 
     stmt = f"SELECT {','.join(fields)} FROM {sobject}" + (
         f" WHERE {' AND '.join(filters)}" if len(filters) > 0 else ""
@@ -249,7 +251,7 @@ def process_sobject(
                 schema,
                 pk_chunking=pk_chunking,
                 max_date_col=max_date_col or None,
-                max_date=max_date.replace(tzinfo=datetime.timezone.utc) or None,
+                max_date=max_date or None,
             )
         except Exception as exc:
             print(exc)
