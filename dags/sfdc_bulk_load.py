@@ -175,10 +175,10 @@ def put_resps_on_snowflake(
             with TemporaryDirectory() as tempdir:
                 tempdir = Path(tempdir)
                 json_filepath = (tempdir / destination_table).with_suffix(
-                    f".{slugify(pendulum.datetime.now())}.{i}.json"
+                    f".{pendulum.datetime.now().isoformat()}.{i}.json"
                 )
                 pq_filepath = (tempdir / destination_table).with_suffix(
-                    f".{slugify(pendulum.datetime.now())}.{i}.pq"
+                    f".{pendulum.datetime.now().isoformat()}.{i}.pq"
                 )
 
                 with open(json_filepath, "w+b") as csv_file:
@@ -221,7 +221,7 @@ def process_sobject(
         "SystemModstamp" if not sobject.name.endswith("__History") else "CreatedDate"
     )
     stmt = select(
-        columns=[func.max(text(f'$1:"{max_date_col}"::datetime'))],
+        columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
         from_obj=text(f"{schema}.{sobject.name}___PART_0"),
     )
 
