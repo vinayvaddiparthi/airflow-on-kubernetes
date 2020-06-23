@@ -195,8 +195,7 @@ def put_resps_on_snowflake(
 
                 print(
                     tx.execute(
-                        f"PUT file://{pq_filepath} @{destination_schema}.{destination_table} "
-                        f"OVERWRITE=TRUE"
+                        f"PUT file://{pq_filepath} @{destination_schema}.{destination_table}"
                     ).fetchall()
                 )
 
