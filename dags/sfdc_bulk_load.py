@@ -90,6 +90,8 @@ def get_resps_from_fields(
         f" WHERE {'AND'.join(filters)}" if len(filters) > 0 else ""
     )
 
+    print(stmt)
+
     if pk_chunking:
         for suffix in ["History", "Share"]:
             if sobject.endswith(suffix):
@@ -221,17 +223,17 @@ def process_sobject(
     try:
         with engine_.begin() as tx:
             max_date_col = (
-                "SYSTEMMODSTAMP"
+                "SystemModstamp"
                 if not sobject.name.endswith("__History")
-                else "CREATEDDATE"
+                else "CreatedDate"
             )
             stmt = select(
-                columns=[func.max(text(f"$1:{max_date_col}::DATETIME"))],
+                columns=[func.max(text(f'$1:"{max_date_col}"::datetime'))],
                 from_obj=text(f"{schema}.{sobject.name}___PART_0"),
             )
             max_date = tx.execute(stmt).fetchall()[0][0]
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"Executing {stmt} raised \n{exc}")
 
     for i, chunk in enumerate(chunks_):
         fields = ["Id"] + chunk
@@ -251,7 +253,10 @@ def process_sobject(
             print(exc)
             return
 
-        put_resps_on_snowflake(schema, destination_table, engine_, resps)
+        try:
+            put_resps_on_snowflake(schema, destination_table, engine_, resps)
+        except Exception as exc:
+            print(f"put_resps_on_snowflake raised \n{exc}")
 
 
 def get_sobjects(
