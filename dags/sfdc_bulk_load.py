@@ -83,8 +83,9 @@ def get_resps_from_fields(
     pk_chunking: bool = False,
 ) -> Iterator[requests.Response]:
     filters = stmt_filters(schema, sobject)
+
     if max_date_col and max_date:
-        filters.append(f"{max_date_col} <= {max_date.isoformat()}")
+        filters.append(f"{max_date_col} >= {max_date.isoformat()}")
 
     stmt = f"SELECT {','.join(fields)} FROM {sobject}" + (
         f" WHERE {'AND'.join(filters)}" if len(filters) > 0 else ""
@@ -215,28 +216,28 @@ def process_sobject(
 ):
     print(f"Processing sobject {sobject.name}")
 
+    max_date_col = (
+        "SystemModstamp" if not sobject.name.endswith("__History") else "CreatedDate"
+    )
+    stmt = select(
+        columns=[func.max(text(f'$1:"{max_date_col}"::datetime'))],
+        from_obj=text(f"{schema}.{sobject.name}___PART_0"),
+    )
+
     #  Split Columns into chunks of WIDE_THRESHOLD
     chunks_ = chunks(
-        [field for field in sobject.fields if field != "Id"], WIDE_THRESHOLD
+        [field for field in sobject.fields if field not in {"Id", max_date_col}],
+        WIDE_THRESHOLD,
     )
 
     try:
         with engine_.begin() as tx:
-            max_date_col = (
-                "SystemModstamp"
-                if not sobject.name.endswith("__History")
-                else "CreatedDate"
-            )
-            stmt = select(
-                columns=[func.max(text(f'$1:"{max_date_col}"::datetime'))],
-                from_obj=text(f"{schema}.{sobject.name}___PART_0"),
-            )
             max_date = tx.execute(stmt).fetchall()[0][0]
     except Exception as exc:
         print(f"Executing {stmt} raised \n{exc}")
 
     for i, chunk in enumerate(chunks_):
-        fields = ["Id"] + chunk
+        fields = ["Id", max_date_col] + chunk
         destination_table = f"{sobject.name}___PART_{i}"
 
         try:
