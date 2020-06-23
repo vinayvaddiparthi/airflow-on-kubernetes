@@ -7,7 +7,7 @@ from concurrent.futures._base import Executor
 from concurrent.futures.thread import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Union, Callable, Iterator, List
+from typing import Union, Callable, Iterator, List, Optional
 
 import attr
 import pendulum
@@ -24,6 +24,7 @@ from salesforce_bulk.bulk_states import NOT_PROCESSED
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce import Salesforce, SalesforceMalformedRequest
 from salesforce_bulk import SalesforceBulk, BulkApiError
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 
 
@@ -66,9 +67,9 @@ class SobjectBucket:
     sobjects: List[SobjectDescriptor] = attr.ib(default=attr.Factory(list))
 
 
-def stmt_filter(schema: str, sobject_name: str) -> str:
-    filters = {"sfoi": {"Account": "Test_Account__c = FALSE"}}.get(schema, {})
-    return f"WHERE {filters[sobject_name]}" if sobject_name in filters.keys() else ""
+def stmt_filters(schema: str, sobject_name: str) -> List[str]:
+    filters = {"sfoi": {"Account": ["Test_Account__c = FALSE"]}}.get(schema, {})
+    return filters[sobject_name] if sobject_name in filters.keys() else None
 
 
 def get_resps_from_fields(
@@ -76,10 +77,17 @@ def get_resps_from_fields(
     fields: str,
     bulk: SalesforceBulk,
     schema: str,
+    max_date_col: Optional[str] = None,
+    max_date: Optional[datetime.datetime] = None,
     pk_chunking: bool = False,
 ) -> Iterator[requests.Response]:
+    filters = stmt_filters(schema, sobject)
+    if max_date_col and max_date:
+        filters.append(f"{max_date_col} <= {max_date.isoformat()}")
 
-    stmt = f"SELECT {','.join(fields)} FROM {sobject} {stmt_filter(schema, sobject)}"
+    stmt = f"SELECT {','.join(fields)} FROM {sobject}" + (
+        f" WHERE {'AND'.join(filters)}" if len(filters) > 0 else ""
+    )
 
     if pk_chunking:
         for suffix in ["History", "Share"]:
@@ -205,13 +213,34 @@ def process_sobject(
         [field for field in sobject.fields if field != "Id"], WIDE_THRESHOLD
     )
 
+    try:
+        with engine_.begin() as tx:
+            max_date_col = (
+                "SYSTEMMODSTAMP"
+                if not sobject.name.endswith("__History")
+                else "CREATEDDATE"
+            )
+            stmt = select(
+                columns=[func.max(max_date_col)],
+                from_obj=text(f"{schema}.{sobject.name}___PART_0"),
+            )
+            max_date = tx.execute(stmt).fetchall()[0][0]
+    except Exception:
+        pass
+
     for i, chunk in enumerate(chunks_):
         fields = ["Id"] + chunk
         destination_table = f"{sobject.name}___PART_{i}"
 
         try:
             resps = get_resps_from_fields(
-                sobject.name, fields, bulk, schema, pk_chunking=pk_chunking,
+                sobject.name,
+                fields,
+                bulk,
+                schema,
+                pk_chunking=pk_chunking,
+                max_date_col=max_date_col or None,
+                max_date=max_date or None,
             )
         except BulkApiError as exc:
             print(exc)
@@ -306,7 +335,6 @@ def create_dag(instances: List[str]) -> DAG:
                     "salesforce_conn": f"salesforce_{instance}",
                     "schema": instance,
                 },
-                execution_timeout=datetime.timedelta(hours=4),
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
             )
