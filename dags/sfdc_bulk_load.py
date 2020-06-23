@@ -222,26 +222,26 @@ def process_sobject(
     )
     max_date: Optional[datetime.datetime] = None
 
-    stmt = select(
-        columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
-        from_obj=text(f"{schema}.{sobject.name}___PART_0"),
-    )
-
     #  Split Columns into chunks of WIDE_THRESHOLD
     chunks_ = chunks(
         [field for field in sobject.fields if field not in {"Id", max_date_col}],
         WIDE_THRESHOLD,
     )
 
-    try:
-        with engine_.begin() as tx:
-            max_date = tx.execute(stmt).fetchall()[0][0]
-    except DBAPIError as exc:
-        print(f"Executing {stmt} raised \n{exc}")
-
     for i, chunk in enumerate(chunks_):
         fields = ["Id", max_date_col] + chunk
         destination_table = f"{sobject.name}___PART_{i}"
+
+        stmt = select(
+            columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
+            from_obj=text(destination_table),
+        )
+
+        try:
+            with engine_.begin() as tx:
+                max_date = tx.execute(stmt).fetchall()[0][0]
+        except DBAPIError as exc:
+            print(f"Executing {stmt} raised \n{exc}")
 
         try:
             resps = get_resps_from_fields(
@@ -253,11 +253,6 @@ def process_sobject(
                 max_date_col=max_date_col,
                 max_date=max_date,
             )
-        except Exception as exc:
-            print(exc)
-            return
-
-        try:
             put_resps_on_snowflake(schema, destination_table, engine_, resps)
         except Exception as exc:
             print(f"put_resps_on_snowflake raised \n{exc}")
