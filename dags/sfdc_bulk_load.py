@@ -68,7 +68,7 @@ class SobjectBucket:
 
 def stmt_filters(schema: str, sobject_name: str) -> List[str]:
     filters = {"sfoi": {"Account": ["Test_Account__c = FALSE"]}}.get(schema, {})
-    return filters[sobject_name] if sobject_name in filters.keys() else None
+    return filters[sobject_name] if sobject_name in filters else []
 
 
 def get_resps_from_fields(
