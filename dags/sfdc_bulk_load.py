@@ -87,8 +87,8 @@ def get_resps_from_fields(
             f"{max_date_col} >= {max_date.replace(tzinfo=datetime.timezone.utc).isoformat()}"
         )
 
-    stmt = f"SELECT {','.join(fields)} FROM {sobject}" + (
-        f" WHERE {' AND '.join(filters)}" if len(filters) > 0 else ""
+    stmt = f"select {','.join(fields)} from {sobject}" + (
+        f" where {' and '.join(filters)}" if len(filters) > 0 else ""
     )
 
     print(stmt)
@@ -164,8 +164,8 @@ def put_resps_on_snowflake(
     with engine_.begin() as tx:
         print(
             tx.execute(
-                f"CREATE STAGE IF NOT EXISTS {destination_schema}.{destination_table} "
-                "FILE_FORMAT=(TYPE=PARQUET)"
+                f"create stage if not exists {destination_schema}.{destination_table} "
+                "file_format=(type=parquet)"
             ).fetchall()
         )  # nosec
 
@@ -192,15 +192,15 @@ def put_resps_on_snowflake(
 
                 print(
                     tx.execute(
-                        f"PUT file://{pq_filepath} @{destination_schema}.{destination_table}"
+                        f"put file://{pq_filepath} @{destination_schema}.{destination_table}"
                     ).fetchall()
                 )
 
         with engine_.begin() as tx:
             print(
                 tx.execute(
-                    f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{destination_table} AS "  # nosec
-                    f"SELECT $1 AS FIELDS FROM @{destination_schema}.{destination_table}"  # nosec
+                    f"create or replace transient table {destination_schema}.{destination_table} as "  # nosec
+                    f"select $1 as fields from @{destination_schema}.{destination_table} "
                 ).fetchall()
             )
 
@@ -270,7 +270,7 @@ def get_sobjects(
                     for field in getattr(salesforce, sobject).describe()["fields"]
                     if field["type"] != "address"
                 ],
-                count=salesforce.query(f"SELECT COUNT(id) FROM {sobject}")[  # nosec
+                count=salesforce.query(f"select count(id) from {sobject}")[  # nosec
                     "records"
                 ][0]["expr0"],
             )
