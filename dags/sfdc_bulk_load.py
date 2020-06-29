@@ -219,9 +219,10 @@ def process_sobject(
 
     if len(sobject.fields) >= WIDE_THRESHOLD:
         chunks: List[List[str]] = [["Id", max_date_col]] * NUM_BUCKETS
-        for field in sobject.fields:
-            if field not in ["Id", max_date_col]:
-                chunks[hash(field) % NUM_BUCKETS].append(field)
+        for field in (
+            field for field in sobject.fields if field not in {"Id", max_date_col}
+        ):
+            chunks[hash(field) % NUM_BUCKETS].append(field)
     else:
         chunks: List[List[str]] = [sobject.fields]
 
@@ -303,7 +304,8 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str):
         max_workers=4
     ) as processing_executor:
         futures_ = [
-            process_sobject(
+            processing_executor.submit(
+                process_sobject,
                 sobject,
                 salesforce_bulk,
                 engine_,
