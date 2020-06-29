@@ -218,7 +218,7 @@ def process_sobject(
     max_date: Optional[datetime.datetime] = None
 
     if len(sobject.fields) >= WIDE_THRESHOLD:
-        chunks: List[List[str]] = [["Id", max_date_col]] * NUM_BUCKETS
+        chunks: List[List[str]] = [["Id", max_date_col] for _ in range(NUM_BUCKETS)]
         for field in (
             field for field in sobject.fields if field not in {"Id", max_date_col}
         ):
