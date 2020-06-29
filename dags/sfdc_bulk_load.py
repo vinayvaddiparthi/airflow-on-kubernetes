@@ -23,11 +23,13 @@ from salesforce_bulk.bulk_states import NOT_PROCESSED
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce import Salesforce, SalesforceMalformedRequest
 from salesforce_bulk import SalesforceBulk
+from slugify import slugify
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
 
 WIDE_THRESHOLD = 50
+NUM_BUCKETS = 16
 
 
 def _monkey_patched_get_query_batch_results(
@@ -43,12 +45,6 @@ def _monkey_patched_get_query_batch_results(
     resp = requests.get(uri, headers=self.headers(), stream=True)
     self.check_status(resp)
     return resp
-
-
-def chunks(l, n):
-    """Yield successive n-sized chunks from l."""
-    for i in range(0, len(l), n):
-        yield l[i : i + n]
 
 
 @attr.s
@@ -73,7 +69,7 @@ def stmt_filters(schema: str, sobject_name: str) -> List[str]:
 
 def get_resps_from_fields(
     sobject: str,
-    fields: str,
+    fields: List[str],
     bulk: SalesforceBulk,
     schema: str,
     max_date_col: str,
@@ -169,7 +165,7 @@ def put_resps_on_snowflake(
             ).fetchall()
         )  # nosec
 
-    dt_suffix = pendulum.datetime.now().isoformat()
+    dt_suffix = slugify(pendulum.datetime.now().isoformat(), separator="_")
     with engine_.begin() as tx:
         for i, resp in enumerate(resps):
             with TemporaryDirectory() as tempdir:
@@ -215,23 +211,27 @@ def process_sobject(
     print(f"Processing sobject {sobject.name}")
 
     max_date_col = (
-        "SystemModstamp" if not sobject.name.endswith("__History") else "CreatedDate"
+        "SystemModstamp"
+        if not (sobject.name.endswith("__History") or sobject.name.endswith("__Share"))
+        else "CreatedDate"
     )
     max_date: Optional[datetime.datetime] = None
 
-    #  Split Columns into chunks of WIDE_THRESHOLD
-    chunks_ = chunks(
-        [field for field in sobject.fields if field not in {"Id", max_date_col}],
-        WIDE_THRESHOLD,
-    )
+    if len(sobject.fields) >= WIDE_THRESHOLD:
+        chunks: List[List[str]] = [["Id", max_date_col]] * NUM_BUCKETS
+        for field in (
+            field for field in sobject.fields if field not in {"Id", max_date_col}
+        ):
+            chunks[hash(field) % NUM_BUCKETS].append(field)
+    else:
+        chunks: List[List[str]] = [sobject.fields]
 
-    for i, chunk in enumerate(chunks_):
-        fields = ["Id", max_date_col] + chunk
+    for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
 
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
-            from_obj=text(destination_table),
+            from_obj=text(f"{schema}.{destination_table}"),
         )
 
         try:
@@ -277,11 +277,7 @@ def get_sobjects(
         except SalesforceMalformedRequest as exc:
             return exc
 
-    sobjects = [
-        x
-        for x in salesforce.describe()["sobjects"]
-        if x["queryable"] and x["name"][1:60]
-    ]
+    sobjects = (x for x in salesforce.describe()["sobjects"] if x["queryable"])
 
     futures = (
         executor.submit(_describe_sobjects, sobject["name"]) for sobject in sobjects
@@ -304,12 +300,11 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str):
         security_token=salesforce_connection.extra_dejson["security_token"],
     )
 
-    with ThreadPoolExecutor(max_workers=16) as metadata_executor, ThreadPoolExecutor(
-        max_workers=16
+    with ThreadPoolExecutor(max_workers=4) as metadata_executor, ThreadPoolExecutor(
+        max_workers=4
     ) as processing_executor:
         futures_ = [
-            processing_executor.submit(
-                process_sobject,
+                process_sobject(
                 sobject,
                 salesforce_bulk,
                 engine_,
@@ -348,4 +343,39 @@ def create_dag(instances: List[str]) -> DAG:
         return dag
 
 
-globals()[f"salesforce_bulk_import_dag"] = create_dag(["sfoi", "sfni"])
+if __name__ == "__main__":
+    import os
+    from unittest.mock import MagicMock, patch
+    from sqlalchemy import create_engine
+    from snowflake.sqlalchemy import URL
+
+    account = os.environ.get("SNOWFLAKE_ACCOUNT", "thinkingcapital.ca-central-1.aws")
+    database = os.environ.get("SNOWFLAKE_DATABASE", "SALESFORCE2")
+    role = os.environ.get("SNOWFLAKE_ROLE", "SYSADMIN")
+
+    url = (
+        URL(account=account, database=database, role=role)
+        if role
+        else URL(account=account, database=database)
+    )
+
+    mock = MagicMock()
+    mock.login = os.environ.get("SALESFORCE_USERNAME")
+    mock.password = os.environ.get("SALESFORCE_PASSWORD")
+    mock.extra_dejson = {"security_token": os.environ.get("SALESFORCE_TOKEN")}
+
+    with patch(
+        "dags.sfdc_bulk_load.BaseHook.get_connection", return_value=mock
+    ) as mock_conn, patch(
+        "dags.sfdc_bulk_load.SnowflakeHook.get_sqlalchemy_engine",
+        return_value=create_engine(
+            url,
+            connect_args={
+                "authenticator": "oauth",
+                "token": os.environ.get("ACCESS_TOKEN"),
+            },
+        ),
+    ) as mock_engine:
+        import_sfdc("snowflake_conn", "salesforce_conn", "sfoi")
+else:
+    globals()[f"salesforce_bulk_import_dag"] = create_dag(["sfoi", "sfni"])
