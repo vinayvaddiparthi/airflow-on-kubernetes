@@ -324,7 +324,7 @@ def create_dag(instances: List[str]) -> DAG:
         start_date=pendulum.datetime(
             2020, 6, 21, tzinfo=pendulum.timezone("America/Toronto")
         ),
-        schedule_interval="0 0,18 * * *",
+        schedule_interval="0 0 * * *",
         catchup=False,
     ) as dag:
         for instance in instances:
