@@ -304,7 +304,7 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str):
         max_workers=4
     ) as processing_executor:
         futures_ = [
-                process_sobject(
+            process_sobject(
                 sobject,
                 salesforce_bulk,
                 engine_,
