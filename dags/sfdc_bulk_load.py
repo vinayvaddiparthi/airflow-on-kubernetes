@@ -28,7 +28,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
 
-WIDE_THRESHOLD = 50
+WIDE_THRESHOLD = 100
 NUM_BUCKETS = 16
 
 
@@ -90,14 +90,18 @@ def get_resps_from_fields(
     print(stmt)
 
     if pk_chunking:
+        pk_chunking = 250000
+
         for suffix in ["History", "Share"]:
             if sobject.endswith(suffix):
                 if sobject.endswith("__History"):
                     parent = sobject.replace("__History", "__c")
+                if sobject.endswith("__Share"):
+                    parent = sobject.replace("__Share", "__c")
                 else:
                     parent = sobject[: -len(suffix)]
 
-                pk_chunking = f"parent={parent}"
+                pk_chunking = f"chunkSize=250000;parent={parent}"
 
     try:
         job_id = bulk.create_queryall_job(
@@ -222,7 +226,8 @@ def process_sobject(
         for field in (
             field for field in sobject.fields if field not in {"Id", max_date_col}
         ):
-            chunks[hash(field) % NUM_BUCKETS].append(field)
+            i = hash(field) % NUM_BUCKETS
+            chunks[i].append(field)
     else:
         chunks: List[List[str]] = [sobject.fields]
 
