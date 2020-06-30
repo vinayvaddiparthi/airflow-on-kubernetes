@@ -90,18 +90,17 @@ def get_resps_from_fields(
     print(stmt)
 
     if pk_chunking:
-        pk_chunking = 250000
-
-        for suffix in ["History", "Share"]:
+        for suffix, parent in [
+            ("__History", sobject.replace("__History", "__c")),
+            ("__Share", sobject.replace("__Share", "__c")),
+            ("History", sobject[: -len("History")]),
+            ("Share", sobject[: -len("Share")]),
+        ]:
             if sobject.endswith(suffix):
-                if sobject.endswith("__History"):
-                    parent = sobject.replace("__History", "__c")
-                if sobject.endswith("__Share"):
-                    parent = sobject.replace("__Share", "__c")
-                else:
-                    parent = sobject[: -len(suffix)]
-
                 pk_chunking = f"chunkSize=250000;parent={parent}"
+                break
+        else:
+            pk_chunking = 250000
 
     try:
         job_id = bulk.create_queryall_job(
@@ -184,7 +183,7 @@ def put_resps_on_snowflake(
                         csv_file.write(chunk)
 
                 #  Convert to parquet to avoid newline shenanigans
-                table = pv.open_csv(
+                table = pv.read_csv(
                     f"{json_filepath}",
                     parse_options=ParseOptions(newlines_in_values=True),
                 )
