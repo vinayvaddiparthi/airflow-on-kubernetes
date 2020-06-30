@@ -183,7 +183,7 @@ def put_resps_on_snowflake(
                         csv_file.write(chunk)
 
                 #  Convert to parquet to avoid newline shenanigans
-                table = pv.open_csv(
+                table = pv.read_csv(
                     f"{json_filepath}",
                     parse_options=ParseOptions(newlines_in_values=True),
                 )
