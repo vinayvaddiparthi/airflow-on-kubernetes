@@ -28,7 +28,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
 
-WIDE_THRESHOLD = 100
+WIDE_THRESHOLD = 200
 NUM_BUCKETS = 16
 
 
