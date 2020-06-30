@@ -184,7 +184,7 @@ def put_resps_on_snowflake(
                         csv_file.write(chunk)
 
                 #  Convert to parquet to avoid newline shenanigans
-                table = pv.read_csv(
+                table = pv.open_csv(
                     f"{json_filepath}",
                     parse_options=ParseOptions(newlines_in_values=True),
                 )
@@ -214,11 +214,15 @@ def process_sobject(
 ):
     print(f"Processing sobject {sobject.name}")
 
-    max_date_col = (
-        "SystemModstamp"
-        if not (sobject.name.endswith("__History") or sobject.name.endswith("__Share"))
-        else "CreatedDate"
-    )
+    for suffix, max_date_col in [
+        ("__History", "CreatedDate"),
+        ("Share", "LastModifiedDate"),
+    ]:
+        if sobject.name.endswith(suffix):
+            break
+    else:
+        max_date_col = "SystemModstamp"
+
     max_date: Optional[datetime.datetime] = None
 
     if len(sobject.fields) >= WIDE_THRESHOLD:
