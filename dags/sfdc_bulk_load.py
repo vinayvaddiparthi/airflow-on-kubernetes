@@ -392,11 +392,7 @@ if __name__ == "__main__":
     ) as mock_conn, patch(
         "dags.sfdc_bulk_load.SnowflakeHook.get_sqlalchemy_engine",
         return_value=create_engine(
-            url,
-            connect_args={
-                "authenticator": "oauth",
-                "token": os.environ.get("ACCESS_TOKEN"),
-            },
+            url, connect_args={"authenticator": "externalbrowser",},
         ),
     ) as mock_engine:
         import_sfdc("snowflake_conn", "salesforce_conn", "sfoi")
