@@ -79,9 +79,7 @@ def get_resps_from_fields(
     filters = stmt_filters(schema, sobject)
 
     if max_date:
-        filters.append(
-            f"{max_date_col} >= {max_date.replace(tzinfo=datetime.timezone.utc).isoformat()}"
-        )
+        filters.append(f"{max_date_col} >= {max_date.isoformat()}")
 
     stmt = f"select {','.join(fields)} from {sobject}" + (
         f" where {' and '.join(filters)}" if len(filters) > 0 else ""
@@ -206,6 +204,7 @@ def put_resps_on_snowflake(
 
 def process_sobject(
     sobject: SobjectDescriptor,
+    salesforce: Salesforce,
     bulk: SalesforceBulk,
     engine_: Engine,
     schema: str,
@@ -244,9 +243,22 @@ def process_sobject(
 
         try:
             with engine_.begin() as tx:
-                max_date = tx.execute(stmt).fetchall()[0][0]
+                max_date = (
+                    tx.execute(stmt)
+                    .fetchall()[0][0]
+                    .replace(tzinfo=datetime.timezone.utc)
+                )
         except DBAPIError as exc:
-            print(f"Executing {stmt} raised \n{exc}")
+            print(f"📝 Executing {stmt} raised \n{exc}")
+
+        if max_date:
+            num_recs_to_load = salesforce.query(
+                f"select count(id) from {sobject.name} where {max_date_col} >= {max_date.isoformat()}"  # nosec
+            )["records"][0]["expr0"]
+
+            if num_recs_to_load == 0:
+                print(f"📝 Skipping {sobject.name} because there are no new records.")
+                return
 
         try:
             resps = get_resps_from_fields(
@@ -260,7 +272,7 @@ def process_sobject(
             )
             put_resps_on_snowflake(schema, destination_table, engine_, resps)
         except Exception as exc:
-            print(f"put_resps_on_snowflake raised \n{exc}")
+            print(f"⚠️ put_resps_on_snowflake raised \n{exc}")
 
 
 def get_sobjects(
@@ -315,6 +327,7 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str):
             processing_executor.submit(
                 process_sobject,
                 sobject,
+                salesforce,
                 salesforce_bulk,
                 engine_,
                 schema,
