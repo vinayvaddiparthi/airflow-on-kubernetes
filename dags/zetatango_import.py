@@ -133,10 +133,11 @@ def stage_table_in_snowflake(
                     csv_filedesc,
                 )
 
-            table = pv.read_csv(
+            table_ = pv.read_csv(
                 f"{csv_filepath}", parse_options=ParseOptions(newlines_in_values=True),
             )
-            pq.write_table(table, f"{pq_filepath}")
+            pq.write_table(table_, f"{pq_filepath}")
+
             tx.execute(
                 f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
             ).fetchall()
