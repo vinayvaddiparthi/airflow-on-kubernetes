@@ -16,9 +16,13 @@ from airflow.hooks.http_hook import HttpHook
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
+from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
+
+import pyarrow.csv as pv, pyarrow.parquet as pq
+from pyarrow._csv import ParseOptions
 
 from sqlalchemy import text, func, create_engine, column, literal_column, literal
-from sqlalchemy.engine import Transaction, Engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
 
 
@@ -79,18 +83,25 @@ def export_to_snowflake(
             ).fetchall()
         )
 
-        output = [
-            stage_table_in_snowflake(
-                tx, snowflake_engine, source_schema, snowflake_schema, table
-            )
-            for table in tables
-        ]
+        with source_engine.raw_connection() as source_raw_conn:
+            source_raw_conn.set_isolation_level(ISOLATION_LEVEL_REPEATABLE_READ)
+
+            output = [
+                stage_table_in_snowflake(
+                    source_raw_conn,
+                    snowflake_engine,
+                    source_schema,
+                    snowflake_schema,
+                    table,
+                )
+                for table in tables
+            ]
 
     print(*output, sep="\n")
 
 
 def stage_table_in_snowflake(
-    source_tx: Transaction,
+    source_raw_conn,
     snowflake_engine: Engine,
     source_schema: str,
     destination_schema: str,
@@ -99,26 +110,34 @@ def stage_table_in_snowflake(
     stage_guid = __random()
     with snowflake_engine.begin() as tx:
         tx.execute(
-            f"CREATE OR REPLACE TEMPORARY STAGE {destination_schema}.{stage_guid} "
-            f"FILE_FORMAT=(TYPE=PARQUET)"
+            f"create or replace temporary stage {destination_schema}.{stage_guid} "
+            f"file_format=(type=parquet)"
         ).fetchall()
 
-        try:
-            dfs = pd.read_sql_table(table, source_tx, source_schema, chunksize=10000)
-            for df in dfs:
-                with tempfile.NamedTemporaryFile() as tempfile_:
-                    df.to_parquet(
-                        tempfile_.name, engine="fastparquet", compression="gzip"
-                    )
-                    tx.execute(
-                        f"PUT file://{tempfile_.name} @{destination_schema}.{stage_guid}"
-                    ).fetchall()
-        except ValueError as ve:
-            return f"⚠️ Caught ValueError reading table {table}: {ve}"
+        with source_raw_conn.cursor() as cursor, tempfile.TemporaryDirectory() as tempdir:
+            tempdir = Path(tempdir)
+            csv_filepath = (tempdir / table).with_suffix(".csv")
+            pq_filepath = (tempdir / table).with_suffix(".pq")
+
+            with csv_filepath.open("w+b") as csv_filedesc:
+                cursor.copy_expert(
+                    f"copy {source_schema}.{table} to stdout "
+                    f"with csv header "
+                    f"delimiter ',' quote '\"'",
+                    csv_filedesc,
+                )
+
+            table = pv.read_csv(
+                f"{csv_filepath}", parse_options=ParseOptions(newlines_in_values=True),
+            )
+            pq.write_table(table, f"{pq_filepath}")
+            tx.execute(
+                f"put file://{pq_filepath.name} @{destination_schema}.{stage_guid}"
+            ).fetchall()
 
         tx.execute(
-            f"CREATE OR REPLACE TRANSIENT TABLE {destination_schema}.{table} AS "  # nosec
-            f"SELECT $1 AS FIELDS FROM @{destination_schema}.{stage_guid}"  # nosec
+            f"create or replace transient table {destination_schema}.{table} as "  # nosec
+            f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
         ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
