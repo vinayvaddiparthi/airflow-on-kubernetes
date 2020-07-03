@@ -80,10 +80,8 @@ def export_to_snowflake(
                     columns=[column("table_name")],
                     from_obj=text('"information_schema"."tables"'),
                     whereclause=and_(
-                        [
-                            literal_column("table_schema") == literal(source_schema),
-                            literal_column("table_type") == literal("BASE TABLE"),
-                        ]
+                        literal_column("table_schema") == literal(source_schema),
+                        literal_column("table_type") == literal("BASE TABLE"),
                     ),
                 )
             ).fetchall()
