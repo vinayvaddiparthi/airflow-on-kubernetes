@@ -11,11 +11,13 @@ import attr
 import heroku3
 import pandas as pd
 import pendulum
+import psycopg2
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
+from psycopg2._psycopg import connection
 from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
 
 import pyarrow.csv as pv, pyarrow.parquet as pq
@@ -83,25 +85,26 @@ def export_to_snowflake(
             ).fetchall()
         )
 
-        with source_engine.raw_connection() as source_raw_conn:
-            source_raw_conn.set_isolation_level(ISOLATION_LEVEL_REPEATABLE_READ)
-
-            output = [
-                stage_table_in_snowflake(
-                    source_raw_conn,
-                    snowflake_engine,
-                    source_schema,
-                    snowflake_schema,
-                    table,
-                )
-                for table in tables
-            ]
-
-    print(*output, sep="\n")
+    source_raw_conn: connection = source_engine.raw_connection()
+    try:
+        source_raw_conn.set_isolation_level(ISOLATION_LEVEL_REPEATABLE_READ)
+        output = [
+            stage_table_in_snowflake(
+                source_raw_conn,
+                snowflake_engine,
+                source_schema,
+                snowflake_schema,
+                table,
+            )
+            for table in tables
+        ]
+        print(*output, sep="\n")
+    finally:
+        source_raw_conn.close()
 
 
 def stage_table_in_snowflake(
-    source_raw_conn,
+    source_raw_conn: connection,
     snowflake_engine: Engine,
     source_schema: str,
     destination_schema: str,
@@ -115,6 +118,8 @@ def stage_table_in_snowflake(
         ).fetchall()
 
         with source_raw_conn.cursor() as cursor, tempfile.TemporaryDirectory() as tempdir:
+            cursor: psycopg2.extensions.cursor
+
             tempdir = Path(tempdir)
             csv_filepath = (tempdir / table).with_suffix(".csv")
             pq_filepath = (tempdir / table).with_suffix(".pq")
