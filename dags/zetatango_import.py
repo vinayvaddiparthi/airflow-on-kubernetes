@@ -136,6 +136,10 @@ def stage_table_in_snowflake(
             table_ = pv.read_csv(
                 f"{csv_filepath}", parse_options=ParseOptions(newlines_in_values=True),
             )
+
+            if table_.num_rows == 0:
+                return f"📝️ Skipping table {table} because it contains no records"
+
             pq.write_table(table_, f"{pq_filepath}")
 
             tx.execute(
