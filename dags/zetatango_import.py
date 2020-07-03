@@ -21,7 +21,7 @@ from psycopg2._psycopg import connection
 from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
 
 import pyarrow.csv as pv, pyarrow.parquet as pq
-from pyarrow._csv import ParseOptions
+from pyarrow._csv import ParseOptions, ReadOptions
 
 from sqlalchemy import text, func, create_engine, column, literal_column, literal, and_
 from sqlalchemy.engine import Engine
@@ -134,7 +134,9 @@ def stage_table_in_snowflake(
                 )
 
             table_ = pv.read_csv(
-                f"{csv_filepath}", parse_options=ParseOptions(newlines_in_values=True),
+                f"{csv_filepath}",
+                read_options=ReadOptions(block_size=8388608),
+                parse_options=ParseOptions(newlines_in_values=True),
             )
 
             if table_.num_rows == 0:
