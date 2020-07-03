@@ -23,7 +23,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
 import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions
 
-from sqlalchemy import text, func, create_engine, column, literal_column, literal
+from sqlalchemy import text, func, create_engine, column, literal_column, literal, and_
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
 
@@ -79,8 +79,12 @@ def export_to_snowflake(
                 Select(
                     columns=[column("table_name")],
                     from_obj=text('"information_schema"."tables"'),
-                    whereclause=literal_column("table_schema")
-                    == literal(source_schema),
+                    whereclause=and_(
+                        [
+                            literal_column("table_schema") == literal(source_schema),
+                            literal_column("table_type") == literal("BASE TABLE"),
+                        ]
+                    ),
                 )
             ).fetchall()
         )
@@ -127,8 +131,7 @@ def stage_table_in_snowflake(
             with csv_filepath.open("w+b") as csv_filedesc:
                 cursor.copy_expert(
                     f"copy {source_schema}.{table} to stdout "
-                    f"with csv header "
-                    f"delimiter ',' quote '\"'",
+                    f"with csv header delimiter ',' quote '\"'",
                     csv_filedesc,
                 )
 
