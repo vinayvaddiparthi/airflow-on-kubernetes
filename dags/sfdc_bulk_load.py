@@ -79,7 +79,7 @@ def get_resps_from_fields(
     filters = stmt_filters(schema, sobject)
 
     if max_date:
-        filters.append(f"{max_date_col} >= {max_date.isoformat()}")
+        filters.append(f"{max_date_col} > {max_date.isoformat()}")
 
     stmt = f"select {','.join(fields)} from {sobject}" + (
         f" where {' and '.join(filters)}" if len(filters) > 0 else ""
@@ -253,7 +253,7 @@ def process_sobject(
 
         if max_date:
             num_recs_to_load = salesforce.query(
-                f"select count(id) from {sobject.name} where {max_date_col} >= {max_date.isoformat()}"  # nosec
+                f"select count(id) from {sobject.name} where {max_date_col} > {max_date.isoformat()}"  # nosec
             )["records"][0]["expr0"]
 
             if num_recs_to_load == 0:
