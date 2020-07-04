@@ -196,7 +196,12 @@ def put_resps_on_snowflake(
         with engine_.begin() as tx:
             print(
                 tx.execute(
-                    f"create or replace transient table {destination_schema}.{destination_table} as "  # nosec
+                    f"drop table if exists {destination_schema}.{destination_table}"
+                ).fetchall()
+            )
+            print(
+                tx.execute(
+                    f"create or replace view {destination_schema}.{destination_table} as "  # nosec
                     f"select $1 as fields from @{destination_schema}.{destination_table} "
                 ).fetchall()
             )
@@ -253,12 +258,16 @@ def process_sobject(
 
         if max_date:
             num_recs_to_load = salesforce.query(
-                f"select count(id) from {sobject.name} where {max_date_col} > {max_date.isoformat()}"  # nosec
+                f"select count(id) from {sobject.name} "  # nosec
+                f"where {max_date_col} > {max_date.isoformat()}"  # nosec
             )["records"][0]["expr0"]
 
             if num_recs_to_load == 0:
-                print(f"📝 Skipping {sobject.name} because there are no new records.")
-                return
+                print(
+                    f"📝 Skipping {destination_table} "
+                    f"because there are no new records"
+                )
+                continue
 
         try:
             resps = get_resps_from_fields(
