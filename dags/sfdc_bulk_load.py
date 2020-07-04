@@ -258,12 +258,16 @@ def process_sobject(
 
         if max_date:
             num_recs_to_load = salesforce.query(
-                f"select count(id) from {sobject.name} where {max_date_col} > {max_date.isoformat()}"  # nosec
+                f"select count(id) from {sobject.name} "
+                f"where {max_date_col} > {max_date.isoformat()}"  # nosec
             )["records"][0]["expr0"]
 
             if num_recs_to_load == 0:
-                print(f"📝 Skipping {sobject.name} because there are no new records.")
-                return
+                print(
+                    f"📝 Skipping {destination_table} "
+                    f"because there are no new records"
+                )
+                continue
 
         try:
             resps = get_resps_from_fields(
