@@ -258,7 +258,7 @@ def process_sobject(
 
         if max_date:
             num_recs_to_load = salesforce.query(
-                f"select count(id) from {sobject.name} "
+                f"select count(id) from {sobject.name} "  # nosec
                 f"where {max_date_col} > {max_date.isoformat()}"  # nosec
             )["records"][0]["expr0"]
 
