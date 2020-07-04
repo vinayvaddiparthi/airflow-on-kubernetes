@@ -196,7 +196,12 @@ def put_resps_on_snowflake(
         with engine_.begin() as tx:
             print(
                 tx.execute(
-                    f"create or replace transient table {destination_schema}.{destination_table} as "  # nosec
+                    f"drop table if exists {destination_schema}.{destination_table}"
+                ).fetchall()
+            )
+            print(
+                tx.execute(
+                    f"create or replace view {destination_schema}.{destination_table} as "  # nosec
                     f"select $1 as fields from @{destination_schema}.{destination_table} "
                 ).fetchall()
             )
