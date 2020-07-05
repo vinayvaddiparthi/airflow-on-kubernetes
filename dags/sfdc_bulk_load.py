@@ -27,6 +27,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
 
+PK_CHUNKING_THRESHOLD = 2_000_000
 WIDE_THRESHOLD = 200
 NUM_BUCKETS = 16
 
@@ -287,6 +288,8 @@ def process_sobject(
         except DBAPIError as exc:
             print(f"📝 Executing {stmt} raised \n{exc}")
 
+        num_recs_to_load = sobject.count
+
         if max_date:
             num_recs_to_load = salesforce.query(
                 f"select count(id) from {sobject.name} "  # nosec
@@ -295,8 +298,7 @@ def process_sobject(
 
             if num_recs_to_load == 0:
                 print(
-                    f"📝 Skipping {destination_table} "
-                    f"because there are no new records"
+                    f"📝 Skipping {destination_table} because there are no new records"
                 )
                 continue
 
@@ -306,7 +308,7 @@ def process_sobject(
                 fields,
                 bulk,
                 schema,
-                pk_chunking=sobject.count > 2000000,
+                pk_chunking=num_recs_to_load > PK_CHUNKING_THRESHOLD,
                 max_date_col=max_date_col,
                 max_date=max_date,
             )
