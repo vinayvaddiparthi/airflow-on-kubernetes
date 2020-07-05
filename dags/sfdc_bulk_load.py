@@ -2,7 +2,6 @@ import datetime
 import itertools
 import types
 from concurrent import futures
-from concurrent.futures._base import Executor
 from concurrent.futures.thread import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -28,6 +27,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
 
+PK_CHUNKING_THRESHOLD = 2_000_000
 WIDE_THRESHOLD = 200
 NUM_BUCKETS = 16
 
@@ -180,7 +180,7 @@ def put_resps_on_snowflake(
                     for chunk in resp.iter_content(chunk_size=128):
                         csv_file.write(chunk)
 
-                #  Convert to parquet to avoid newline shenanigans
+                #  Convert to parquet to avoid newline shenanigans in source CSV
                 table = pv.read_csv(
                     f"{json_filepath}",
                     parse_options=ParseOptions(newlines_in_values=True),
@@ -193,29 +193,59 @@ def put_resps_on_snowflake(
                     ).fetchall()
                 )
 
-        with engine_.begin() as tx:
-            print(
-                tx.execute(
-                    f"drop table if exists {destination_schema}.{destination_table}"
-                ).fetchall()
-            )
-            print(
-                tx.execute(
-                    f"create or replace view {destination_schema}.{destination_table} as "  # nosec
-                    f"select $1 as fields from @{destination_schema}.{destination_table} "
-                ).fetchall()
-            )
+
+def ensure_view(
+    engine_: Engine, destination_schema: str, destination_table: str
+) -> None:
+    print(f"Ensuring that {destination_schema}.{destination_table} exists")
+
+    stmts = [
+        f"drop table if exists {destination_schema}.{destination_table}",
+        f"create or replace view {destination_schema}.{destination_table} as "  # nosec
+        f"  select $1 as fields from @{destination_schema}.{destination_table}",
+    ]
+
+    with engine_.begin() as tx:
+        res = [tx.execute(stmt).fetchall() for stmt in stmts]
+
+    print(res)
+
+
+def describe_sobject(
+    salesforce: Salesforce, sobject: str,
+) -> Union[SobjectDescriptor, SalesforceMalformedRequest]:
+    print(f"Getting metadata for sobject {sobject}")
+    return SobjectDescriptor(
+        name=sobject,
+        fields=[
+            field["name"]
+            for field in getattr(salesforce, sobject).describe()["fields"]
+            if field["type"] != "address"
+        ],
+        count=salesforce.query(f"select count(id) from {sobject}")["records"][  # nosec
+            0
+        ]["expr0"],
+    )
 
 
 def process_sobject(
-    sobject: SobjectDescriptor,
+    sobject_name: str,
     salesforce: Salesforce,
     bulk: SalesforceBulk,
     engine_: Engine,
     schema: str,
-    pk_chunking: Union[bool, str] = False,
 ):
-    print(f"Processing sobject {sobject.name}")
+    try:
+        sobject = describe_sobject(salesforce, sobject_name)
+    except SalesforceMalformedRequest as exc:
+        print(f"⚠️ Skipping sobject_name because describe_sobject raised {exc}")
+        return
+
+    if sobject.count == 0:
+        print(f"⚠️ Skipping sobject_name because it is empty")
+        return
+
+    print(f"⚙️ Processing sobject {sobject.name}")
 
     for suffix, max_date_col in [
         ("__History", "CreatedDate"),
@@ -241,6 +271,8 @@ def process_sobject(
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
 
+        ensure_view(engine_, schema, destination_table)
+
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
             from_obj=text(f"{schema}.{destination_table}"),
@@ -256,6 +288,8 @@ def process_sobject(
         except DBAPIError as exc:
             print(f"📝 Executing {stmt} raised \n{exc}")
 
+        num_recs_to_load = sobject.count
+
         if max_date:
             num_recs_to_load = salesforce.query(
                 f"select count(id) from {sobject.name} "  # nosec
@@ -264,8 +298,7 @@ def process_sobject(
 
             if num_recs_to_load == 0:
                 print(
-                    f"📝 Skipping {destination_table} "
-                    f"because there are no new records"
+                    f"📝 Skipping {destination_table} because there are no new records"
                 )
                 continue
 
@@ -275,7 +308,7 @@ def process_sobject(
                 fields,
                 bulk,
                 schema,
-                pk_chunking=pk_chunking,
+                pk_chunking=num_recs_to_load > PK_CHUNKING_THRESHOLD,
                 max_date_col=max_date_col,
                 max_date=max_date,
             )
@@ -283,36 +316,7 @@ def process_sobject(
         except Exception as exc:
             print(f"⚠️ put_resps_on_snowflake raised \n{exc}")
 
-
-def get_sobjects(
-    executor: Executor, salesforce: Salesforce
-) -> Iterator[Union[SobjectDescriptor, SalesforceMalformedRequest]]:
-    def _describe_sobjects(
-        sobject: str,
-    ) -> Union[SobjectDescriptor, SalesforceMalformedRequest]:
-        try:
-            print(f"Getting metadata for sobject {sobject}")
-            return SobjectDescriptor(
-                name=sobject,
-                fields=[
-                    field["name"]
-                    for field in getattr(salesforce, sobject).describe()["fields"]
-                    if field["type"] != "address"
-                ],
-                count=salesforce.query(f"select count(id) from {sobject}")[  # nosec
-                    "records"
-                ][0]["expr0"],
-            )
-        except SalesforceMalformedRequest as exc:
-            return exc
-
-    sobjects = (x for x in salesforce.describe()["sobjects"] if x["queryable"])
-
-    futures = (
-        executor.submit(_describe_sobjects, sobject["name"]) for sobject in sobjects
-    )
-
-    return (future.result() for future in futures)
+        print(f"✨ Done processing {sobject.name}")
 
 
 def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str):
@@ -329,21 +333,19 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str):
         security_token=salesforce_connection.extra_dejson["security_token"],
     )
 
-    with ThreadPoolExecutor(max_workers=4) as metadata_executor, ThreadPoolExecutor(
-        max_workers=4
-    ) as processing_executor:
+    with ThreadPoolExecutor(max_workers=4) as processing_executor:
         futures_ = [
             processing_executor.submit(
                 process_sobject,
-                sobject,
+                sobject_name,
                 salesforce,
                 salesforce_bulk,
                 engine_,
                 schema,
-                pk_chunking=sobject.count > 2_000_000,
             )
-            for sobject in get_sobjects(metadata_executor, salesforce)
-            if not isinstance(sobject, Exception) and not sobject.count == 0
+            for sobject_name in (
+                x for x in salesforce.describe()["sobjects"] if x["queryable"]
+            )
         ]
 
         futures.wait(futures_)
