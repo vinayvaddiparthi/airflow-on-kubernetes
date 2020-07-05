@@ -212,19 +212,19 @@ def ensure_view(
 
 
 def describe_sobject(
-    salesforce: Salesforce, sobject: str,
+    salesforce: Salesforce, sobject_name: str,
 ) -> Union[SobjectDescriptor, SalesforceMalformedRequest]:
-    print(f"Getting metadata for sobject {sobject}")
+    print(f"Getting metadata for sobject {sobject_name}")
     return SobjectDescriptor(
-        name=sobject,
+        name=sobject_name,
         fields=[
             field["name"]
-            for field in getattr(salesforce, sobject).describe()["fields"]
+            for field in getattr(salesforce, sobject_name).describe()["fields"]
             if field["type"] != "address"
         ],
-        count=salesforce.query(f"select count(id) from {sobject}")["records"][  # nosec
-            0
-        ]["expr0"],
+        count=salesforce.query(f"select count(id) from {sobject_name}")[  # nosec
+            "records"
+        ][0]["expr0"],
     )
 
 
@@ -344,7 +344,7 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str):
                 schema,
             )
             for sobject_name in (
-                x for x in salesforce.describe()["sobjects"] if x["queryable"]
+                x["name"] for x in salesforce.describe()["sobjects"] if x["queryable"]
             )
         ]
 
