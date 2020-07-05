@@ -158,16 +158,6 @@ def put_resps_on_snowflake(
     engine_: Engine,
     resps: Iterator[requests.Response],
 ):
-    with engine_.begin() as tx:
-        stmts = [
-            f"create stage if not exists {destination_schema}.{destination_table} "  # nosec
-            f"  file_format=(type=parquet)",  # nosec
-            f"create or replace view {destination_schema}.{destination_table} as "  # nosec
-            f"  select $1 as fields from @{destination_schema}.{destination_table}",  # nosec
-        ]
-
-        print([tx.execute(stmt).fetchall() for stmt in stmts])  # nosec
-
     dt_suffix = slugify(pendulum.datetime.now().isoformat(), separator="_")
     with engine_.begin() as tx:
         for i, resp in enumerate(resps):
@@ -213,6 +203,20 @@ def describe_sobject(
     )
 
 
+def ensure_stage_and_view(
+    engine_: Engine, destination_schema: str, destination_table: str
+):
+    with engine_.begin() as tx:
+        stmts = [
+            f"create stage if not exists {destination_schema}.{destination_table} "  # nosec
+            f"  file_format=(type=parquet)",  # nosec
+            f"create or replace view {destination_schema}.{destination_table} as "  # nosec
+            f"  select $1 as fields from @{destination_schema}.{destination_table}",  # nosec
+        ]
+
+        print([tx.execute(stmt).fetchall() for stmt in stmts])  # nosec
+
+
 def process_sobject(
     sobject_name: str,
     salesforce: Salesforce,
@@ -255,6 +259,9 @@ def process_sobject(
 
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
+
+        ensure_stage_and_view(engine_, schema, destination_table)
+
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
             from_obj=text(f"{schema}.{destination_table}"),
