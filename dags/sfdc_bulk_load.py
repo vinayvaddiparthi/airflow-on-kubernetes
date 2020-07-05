@@ -200,7 +200,6 @@ def ensure_view(
     print(f"Ensuring that {destination_schema}.{destination_table} exists")
 
     stmts = [
-        f"drop table if exists {destination_schema}.{destination_table}",
         f"create or replace view {destination_schema}.{destination_table} as "  # nosec
         f"  select $1 as fields from @{destination_schema}.{destination_table}",
     ]
