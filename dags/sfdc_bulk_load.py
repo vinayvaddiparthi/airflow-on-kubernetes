@@ -227,11 +227,11 @@ def process_sobject(
     try:
         sobject = describe_sobject(salesforce, sobject_name)
     except SalesforceMalformedRequest as exc:
-        print(f"⚠️ Skipping sobject_name because describe_sobject raised {exc}")
+        print(f"⚠️ Skipping {sobject_name} because describe_sobject raised {exc}")
         return
 
     if sobject.count == 0:
-        print(f"⚠️ Skipping sobject_name because it is empty")
+        print(f"⚠️ Skipping {sobject_name} because it is empty")
         return
 
     print(f"⚙️ Processing sobject {sobject.name}")
@@ -245,8 +245,6 @@ def process_sobject(
     else:
         max_date_col = "SystemModstamp"
 
-    max_date: Optional[datetime.datetime] = None
-
     if len(sobject.fields) >= WIDE_THRESHOLD:
         chunks: List[List[str]] = [["Id", max_date_col] for _ in range(NUM_BUCKETS)]
         for field in (
@@ -259,37 +257,37 @@ def process_sobject(
 
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
-
         ensure_stage_and_view(engine_, schema, destination_table)
 
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
             from_obj=text(f"{schema}.{destination_table}"),
         )
-
         try:
             with engine_.begin() as tx:
-                max_date = (
+                max_date: Optional[datetime.datetime] = (
                     tx.execute(stmt)
                     .fetchall()[0][0]
                     .replace(tzinfo=datetime.timezone.utc)
                 )
+
+                num_recs_to_load = salesforce.query(
+                    f"select count(Id) from {sobject.name} "  # nosec
+                    f"where {max_date_col} > {max_date.isoformat()}"  # nosec
+                )["records"][0]["expr0"]
+
         except DBAPIError as exc:
-            print(f"📝 Executing {stmt} raised \n{exc}")
+            print(
+                f"📝 {stmt} raised {exc}; setting max_date to None "
+                f"and num_recs_to_load to sobject.count"
+            )
 
-        num_recs_to_load = sobject.count
+            max_date: Optional[datetime.datetime] = None
+            num_recs_to_load = sobject.count
 
-        if max_date:
-            num_recs_to_load = salesforce.query(
-                f"select count(id) from {sobject.name} "  # nosec
-                f"where {max_date_col} > {max_date.isoformat()}"  # nosec
-            )["records"][0]["expr0"]
-
-            if num_recs_to_load == 0:
-                print(
-                    f"📝 Skipping {destination_table} because there are no new records"
-                )
-                continue
+        if num_recs_to_load == 0:
+            print(f"📝 Skipping {destination_table} because there are no new records")
+            continue
 
         try:
             resps = get_resps_from_fields(
