@@ -29,16 +29,22 @@ CREATE TABLE IF NOT EXISTS
             RAW_RESPONSE VARIANT NOT NULL
         )
 """
-        connection.execute(create_table_query)
+        with snowflake_engine.begin() as tx:
+            res = tx.execute(create_table_query).fetchall()
     except:
         e = sys.exc_info()
         logging.error(f"❌ Error creating table: {e}")
     finally:
-        connection.close()
         snowflake_engine.dispose()
 
 
 def store_flinks_response(merchant_id, file_path, bucket_name):
+    try:
+        del os.environ["AWS_ACCESS_KEY_ID"]
+        del os.environ["AWS_SECRET_ACCESS_KEY"]
+    except KeyError:
+        pass
+
     try:
         snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
 
@@ -63,15 +69,14 @@ def store_flinks_response(merchant_id, file_path, bucket_name):
 
         statement = f"INSERT INTO \"ZETATANGO\".\"CORE_PRODUCTION\".\"FLINKS_RAW_RESPONSES\" (merchant_id, batch_timestamp, file_path, raw_response) SELECT {merchant_id}, '{response['LastModified']}', '{file_path}', PARSE_JSON('{data}')"
 
-        connection = snowflake_engine.connect()
-        connection.execute(statement)
+        with snowflake_engine.begin() as tx:
+            res = tx.execute(statement).fetchall()
 
         logging.info(f"✔️ Successfully stored {file_path}")
     except:
         e = sys.exc_info()
         logging.error(f"❌ Error downloading file {file_path} from {bucket_name}: {e}")
     finally:
-        connection.close()
         snowflake_engine.dispose()
 
 
@@ -150,8 +155,7 @@ with DAG(
         executor_config={
             "KubernetesExecutor": {
                 "annotations": {
-                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                    "KubernetesAirflowProductionWorkbooksRole"
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowNonProdFlinksRole"
                 }
             }
         },
