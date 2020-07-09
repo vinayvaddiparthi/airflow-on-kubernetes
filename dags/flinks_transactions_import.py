@@ -1,3 +1,5 @@
+import os
+import tempfile
 import sys
 import logging
 import json
@@ -11,13 +13,13 @@ from datetime import timedelta
 from concurrent.futures.thread import ThreadPoolExecutor
 from pyporky.symmetric import SymmetricPorky
 from base64 import b64decode
+from utils import random_identifier
+from pathlib import Path
 
 
 def create_table(snowflake_connection: str):
     try:
         snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-        connection = snowflake_engine.connect()
-
         create_table_query = """
 CREATE TABLE IF NOT EXISTS
     "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"
@@ -30,7 +32,7 @@ CREATE TABLE IF NOT EXISTS
         )
 """
         with snowflake_engine.begin() as tx:
-            res = tx.execute(create_table_query).fetchall()
+            tx.execute(create_table_query).fetchall()
     except:
         e = sys.exc_info()
         logging.error(f"❌ Error creating table: {e}")
@@ -67,15 +69,32 @@ def store_flinks_response(merchant_id, file_path, bucket_name):
         data = data.replace("=>", ": ")
         data = data.replace("nil", "null")
 
-        statement = f"INSERT INTO \"ZETATANGO\".\"CORE_PRODUCTION\".\"FLINKS_RAW_RESPONSES\" (merchant_id, batch_timestamp, file_path, raw_response) SELECT {merchant_id}, '{response['LastModified']}', '{file_path}', PARSE_JSON('{data}')"
+        with snowflake_engine.begin() as tx, tempfile.TemporaryDirectory() as path:
+            file_identifier = random_identifier()
 
-        with snowflake_engine.begin() as tx:
-            res = tx.execute(statement).fetchall()
+            tmp_file_path = Path(path) / file_identifier
+            staging_location = f'"ZETATANGO"."CORE_PRODUCTION"."{file_identifier}"'
+
+            with open(tmp_file_path, "w") as file:
+                file.write(data)
+
+            statements = [
+                f"CREATE OR REPLACE TEMPORARY STAGE {staging_location} FILE_FORMAT=(TYPE=JSON)",
+                f"PUT file://{tmp_file_path} @{staging_location}",
+                f"INSERT INTO \"ZETATANGO\".\"CORE_PRODUCTION\".\"FLINKS_RAW_RESPONSES\" (merchant_id, batch_timestamp, file_path, raw_response) SELECT {merchant_id}, '{response['LastModified']}', '{file_path}', PARSE_JSON($1) AS FIELDS FROM @{staging_location}",
+            ]
+
+            for statement in statements:
+                tx.execute(statement).fetchall()
+
+            os.remove(tmp_file_path)
 
         logging.info(f"✔️ Successfully stored {file_path}")
     except:
         e = sys.exc_info()
-        logging.error(f"❌ Error downloading file {file_path} from {bucket_name}: {e}")
+        logging.error(
+            f"❌ Error copying file {file_path} from {bucket_name} to Snowflake: {e}"
+        )
     finally:
         snowflake_engine.dispose()
 
