@@ -81,7 +81,12 @@ def store_flinks_response(merchant_id, file_path, bucket_name):
             statements = [
                 f"CREATE OR REPLACE TEMPORARY STAGE {staging_location} FILE_FORMAT=(TYPE=JSON)",
                 f"PUT file://{tmp_file_path} @{staging_location}",
-                f"INSERT INTO \"ZETATANGO\".\"CORE_PRODUCTION\".\"FLINKS_RAW_RESPONSES\" (merchant_id, batch_timestamp, file_path, raw_response) SELECT {merchant_id}, '{response['LastModified']}', '{file_path}', PARSE_JSON($1) AS FIELDS FROM @{staging_location}",
+                (
+                    f'INSERT INTO "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"'
+                    f" (merchant_id, batch_timestamp, file_path, raw_response)"
+                    f" SELECT {merchant_id}, '{response['LastModified']}', '{file_path}',"
+                    f" PARSE_JSON($1) AS FIELDS FROM @{staging_location}"
+                ),
             ]
 
             for statement in statements:
