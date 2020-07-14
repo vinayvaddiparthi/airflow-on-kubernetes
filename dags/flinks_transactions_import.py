@@ -8,6 +8,7 @@ import pandas as pd
 import boto3
 
 from airflow import DAG
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from datetime import timedelta
 from concurrent.futures.thread import ThreadPoolExecutor
