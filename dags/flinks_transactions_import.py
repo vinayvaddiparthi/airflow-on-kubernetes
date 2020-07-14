@@ -83,7 +83,7 @@ def store_flinks_response(file_path, bucket_name, snowflake_connection):
                 (
                     f'INSERT INTO "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"'
                     f" (batch_timestamp, file_path, raw_response)"
-                    f" SELECT {response['LastModified']}', '{file_path}',"
+                    f" SELECT '{response['LastModified']}', '{file_path}',"
                     f" PARSE_JSON($1) AS FIELDS FROM @{staging_location}"
                 ),
             ]
