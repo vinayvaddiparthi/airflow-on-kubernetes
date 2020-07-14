@@ -24,8 +24,6 @@ def create_table(snowflake_connection: str):
 CREATE TABLE IF NOT EXISTS
     "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"
         (
-            ID INT AUTOINCREMENT PRIMARY KEY,
-            MERCHANT_ID INT NOT NULL,
             BATCH_TIMESTAMP DATETIME NOT NULL,
             FILE_PATH VARCHAR NOT NULL,
             RAW_RESPONSE VARIANT NOT NULL
@@ -40,7 +38,7 @@ CREATE TABLE IF NOT EXISTS
         snowflake_engine.dispose()
 
 
-def store_flinks_response(merchant_id, file_path, bucket_name):
+def store_flinks_response(file_path, bucket_name):
     try:
         del os.environ["AWS_ACCESS_KEY_ID"]
         del os.environ["AWS_SECRET_ACCESS_KEY"]
@@ -83,8 +81,8 @@ def store_flinks_response(merchant_id, file_path, bucket_name):
                 f"PUT file://{tmp_file_path} @{staging_location}",
                 (
                     f'INSERT INTO "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"'
-                    f" (merchant_id, batch_timestamp, file_path, raw_response)"
-                    f" SELECT {merchant_id}, '{response['LastModified']}', '{file_path}',"
+                    f" (batch_timestamp, file_path, raw_response)"
+                    f" SELECT {response['LastModified']}', '{file_path}',"
                     f" PARSE_JSON($1) AS FIELDS FROM @{staging_location}"
                 ),
             ]
@@ -111,7 +109,6 @@ def copy_transactions(
         snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
         merchant_documents_query = """
 SELECT
-    fields:merchant_id::INT AS merchant_id,
     fields:cloud_file_path::VARCHAR AS file_path
 FROM "ZETATANGO"."CORE_PRODUCTION"."MERCHANT_DOCUMENTS"
 WHERE fields:doc_type::VARCHAR = 'flinks_raw_response'
@@ -124,7 +121,7 @@ WHERE fields:doc_type::VARCHAR = 'flinks_raw_response'
 
         flinks_raw_response_select_sql = """
 SELECT
-    merchant_id, file_path
+    file_path
 FROM "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"
 """
 
@@ -143,10 +140,7 @@ FROM "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"
         for _index, row in to_download.iterrows():
             with ThreadPoolExecutor(max_workers=num_threads) as executor:
                 executor.submit(
-                    store_flinks_response,
-                    row["merchant_id"],
-                    row["file_path"],
-                    bucket_name,
+                    store_flinks_response, row["file_path"], bucket_name,
                 )
 
     except:
@@ -179,7 +173,7 @@ with DAG(
         executor_config={
             "KubernetesExecutor": {
                 "annotations": {
-                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowNonProdFlinksRole"
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowProductionFlinksRole"
                 }
             }
         },
