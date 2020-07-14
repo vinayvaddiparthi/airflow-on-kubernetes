@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS
         snowflake_engine.dispose()
 
 
-def store_flinks_response(file_path, bucket_name):
+def store_flinks_response(file_path, bucket_name, snowflake_connection):
     try:
         del os.environ["AWS_ACCESS_KEY_ID"]
         del os.environ["AWS_SECRET_ACCESS_KEY"]
@@ -141,7 +141,10 @@ FROM "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"
         for _index, row in to_download.iterrows():
             with ThreadPoolExecutor(max_workers=num_threads) as executor:
                 executor.submit(
-                    store_flinks_response, row["file_path"], bucket_name,
+                    store_flinks_response,
+                    row["file_path"],
+                    bucket_name,
+                    snowflake_connection,
                 )
 
     except:
