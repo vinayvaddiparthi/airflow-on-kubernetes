@@ -56,7 +56,7 @@ def store_flinks_response(file_path, bucket_name, snowflake_connection):
         encrypted_contents = json.loads(response["Body"].read())
 
         data = str(
-            porky_lib.decrypt(
+            SymmetricPorky(aws_region="ca-central-1").decrypt(
                 enciphered_dek=b64decode(encrypted_contents["key"], "-_"),
                 enciphered_data=b64decode(encrypted_contents["data"], "-_"),
                 nonce=b64decode(encrypted_contents["nonce"], "-_"),
