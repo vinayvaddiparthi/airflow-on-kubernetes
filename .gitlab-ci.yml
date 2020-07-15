@@ -23,6 +23,22 @@ black:
     - pip install black
     - black --check .
 
+mypy:
+  stage: test
+  tags:
+    - k8s
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install -r requirements.txt && pip install pytest-mypy
+    - pytest --mypy --junit-xml=mypy.xml dags
+  artifacts:
+    when: always
+    reports:
+      junit: mypy.xml
+  except:
+    variables:
+      - $TEST_DISABLED
+
 build_image:
   stage: build
   tags:

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Iterator
 
 from sqlalchemy import column, text, select
 from sqlalchemy.engine import Engine
@@ -7,8 +7,8 @@ from sqlalchemy.sql import ClauseElement, Select, TableClause
 
 def format_wide_table_select(
     table: str, engine: Engine, condition: Optional[ClauseElement] = None
-):
-    def chunks(l, n):
+) -> Select:
+    def chunks(l: List, n: int) -> Iterator:
         """Yield successive n-sized chunks from l."""
         for i in range(0, len(l), n):
             yield l[i : i + n]
@@ -36,9 +36,9 @@ def format_wide_table_select(
             for cols_ in column_chunks
         ]
 
-        for i, table in enumerate(tables):
-            table.schema = "salesforce"
-            tables[i] = table.alias(f"t{i}")
+        for i, table_ in enumerate(tables):
+            table_.schema = "salesforce"
+            tables[i] = table_.alias(f"t{i}")
 
         stmt = tables[0]
 

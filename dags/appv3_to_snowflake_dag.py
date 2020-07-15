@@ -8,7 +8,7 @@ from sqlalchemy.sql import Select
 from utils.failure_callbacks import slack_on_fail
 
 
-def ctas(catalog: str, schema: str, table: str):
+def ctas(catalog: str, schema: str, table: str) -> None:
     engine = create_engine(
         "presto://presto-production-internal.presto.svc:8080/sf_production_appv3"
     )
@@ -22,7 +22,7 @@ def ctas(catalog: str, schema: str, table: str):
         tx.execute(stmt).fetchall()
 
 
-def swap(conn: str, database: str, schema: str, table: str):
+def swap(conn: str, database: str, schema: str, table: str) -> None:
     database = database.upper()
     schema = schema.upper()
     table = table.upper()
@@ -34,7 +34,7 @@ def swap(conn: str, database: str, schema: str, table: str):
         )
 
 
-def create_dag():
+def create_dag() -> DAG:
     with DAG(
         f"production_appv3_to_snowflake",
         start_date=pendulum.datetime(
