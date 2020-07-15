@@ -151,5 +151,4 @@ def create_dag(instance: str) -> DAG:
         return dag
 
 
-for instance in ["sfoi"]:
-    globals()[f"import_{instance}"] = create_dag(instance)
+globals()["import_sfoi"] = create_dag("sfoi")
