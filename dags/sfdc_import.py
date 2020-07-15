@@ -15,7 +15,7 @@ from sqlalchemy.sql import Select
 from utils.failure_callbacks import slack_on_fail
 
 
-def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
+def ctas_to_snowflake(sfdc_instance: str, sobject: Dict) -> None:
     sobject_name = sobject["name"]
     last_modified_field = sobject.get("last_modified_field", "systemmodstamp")
 
@@ -23,17 +23,19 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
         f"presto://presto-production-internal.presto.svc:8080/{sfdc_instance}"
     )
 
+    selectable = Select(
+        columns=[text("*")],
+        from_obj=text(f'"{sfdc_instance}"."salesforce"."{sobject_name}"'),
+    )
     try:
-        selectable: Select = sobject["selectable"]["callable"](
+        selectable = sobject["selectable"]["callable"](
             table=sobject_name,
             engine=engine,
             **(sobject["selectable"].get("kwargs", {})),
         )
-    except KeyError:
-        selectable: Select = Select(
-            columns=[text("*")],
-            from_obj=text(f'"{sfdc_instance}"."salesforce"."{sobject_name}"'),
-        )
+    except KeyError as exc:
+        print(f"📝 ️Caught {exc}")
+        pass
 
     with engine.begin() as tx:
         cols_ = tx.execute(
@@ -41,7 +43,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
                 [column("column_name"), column("data_type")],
                 from_obj=text(f'"{sfdc_instance}"."information_schema"."columns"'),
             )
-            .where(column("table_schema") == text(f"'salesforce'"))
+            .where(column("table_schema") == text("'salesforce'"))
             .where(column("table_name") == text(f"'{sobject_name}'"))
         ).fetchall()
 
@@ -82,7 +84,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict):
             ).fetchall()
 
 
-def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
+def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict) -> None:
     sobject_name = sobject["name"]
     last_modified_field = sobject.get("last_modified_field", "systemmodstamp")
 
@@ -108,8 +110,8 @@ def create_sf_summary_table(conn: str, sfdc_instance: str, sobject: Dict):
         ).fetchall()
 
 
-def create_dag(instance: str):
-    sobjects = importlib.import_module(
+def create_dag(instance: str) -> DAG:
+    sobjects = importlib.import_module(  # type: ignore
         f"salesforce_import_extras.sobjects.{instance}"
     ).sobjects
 
@@ -149,5 +151,4 @@ def create_dag(instance: str):
         return dag
 
 
-for instance in ["sfoi", "sfni"]:
-    globals()[f"import_{instance}"] = create_dag(instance)
+globals()["import_sfoi"] = create_dag("sfoi")

@@ -25,7 +25,6 @@ from salesforce_bulk import SalesforceBulk
 from slugify import slugify
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import DBAPIError
 
 PK_CHUNKING_THRESHOLD = 2_000_000
 WIDE_THRESHOLD = 200
@@ -33,8 +32,13 @@ NUM_BUCKETS = 16
 
 
 def _monkey_patched_get_query_batch_results(
-    self, batch_id, result_id, job_id=None, chunk_size=2048, raw=False
-):
+    self: SalesforceBulk,
+    batch_id: str,
+    result_id: str,
+    job_id: Optional[str] = None,
+    chunk_size: int = 2048,
+    raw: bool = False,
+) -> requests.Response:
     job_id = job_id or self.lookup_job_id(batch_id)
 
     uri = urlparse.urljoin(
@@ -74,7 +78,7 @@ def get_resps_from_fields(
     schema: str,
     max_date_col: str,
     max_date: Optional[datetime.datetime] = None,
-    pk_chunking: bool = False,
+    pk_chunking: Union[bool, str, int] = False,
 ) -> Iterator[requests.Response]:
     filters = stmt_filters(schema, sobject)
 
@@ -157,14 +161,15 @@ def put_resps_on_snowflake(
     destination_table: str,
     engine_: Engine,
     resps: Iterator[requests.Response],
-):
+) -> None:
     dt_suffix = slugify(pendulum.datetime.now().isoformat(), separator="_")
     with engine_.begin() as tx:
         for i, resp in enumerate(resps):
             with TemporaryDirectory() as tempdir:
-                tempdir = Path(tempdir)
-                json_filepath = (tempdir / destination_table).with_suffix(f".{i}.json")
-                pq_filepath = (tempdir / destination_table).with_suffix(
+                json_filepath = Path(tempdir, destination_table).with_suffix(
+                    f".{i}.json"
+                )
+                pq_filepath = Path(tempdir, destination_table).with_suffix(
                     f".{dt_suffix}.{i}.pq"
                 )
 
@@ -205,7 +210,7 @@ def describe_sobject(
 
 def ensure_stage_and_view(
     engine_: Engine, destination_schema: str, destination_table: str
-):
+) -> None:
     with engine_.begin() as tx:
         stmts = [
             f"create stage if not exists {destination_schema}.{destination_table} "  # nosec
@@ -223,7 +228,7 @@ def process_sobject(
     bulk: SalesforceBulk,
     engine_: Engine,
     schema: str,
-):
+) -> None:
     try:
         sobject = describe_sobject(salesforce, sobject_name)
     except SalesforceMalformedRequest as exc:
@@ -245,15 +250,14 @@ def process_sobject(
     else:
         max_date_col = "SystemModstamp"
 
+    chunks: List[List[str]] = [sobject.fields]
     if len(sobject.fields) >= WIDE_THRESHOLD:
-        chunks: List[List[str]] = [["Id", max_date_col] for _ in range(NUM_BUCKETS)]
+        chunks = [["Id", max_date_col] for _ in range(NUM_BUCKETS)]
         for field in (
             field for field in sobject.fields if field not in {"Id", max_date_col}
         ):
             i = hash(field) % NUM_BUCKETS
             chunks[i].append(field)
-    else:
-        chunks: List[List[str]] = [sobject.fields]
 
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
@@ -263,26 +267,29 @@ def process_sobject(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
             from_obj=text(f"{schema}.{destination_table}"),
         )
+
+        max_date: Optional[datetime.datetime] = None
         try:
             with engine_.begin() as tx:
-                max_date: Optional[datetime.datetime] = (
+                max_date = (
                     tx.execute(stmt)
                     .fetchall()[0][0]
                     .replace(tzinfo=datetime.timezone.utc)
                 )
 
+            if max_date:
                 num_recs_to_load = salesforce.query(
                     f"select count(Id) from {sobject.name} "  # nosec
                     f"where {max_date_col} > {max_date.isoformat()}"  # nosec
                 )["records"][0]["expr0"]
+            else:
+                raise Exception("max_date was None")
 
-        except DBAPIError as exc:
+        except Exception as exc:
             print(
                 f"📝 {stmt} raised {exc}; setting max_date to None "
                 f"and num_recs_to_load to sobject.count"
             )
-
-            max_date: Optional[datetime.datetime] = None
             num_recs_to_load = sobject.count
 
         if num_recs_to_load == 0:
@@ -306,7 +313,7 @@ def process_sobject(
         print(f"✨ Done processing {sobject.name}")
 
 
-def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str):
+def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str) -> None:
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     salesforce_connection = BaseHook.get_connection(salesforce_conn)
     salesforce = Salesforce(
@@ -340,7 +347,7 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str):
 
 def create_dag(instances: List[str]) -> DAG:
     with DAG(
-        f"salesforce_bulk_import",
+        "salesforce_bulk_import",
         start_date=pendulum.datetime(
             2020, 6, 21, tzinfo=pendulum.timezone("America/Toronto")
         ),
@@ -395,4 +402,4 @@ if __name__ == "__main__":
     ) as mock_engine:
         import_sfdc("snowflake_conn", "salesforce_conn", "sfoi")
 else:
-    globals()[f"salesforce_bulk_import_dag"] = create_dag(["sfoi", "sfni"])
+    globals()["salesforce_bulk_import_dag"] = create_dag(["sfoi", "sfni"])

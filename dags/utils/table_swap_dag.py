@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.sql import Select
 
 
-def ctas(input_catalog: str, output_catalog: str, src: Dict, dst: Dict):
+def ctas(input_catalog: str, output_catalog: str, src: Dict, dst: Dict) -> None:
     output_catalog = output_catalog.upper()
 
     engine = create_engine("presto://presto-production-internal.presto.svc:8080")
@@ -23,7 +23,7 @@ def ctas(input_catalog: str, output_catalog: str, src: Dict, dst: Dict):
         tx.execute(stmt).fetchall()
 
 
-def swap(conn: str, output_database: str, dst: Dict):
+def swap(conn: str, output_database: str, dst: Dict) -> None:
     output_database = output_database.upper()
     schema = dst["schema"].upper()
     table = dst["table"].upper()
@@ -42,7 +42,7 @@ def create_table_swap_dag(
     output_catalog: str,
     output_database: str,
     tables: List[Dict],
-):
+) -> DAG:
     with DAG(
         dag_name, start_date=start_date, schedule_interval="0 9 * * *", catchup=False
     ) as dag:

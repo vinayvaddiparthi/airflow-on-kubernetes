@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -6,12 +7,17 @@ from airflow.operators.python_operator import PythonOperator
 import pandas as pd
 from airflow import DAG
 from airflow.hooks.base_hook import BaseHook
-from sqlalchemy import text, cast, column, Date, MetaData, create_engine
+from sqlalchemy import text, cast, column, Date
 from sqlalchemy.sql import Select
 from zeep import Client
 
 
-def build_journal_entry(correlation_guid, grouped_transactions, client, created_at):
+def build_journal_entry(
+    correlation_guid: str,
+    grouped_transactions: pd.DataFrame,
+    client: Client,
+    created_at: datetime,
+) -> Any:
     # get subsidiary
     recordref_type = client.get_type("ns0:RecordRef")
     subsidiary = recordref_type(
@@ -61,7 +67,12 @@ def build_journal_entry(correlation_guid, grouped_transactions, client, created_
 
 
 def process_grouped_transactions(
-    correlation_guid, grouped_transactions, client, passport, app_info, created_at
+    correlation_guid: str,
+    grouped_transactions: pd.DataFrame,
+    client: Client,
+    passport: str,
+    app_info: str,
+    created_at: datetime,
 ) -> str:
     # check subsidiary: allow only one subsidiary value
     if grouped_transactions["ns_subsidiary_id"].nunique() != 1:
@@ -81,7 +92,7 @@ def process_grouped_transactions(
         raise ValueError(status)
 
 
-def print_endpoint(client):
+def print_endpoint(client: Client) -> None:
     definitions = client.wsdl._definitions
     definition = definitions[list(definitions.keys())[0]]
     endpoint = (
@@ -92,7 +103,7 @@ def print_endpoint(client):
     print(f"Endpoint: {endpoint}")
 
 
-def create_journal_entry_for_transaction(**context):
+def create_journal_entry_for_transaction(ds: datetime, **kwargs: Any) -> None:
     snowflake_hook = BaseHook.get_connection("snowflake_platform_erp")
     snowflake_vars = {
         "src_schema": snowflake_hook.extra_dejson.get("src_schema"),
@@ -109,8 +120,8 @@ def create_journal_entry_for_transaction(**context):
         "wsdl": netsuite_hook.extra_dejson.get("wsdl"),
     }
 
-    created_date = context["ds"]
-    print(f"Created_date: {context['ds']}")
+    created_date = ds
+    print(f"Created_date: {created_date}")
 
     selectable = Select(
         [text("*")],

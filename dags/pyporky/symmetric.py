@@ -13,8 +13,8 @@ class SymmetricPorky:
     def __init__(
         self,
         aws_region: str = "us-east-1",
-        aws_access_key_id: str = None,
-        aws_secret_access_key: str = None,
+        aws_access_key_id: Optional[str] = None,
+        aws_secret_access_key: Optional[str] = None,
     ):
         self.kms = boto3.client(
             "kms",
@@ -29,7 +29,7 @@ class SymmetricPorky:
         enciphered_data: bytes,
         nonce: bytes,
         encryption_context: Optional[Dict[str, str]] = None,
-    ):
+    ) -> bytes:
         key = self._decrypt_data_encryption_key(enciphered_dek, encryption_context)
         secret_box = SecretBox(key)
         return secret_box.decrypt(enciphered_data, nonce)
@@ -37,15 +37,15 @@ class SymmetricPorky:
     def encrypt(
         self,
         data: bytes,
-        cmk_key_id: str = None,
-        enciphered_dek: bytes = None,
+        cmk_key_id: Optional[str] = None,
+        enciphered_dek: Optional[bytes] = None,
         encryption_context: Optional[Dict[str, str]] = None,
-    ):
+    ) -> Tuple[bytes, bytes, bytes]:
         if enciphered_dek and not cmk_key_id:
             plaintext_key = self._decrypt_data_encryption_key(
                 enciphered_dek, encryption_context
             )
-            enciphered_key = enciphered_dek
+            enciphered_key: bytes = enciphered_dek
         elif cmk_key_id and not enciphered_dek:
             plaintext_key, enciphered_key = self._generate_data_encryption_key(
                 cmk_key_id, encryption_context
@@ -61,7 +61,7 @@ class SymmetricPorky:
         return enciphered_key, encrypted.ciphertext, encrypted.nonce
 
     def _generate_data_encryption_key(
-        self, cmk_key_id: str, encryption_context: str = None
+        self, cmk_key_id: str, encryption_context: Optional[Dict[str, str]] = None
     ) -> Tuple[bytes, bytes]:
         resp = (
             self.kms.generate_data_key(
@@ -79,7 +79,7 @@ class SymmetricPorky:
     @lru_cache(maxsize=4096)
     def _decrypt_data_encryption_key(
         self, ciphertext_key: bytes, encryption_context: Optional[Dict] = None
-    ):
+    ) -> bytes:
         return (
             self.kms.decrypt(
                 CiphertextBlob=ciphertext_key, EncryptionContext=encryption_context

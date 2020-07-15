@@ -1,3 +1,6 @@
+from enum import Enum
+from typing import Optional, Dict, Any
+
 from airflow.hooks.base_hook import BaseHook
 from airflow.operators.bash_operator import BashOperator
 from airflow.utils.decorators import apply_defaults
@@ -21,24 +24,35 @@ class DbtOperator(BashOperator):
     @apply_defaults
     def __init__(
         self,
-        action=DbtAction.run,
-        profiles_args=".",
-        target_args="prod",
-        env={
-            "SNOWFLAKE_ACCOUNT": snowflake_hook.host,
-            "SNOWFLAKE_USERNAME": snowflake_hook.login,
-            "SNOWFLAKE_PASSWORD": snowflake_hook.password,
-            "SNOWFLAKE_DATABASE": dbt_hook.extra_dejson.get("database", None),
-            "SNOWFLAKE_SCHEMA": dbt_hook.extra_dejson.get("schema", None),
-            "SNOWFLAKE_ROLE": dbt_hook.extra_dejson.get("role", None),
-            "SNOWFLAKE_WAREHOUSE": dbt_hook.extra_dejson.get("warehouse", None),
-            "ZETATANGO_ENV": "PRODUCTION",
-            "GITLAB_USER": gitlab_user,
-            "GITLAB_TOKEN": gitlab_token,
-        },
-        *args,
-        **kwargs,
+        action: Enum = DbtAction.run,
+        profiles_args: str = ".",
+        target_args: str = "prod",
+        env: Optional[Dict] = None,
+        *args: Any,
+        **kwargs: Any,
     ):
+        if not env:
+            env = {
+                "SNOWFLAKE_ACCOUNT": self.__class__.snowflake_hook.host,
+                "SNOWFLAKE_USERNAME": self.__class__.snowflake_hook.login,
+                "SNOWFLAKE_PASSWORD": self.__class__.snowflake_hook.password,
+                "SNOWFLAKE_DATABASE": self.__class__.dbt_hook.extra_dejson.get(
+                    "database", None
+                ),
+                "SNOWFLAKE_SCHEMA": self.__class__.dbt_hook.extra_dejson.get(
+                    "schema", None
+                ),
+                "SNOWFLAKE_ROLE": self.__class__.dbt_hook.extra_dejson.get(
+                    "role", None
+                ),
+                "SNOWFLAKE_WAREHOUSE": self.__class__.dbt_hook.extra_dejson.get(
+                    "warehouse", None
+                ),
+                "ZETATANGO_ENV": "PRODUCTION",
+                "GITLAB_USER": self.__class__.gitlab_user,
+                "GITLAB_TOKEN": self.__class__.gitlab_token,
+            }
+
         profiles = f"--profiles-dir {profiles_args}"
         target = f"--target {target_args}"
         command = " ".join(["dbt", action.name, profiles, target])

@@ -5,10 +5,8 @@ from airflow.operators.python_operator import PythonOperator
 from sqlalchemy import create_engine, text
 from sqlalchemy.sql import Select
 
-from utils.failure_callbacks import slack_on_fail
 
-
-def ctas(catalog: str, schema: str, table: str):
+def ctas(catalog: str, schema: str, table: str) -> None:
     engine = create_engine("presto://presto-production-internal.presto.svc:8080/rde")
 
     with engine.begin() as tx:
@@ -20,7 +18,7 @@ def ctas(catalog: str, schema: str, table: str):
         tx.execute(stmt).fetchall()
 
 
-def swap(conn: str, database: str, schema: str, table: str):
+def swap(conn: str, database: str, schema: str, table: str) -> None:
     database = database.upper()
     schema = schema.upper()
     table = table.upper()
@@ -32,9 +30,9 @@ def swap(conn: str, database: str, schema: str, table: str):
         )
 
 
-def create_dag():
+def create_dag() -> DAG:
     with DAG(
-        f"rde_to_snowflake",
+        "rde_to_snowflake",
         start_date=pendulum.datetime(
             2019, 12, 17, tzinfo=pendulum.timezone("America/Toronto")
         ),

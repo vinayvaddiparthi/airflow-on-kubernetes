@@ -1,0 +1,31 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+pytest = "*"
+pytest-cov = "*"
+pytest-mock = "*"
+black = "*"
+mypy = "*"
+pylint = "*"
+
+[packages]
+apache-airflow = "*"
+pyarrow = "*"
+simple-salesforce = "<1.0"
+salesforce-bulk = "*"
+dbt-snowflake = "*"
+zeep = "*"
+snowflake-sqlalchemy = "*"
+rubymarshal = "*"
+PyYAML = "*"
+PyNaCl = "*"
+pyhive = "*"
+requests = "*"
+requests-oauthlib = "*"
+authlib = "*"
+python-slugify = "*"
+pandas = "*"
+openpyxl = "*"

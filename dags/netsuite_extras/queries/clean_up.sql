@@ -1,1 +1,0 @@
-truncate erp.{{env}}.{{table_name}};

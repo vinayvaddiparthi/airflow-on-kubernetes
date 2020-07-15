@@ -1,4 +1,4 @@
-def sf15to18(id):
+def sf15to18(id: str) -> str:
     if not id:
         raise ValueError("No id given.")
     if not isinstance(id, str):

@@ -12,24 +12,19 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from datetime import timedelta
 from concurrent.futures.thread import ThreadPoolExecutor
-from pyporky.symmetric import SymmetricPorky
 from base64 import b64decode
+
+from pyporky.symmetric import SymmetricPorky
 from utils import random_identifier
 from pathlib import Path
 
 
-def create_table(snowflake_connection: str):
+def create_table(snowflake_connection: str) -> None:
     try:
         snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-        create_table_query = """
-CREATE TABLE IF NOT EXISTS
-    "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"
-        (
-            BATCH_TIMESTAMP DATETIME NOT NULL,
-            FILE_PATH VARCHAR NOT NULL,
-            RAW_RESPONSE VARIANT NOT NULL
-        )
-"""
+        create_table_query = """CREATE TABLE IF NOT EXISTS "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES" 
+        (BATCH_TIMESTAMP DATETIME NOT NULL, FILE_PATH VARCHAR NOT NULL, RAW_RESPONSE VARIANT NOT NULL)"""
+
         with snowflake_engine.begin() as tx:
             tx.execute(create_table_query).fetchall()
     except:
@@ -39,7 +34,9 @@ CREATE TABLE IF NOT EXISTS
         snowflake_engine.dispose()
 
 
-def store_flinks_response(file_path, bucket_name, snowflake_connection):
+def store_flinks_response(
+    file_path: str, bucket_name: str, snowflake_connection: str
+) -> None:
     try:
         del os.environ["AWS_ACCESS_KEY_ID"]
         del os.environ["AWS_SECRET_ACCESS_KEY"]
@@ -57,9 +54,9 @@ def store_flinks_response(file_path, bucket_name, snowflake_connection):
 
         data = str(
             SymmetricPorky(aws_region="ca-central-1").decrypt(
-                enciphered_dek=b64decode(encrypted_contents["key"], "-_"),
-                enciphered_data=b64decode(encrypted_contents["data"], "-_"),
-                nonce=b64decode(encrypted_contents["nonce"], "-_"),
+                enciphered_dek=b64decode(encrypted_contents["key"], b"-_"),
+                enciphered_data=b64decode(encrypted_contents["data"], b"-_"),
+                nonce=b64decode(encrypted_contents["nonce"], b"-_"),
             ),
             "utf-8",
         )
@@ -105,26 +102,22 @@ def store_flinks_response(file_path, bucket_name, snowflake_connection):
 
 def copy_transactions(
     snowflake_connection: str, bucket_name: str, num_threads: int = 4
-):
+) -> None:
     try:
         snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-        merchant_documents_query = """
-SELECT
-    fields:cloud_file_path::VARCHAR AS file_path
-FROM "ZETATANGO"."CORE_PRODUCTION"."MERCHANT_DOCUMENTS"
-WHERE fields:doc_type::VARCHAR = 'flinks_raw_response'
-"""
+        merchant_documents_query = """SELECT fields:cloud_file_path::VARCHAR AS file_path 
+        FROM "ZETATANGO"."CORE_PRODUCTION"."MERCHANT_DOCUMENTS" 
+        WHERE fields:doc_type::VARCHAR = 'flinks_raw_response'"""
 
         # Get the set of all the raw flinks responses
         all_flinks_responses = pd.read_sql_query(
             merchant_documents_query, snowflake_engine
         )
 
-        flinks_raw_response_select_sql = """
-SELECT
-    file_path
-FROM "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"
-"""
+        flinks_raw_response_select_sql = (
+            "SELECT file_path "
+            'FROM "ZETATANGO"."CORE_PRODUCTION"."FLINKS_RAW_RESPONSES"'
+        )
 
         # Get the set of downloaded flinks responses
         downloaded_flinks_responses = pd.read_sql_query(
@@ -177,7 +170,8 @@ with DAG(
         executor_config={
             "KubernetesExecutor": {
                 "annotations": {
-                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowProductionFlinksRole"
+                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                    "KubernetesAirflowProductionFlinksRole"
                 }
             }
         },
