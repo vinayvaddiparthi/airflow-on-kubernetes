@@ -26,6 +26,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
 
 from utils import random_identifier
+from dbt_extras.dbt_action import DbtAction
 
 
 @attr.s
@@ -460,7 +461,7 @@ def create_dag() -> DAG:
         dag << PythonOperator(
             task_id="dbt_snapshot",
             pool="snowflake_pool",
-            execution_timeout=datetime.timedelta(hours=1),
+            execution_timeout=timedelta(hours=1),
             action=DbtAction.snapshot,
         )
 
