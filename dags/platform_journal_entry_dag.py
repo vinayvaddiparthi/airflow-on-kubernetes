@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook

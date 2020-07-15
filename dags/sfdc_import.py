@@ -43,7 +43,7 @@ def ctas_to_snowflake(sfdc_instance: str, sobject: Dict) -> None:
                 [column("column_name"), column("data_type")],
                 from_obj=text(f'"{sfdc_instance}"."information_schema"."columns"'),
             )
-            .where(column("table_schema") == text(f"'salesforce'"))
+            .where(column("table_schema") == text("'salesforce'"))
             .where(column("table_name") == text(f"'{sobject_name}'"))
         ).fetchall()
 

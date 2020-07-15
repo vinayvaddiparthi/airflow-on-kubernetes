@@ -1,5 +1,4 @@
 import pendulum
-from airflow import DAG
 from utils.table_swap_dag import create_table_swap_dag
 
 globals()["cg_staging_to_snowflake"] = create_table_swap_dag(

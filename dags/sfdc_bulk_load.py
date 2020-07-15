@@ -25,7 +25,6 @@ from salesforce_bulk import SalesforceBulk
 from slugify import slugify
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import DBAPIError
 
 PK_CHUNKING_THRESHOLD = 2_000_000
 WIDE_THRESHOLD = 200
@@ -348,7 +347,7 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str) -> None:
 
 def create_dag(instances: List[str]) -> DAG:
     with DAG(
-        f"salesforce_bulk_import",
+        "salesforce_bulk_import",
         start_date=pendulum.datetime(
             2020, 6, 21, tzinfo=pendulum.timezone("America/Toronto")
         ),
@@ -403,4 +402,4 @@ if __name__ == "__main__":
     ) as mock_engine:
         import_sfdc("snowflake_conn", "salesforce_conn", "sfoi")
 else:
-    globals()[f"salesforce_bulk_import_dag"] = create_dag(["sfoi", "sfni"])
+    globals()["salesforce_bulk_import_dag"] = create_dag(["sfoi", "sfni"])
