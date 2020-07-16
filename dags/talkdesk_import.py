@@ -21,7 +21,7 @@ def import_talkdesk(
     snowflake_conn: str,
     talkdesk_conn: str,
     schema: str,
-    task_instance_key_str: str,
+    bucket_name: str,
     execution_date: pendulum.datetime,
     next_execution_date: pendulum.datetime,
     **kwargs: Any,
@@ -83,7 +83,7 @@ def import_talkdesk(
 
         with engine.begin() as tx:
             tx.execute(
-                "insert into TCLEGACY.TALKDESK.CALLS "
+                f"insert into {schema}.CALLS "
                 f"select parse_json('{json.dumps(entry)}') as CALL, "
                 f"parse_json('{json.dumps(recordings)}') as RECORDINGS"  # nosec
             )
@@ -101,7 +101,7 @@ def import_talkdesk(
         for recording in embedded.get("recordings", []):
             media_link = recording["_links"]["media"]["href"]
             with session.get(media_link, stream=True) as in_, open_fs(
-                "s3://tc-talkdesk", create=True
+                f"s3://{bucket_name}", create=True
             ) as fs, fs.open(f"{recording['id']}.mp3", mode="w+b") as out_:
                 for chunk in in_.iter_content(chunk_size=8192):
                     out_.write(chunk)
@@ -123,6 +123,7 @@ def create_dag() -> DAG:
                 "snowflake_conn": "snowflake_talkdesk",
                 "talkdesk_conn": "http_talkdesk",
                 "schema": "TALKDESK",
+                "bucket_name": "tc-talkdesk"
             },
             provide_context=True,
             retry_delay=datetime.timedelta(hours=1),
@@ -154,16 +155,12 @@ if __name__ == "__main__":
     account = os.environ.get("SNOWFLAKE_ACCOUNT", "thinkingcapital.ca-central-1.aws")
     database = os.environ.get("SNOWFLAKE_DATABASE", "TCLEGACY")
     role = os.environ.get("SNOWFLAKE_ROLE", "SYSADMIN")
+    user = os.environ.get("SNOWFLAKE_USER")
 
     url = (
-        URL(
-            account=account,
-            database=database,
-            role=role,
-            user="pgagnon@thinkingcapital.ca",
-        )
-        if role
-        else URL(account=account, database=database)
+        URL(account=account, database=database, role=role, user=user)
+        if user
+        else URL(account=account, database=database, role=role)
     )
 
     with patch(
@@ -178,6 +175,7 @@ if __name__ == "__main__":
             "snowflake_conn",
             "talkdesk_conn",
             schema="TALKDESK",
+            bucket_name="tc-talkdesk",
             task_instance_key_str="manual_testing",
             execution_date=pendulum.datetime(2019, 9, 29),
             next_execution_date=pendulum.datetime(2019, 9, 30),
