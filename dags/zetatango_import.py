@@ -277,7 +277,13 @@ def create_dag() -> DAG:
                         schema="CORE_PRODUCTION",
                         table="MERCHANT_ATTRIBUTES",
                         columns=["value"],
-                        whereclause=literal_column("$1:key").in_(["industry"]),
+                        whereclause=literal_column("$1:key").in_(
+                            [
+                                "industry",
+                                "bank_connection_required",
+                                "selected_bank_account",
+                            ]
+                        ),
                     ),
                     DecryptionSpec(
                         schema="CORE_PRODUCTION",
@@ -382,7 +388,13 @@ def create_dag() -> DAG:
                         schema="CORE_STAGING",
                         table="MERCHANT_ATTRIBUTES",
                         columns=["value"],
-                        whereclause=literal_column("$1:key").in_(["industry"]),
+                        whereclause=literal_column("$1:key").in_(
+                            [
+                                "industry",
+                                "bank_connection_required",
+                                "selected_bank_account",
+                            ]
+                        ),
                     ),
                     DecryptionSpec(
                         schema="CORE_STAGING",
