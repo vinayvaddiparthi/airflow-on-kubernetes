@@ -14,7 +14,7 @@ from fs import open_fs
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
-MAX_ITER = 360
+MAX_RUNS = 360
 
 
 def import_talkdesk(
@@ -57,16 +57,19 @@ def import_talkdesk(
         "https://api.talkdeskapp.com/reports/calls/jobs", json=initial_payload,
     )
 
+    run: int = 0
     while (status := (data := resp.json()).get("status")) not in [
         None,
         "done",
         "failed",
-    ]:
-        print(f"💤 Sleeping for 10 seconds because status is {status}")
+    ] and run < MAX_RUNS:
+        print(f"💤 Sleeping for 10 seconds because status is {status} ({run})")
         sleep(10)
         resp = session.get(
             data["_links"]["self"]["href"]
         )  # Will be autoredirected to the report file
+
+        run += 1
 
     if status == "failed":
         raise Exception(resp.text)
