@@ -21,7 +21,6 @@ def import_talkdesk(
     snowflake_conn: str,
     talkdesk_conn: str,
     schema: str,
-    task_instance_key_str: str,
     execution_date: pendulum.datetime,
     next_execution_date: pendulum.datetime,
     **kwargs: Any,
@@ -83,7 +82,7 @@ def import_talkdesk(
 
         with engine.begin() as tx:
             tx.execute(
-                "insert into TCLEGACY.TALKDESK.CALLS "
+                f"insert into {schema}.CALLS "
                 f"select parse_json('{json.dumps(entry)}') as CALL, "
                 f"parse_json('{json.dumps(recordings)}') as RECORDINGS"  # nosec
             )
@@ -154,16 +153,12 @@ if __name__ == "__main__":
     account = os.environ.get("SNOWFLAKE_ACCOUNT", "thinkingcapital.ca-central-1.aws")
     database = os.environ.get("SNOWFLAKE_DATABASE", "TCLEGACY")
     role = os.environ.get("SNOWFLAKE_ROLE", "SYSADMIN")
+    user = os.environ.get("SNOWFLAKE_USER")
 
     url = (
-        URL(
-            account=account,
-            database=database,
-            role=role,
-            user="pgagnon@thinkingcapital.ca",
-        )
-        if role
-        else URL(account=account, database=database)
+        URL(account=account, database=database, role=role, user=user)
+        if user
+        else URL(account=account, database=database, role=role)
     )
 
     with patch(
