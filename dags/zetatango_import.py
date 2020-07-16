@@ -29,6 +29,7 @@ from utils import random_identifier
 from dbt_extras.dbt_action import DbtAction
 from dbt_extras.dbt_operator import DbtOperator
 
+
 @attr.s
 class DecryptionSpec:
     schema: str = attr.ib()
@@ -466,7 +467,8 @@ def create_dag() -> DAG:
             task_id="dbt_snapshot",
             pool="snowflake_pool",
             execution_timeout=timedelta(hours=1),
-            action=DbtAction.snapshot)
+            action=DbtAction.snapshot,
+        )
 
     return dag
 
