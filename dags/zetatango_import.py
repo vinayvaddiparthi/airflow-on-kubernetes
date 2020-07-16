@@ -458,12 +458,15 @@ def create_dag() -> DAG:
             },
         )
 
-        dag << PythonOperator(
+        dag << DbtOperator(
+            task_id="dbt_run",
+            pool="snowflake_pool",
+            execution_timeout=timedelta(hours=1),
+        ) >> DbtOperator(
             task_id="dbt_snapshot",
             pool="snowflake_pool",
             execution_timeout=timedelta(hours=1),
-            action=DbtAction.snapshot,
-        )
+            action=DbtAction.snapshot)
 
     return dag
 
