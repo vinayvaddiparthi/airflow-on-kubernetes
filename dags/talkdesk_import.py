@@ -123,7 +123,7 @@ def create_dag() -> DAG:
                 "snowflake_conn": "snowflake_talkdesk",
                 "talkdesk_conn": "http_talkdesk",
                 "schema": "TALKDESK",
-                "bucket_name": "tc-talkdesk"
+                "bucket_name": "tc-talkdesk",
             },
             provide_context=True,
             retry_delay=datetime.timedelta(hours=1),
