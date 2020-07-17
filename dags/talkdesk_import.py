@@ -1,8 +1,9 @@
 import datetime
 import json
+import logging
 import os
 from time import sleep
-from typing import Any
+from typing import Any, Optional, Dict
 
 import pendulum
 from airflow import DAG
@@ -10,9 +11,10 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
 from airflow.operators.python_operator import PythonOperator
 from authlib.integrations.requests_client import OAuth2Session
-from fs import open_fs
-from sqlalchemy import create_engine
+from fs_s3fs import S3FS
+from sqlalchemy import create_engine, func, Table, MetaData, Column
 from sqlalchemy.engine import Engine
+from sqlalchemy.sql import Select
 
 MAX_RUNS = 360
 
@@ -34,7 +36,17 @@ def import_talkdesk(
 
     taskdesk_connection = BaseHook.get_connection(talkdesk_conn)
 
+    metadata = MetaData()
     engine: Engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
+
+    t = Table(
+        "calls",
+        metadata,
+        Column("call", VARIANT),
+        Column("recordings", VARIANT),
+        schema=schema,
+    )
+    t.create(engine, checkfirst=True)
 
     session = OAuth2Session(
         client_id=taskdesk_connection.login,
@@ -63,7 +75,7 @@ def import_talkdesk(
         "done",
         "failed",
     ] and run < MAX_RUNS:
-        print(f"💤 Sleeping for 10 seconds because status is {status} ({run})")
+        logging.info(f"💤 Sleeping for 10 seconds because status is {status} ({run})")
         sleep(10)
         resp = session.get(
             data["_links"]["self"]["href"]
@@ -74,35 +86,44 @@ def import_talkdesk(
     if status == "failed":
         raise Exception(resp.text)
 
-    for entry in data.get("entries", []):
-        recordings = (
+    fs = S3FS(f"s3://{bucket_name}")
+
+    for entry in data.get("entries", []):  # for each entry in the calls report
+        call_id: str = entry["call_id"]
+
+        # get the recordings report associated with the entry
+        recordings: Optional[Dict] = (
             session.get(recording_url).json()
             if (recording_url := entry.get("recording_url"))
             else None
         )
 
-        with engine.begin() as tx:
-            tx.execute(
-                f"insert into {schema}.CALLS "
-                f"select parse_json('{json.dumps(entry)}') as CALL, "
-                f"parse_json('{json.dumps(recordings)}') as RECORDINGS"  # nosec
-            )
+        logging.debug(f"call id: {call_id} recording: {recordings}")
 
-        print(f"call id: {entry.get('call_id')} recording: {recordings}")
+        #  insert call and recordings metadata in Snowflake
+        with engine.begin() as tx:
+            selectable = Select(
+                [
+                    func.parse_json(json.dumps(entry)).label("call"),
+                    func.parse_json(json.dumps(recordings)).label("recordings"),
+                ]
+            )
+            tx.execute(t.insert().from_select(["call", "recordings"], selectable))
 
         if not recordings:
-            print(f"⚠️Could not find recording_url key in {entry.get('call_id')}")
+            logging.warning(f"⚠️Could not find recording_url key in {call_id}")
             continue
 
         if not (embedded := recordings.get("_embedded")):
-            print(f"⚠️Could not find _embedded key in {entry.get('call_id')}")
+            logging.warning(f"⚠️Could not find _embedded key in {call_id}")
             continue
 
+        # download all recordings and re-upload them to S3
         for recording in embedded.get("recordings", []):
             media_link = recording["_links"]["media"]["href"]
-            with session.get(media_link, stream=True) as in_, open_fs(
-                f"s3://{bucket_name}", create=True
-            ) as fs, fs.open(f"{recording['id']}.mp3", mode="w+b") as out_:
+            with session.get(media_link, stream=True) as in_, fs.open(
+                f"{recording['id']}.mp3", mode="w+b"
+            ) as out_:
                 for chunk in in_.iter_content(chunk_size=8192):
                     out_.write(chunk)
 
@@ -141,7 +162,7 @@ def create_dag() -> DAG:
 
 
 if __name__ == "__main__":
-    from snowflake.sqlalchemy import URL
+    from snowflake.sqlalchemy import URL, VARIANT
     from unittest.mock import patch, MagicMock
 
     mock = MagicMock()
@@ -176,7 +197,6 @@ if __name__ == "__main__":
             "talkdesk_conn",
             schema="TALKDESK",
             bucket_name="tc-talkdesk",
-            task_instance_key_str="manual_testing",
             execution_date=pendulum.datetime(2019, 9, 29),
             next_execution_date=pendulum.datetime(2019, 9, 30),
         )
