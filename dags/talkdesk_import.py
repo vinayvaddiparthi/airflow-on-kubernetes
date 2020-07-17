@@ -136,6 +136,7 @@ def create_dag() -> DAG:
         ),
         schedule_interval=None,
         catchup=True,
+        max_active_runs=4,
     ) as dag:
         dag << PythonOperator(
             task_id="import_talkdesk",
