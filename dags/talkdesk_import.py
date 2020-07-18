@@ -155,7 +155,7 @@ def create_dag() -> DAG:
                     "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                     "KubernetesAirflowProductionTalkdeskRole"
                 },
-                "resources": {"request_memory": "2Gi"},
+                "resources": {"request_memory": "512Mi"},
             },
         )
 
