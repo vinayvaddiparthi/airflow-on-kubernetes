@@ -134,7 +134,7 @@ def create_dag() -> DAG:
         start_date=pendulum.datetime(
             2015, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
-        schedule_interval=None,
+        schedule_interval="@daily",
         catchup=True,
         max_active_runs=4,
     ) as dag:
