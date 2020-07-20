@@ -18,7 +18,7 @@ with DAG(
         external_dag_id="zetatango_import",
         execution_delta=timedelta(hours=1),
         timeout=300,
-    ) << DbtOperator(
+    ) >> DbtOperator(
         task_id="dbt_run",
         pool="snowflake_pool",
         execution_timeout=timedelta(hours=1),
