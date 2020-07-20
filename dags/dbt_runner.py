@@ -1,5 +1,5 @@
 from airflow import DAG
-import datetime
+from datetime import timedelta
 import pendulum
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
@@ -21,11 +21,11 @@ with DAG(
     ) << DbtOperator(
         task_id="dbt_run",
         pool="snowflake_pool",
-        execution_timeout=datetime.timedelta(hours=1),
+        execution_timeout=timedelta(hours=1),
         action=DbtAction.run,
     ) >> DbtOperator(
         task_id="dbt_snapshot",
         pool="snowflake_pool",
-        execution_timeout=datetime.timedelta(hours=1),
+        execution_timeout=timedelta(hours=1),
         action=DbtAction.snapshot,
     )
