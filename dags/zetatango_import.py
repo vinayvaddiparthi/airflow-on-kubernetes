@@ -26,6 +26,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
 
 from utils import random_identifier
+from dbt_runner import dbt_run
+from dbt_runner import dbt_snapshot
 
 
 @attr.s
@@ -39,12 +41,12 @@ class DecryptionSpec:
 
 
 def export_to_snowflake(
-    snowflake_connection: str,
-    snowflake_schema: str,
-    source_schema: str = "public",
-    heroku_app: Optional[str] = None,
-    heroku_endpoint_url_env_var: str = "DATABASE_URL",
-    heroku_postgres_connection: Optional[str] = None,
+        snowflake_connection: str,
+        snowflake_schema: str,
+        source_schema: str = "public",
+        heroku_app: Optional[str] = None,
+        heroku_endpoint_url_env_var: str = "DATABASE_URL",
+        heroku_postgres_connection: Optional[str] = None,
 ) -> None:
     if not (heroku_postgres_connection or heroku_app):
         raise Exception(
@@ -60,8 +62,8 @@ def export_to_snowflake(
             heroku3.from_key(
                 HttpHook.get_connection("heroku_production_api_key").password
             )
-            .app(heroku_app)
-            .config()[heroku_endpoint_url_env_var],
+                .app(heroku_app)
+                .config()[heroku_endpoint_url_env_var],
             isolation_level="REPEATABLE_READ",
         )
     )
@@ -72,15 +74,15 @@ def export_to_snowflake(
         tables = (
             x[0]
             for x in tx.execute(
-                Select(
-                    columns=[column("table_name")],
-                    from_obj=text('"information_schema"."tables"'),
-                    whereclause=and_(
-                        literal_column("table_schema") == literal(source_schema),
-                        literal_column("table_type") == literal("BASE TABLE"),
-                    ),
-                )
-            ).fetchall()
+            Select(
+                columns=[column("table_name")],
+                from_obj=text('"information_schema"."tables"'),
+                whereclause=and_(
+                    literal_column("table_schema") == literal(source_schema),
+                    literal_column("table_type") == literal("BASE TABLE"),
+                ),
+            )
+        ).fetchall()
         )
 
     source_raw_conn: connection = source_engine.raw_connection()
@@ -102,11 +104,11 @@ def export_to_snowflake(
 
 
 def stage_table_in_snowflake(
-    source_raw_conn: connection,
-    snowflake_engine: Engine,
-    source_schema: str,
-    destination_schema: str,
-    table: str,
+        source_raw_conn: connection,
+        snowflake_engine: Engine,
+        source_schema: str,
+        destination_schema: str,
+        table: str,
 ) -> str:
     stage_guid = random_identifier()
     with snowflake_engine.begin() as tx:
@@ -116,7 +118,7 @@ def stage_table_in_snowflake(
         ).fetchall()
 
         with cast(
-            psycopg2.extensions.cursor, source_raw_conn.cursor()
+                psycopg2.extensions.cursor, source_raw_conn.cursor()
         ) as cursor, tempfile.TemporaryDirectory() as tempdir:
             csv_filepath = Path(tempdir, table).with_suffix(".csv")
             pq_filepath = Path(tempdir, table).with_suffix(".pq")
@@ -155,9 +157,9 @@ def stage_table_in_snowflake(
 
 
 def decrypt_pii_columns(
-    snowflake_connection: str,
-    decryption_specs: List[DecryptionSpec],
-    target_schema: str,
+        snowflake_connection: str,
+        decryption_specs: List[DecryptionSpec],
+        target_schema: str,
 ) -> None:
     from pyporky.symmetric import SymmetricPorky
     from json import loads as json_loads, dumps as json_dumps
@@ -209,12 +211,12 @@ def decrypt_pii_columns(
         dst_stage = random_identifier()
         stmt = Select(
             columns=[literal_column(f"{spec.table}.$1:id").label("id")]
-            + [
-                func.base64_decode_string(
-                    literal_column(f"{spec.table}.$1:encrypted_{col}")
-                ).label(col)
-                for col in spec.columns
-            ],
+                    + [
+                        func.base64_decode_string(
+                            literal_column(f"{spec.table}.$1:encrypted_{col}")
+                        ).label(col)
+                        for col in spec.columns
+                    ],
             from_obj=text(f"{spec.schema}.{spec.table}"),
             whereclause=spec.whereclause,
         )
@@ -249,225 +251,243 @@ def decrypt_pii_columns(
             logging.info(f"🔓 Successfully decrypted {spec}")
 
 
+import_core_prod = PythonOperator(
+    task_id="zt-production-elt-core__import",
+    python_callable=export_to_snowflake,
+    op_kwargs={
+        "heroku_app": "zt-production-elt-core",
+        "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
+        "snowflake_connection": "snowflake_zetatango_production",
+        "snowflake_schema": "CORE_PRODUCTION",
+    },
+)
+
+import_core_staging = PythonOperator(
+    task_id="zt-staging-elt-core__import",
+    python_callable=export_to_snowflake,
+    op_kwargs={
+        "heroku_app": "zt-staging-elt-core",
+        "snowflake_connection": "snowflake_zetatango_staging",
+        "snowflake_schema": "CORE_STAGING",
+    },
+)
+
+decrypt_core_prod = PythonOperator(
+    task_id="zt-production-elt-core__pii_decryption",
+    python_callable=decrypt_pii_columns,
+    op_kwargs={
+        "snowflake_connection": "snowflake_zetatango_production",
+        "decryption_specs": [
+            DecryptionSpec(
+                schema="CORE_PRODUCTION",
+                table="MERCHANT_ATTRIBUTES",
+                columns=["value"],
+                whereclause=literal_column("$1:key").in_(
+                    [
+                        "industry",
+                        "bank_connection_required",
+                        "selected_bank_account",
+                    ]
+                ),
+            ),
+            DecryptionSpec(
+                schema="CORE_PRODUCTION",
+                table="LENDING_ADJUDICATIONS",
+                columns=["offer_results"],
+                format="yaml",
+            ),
+            DecryptionSpec(
+                schema="CORE_PRODUCTION",
+                table="LENDING_LOAN_ATTRIBUTES",
+                columns=["value"],
+                whereclause=literal_column("$1:key").in_(["external_id"]),
+            ),
+        ],
+        "target_schema": "PII_PRODUCTION",
+    },
+    executor_config={
+        "KubernetesExecutor": {
+            "annotations": {
+                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                                          "KubernetesAirflowProductionZetatangoPiiRole"
+            }
+        },
+        "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
+    },
+)
+
+decrypt_core_staging = PythonOperator(
+    task_id="zt-staging-elt-core__pii_decryption",
+    python_callable=decrypt_pii_columns,
+    op_kwargs={
+        "snowflake_connection": "snowflake_zetatango_staging",
+        "decryption_specs": [
+            DecryptionSpec(
+                schema="CORE_STAGING",
+                table="MERCHANT_ATTRIBUTES",
+                columns=["value"],
+                whereclause=literal_column("$1:key").in_(
+                    [
+                        "industry",
+                        "bank_connection_required",
+                        "selected_bank_account",
+                    ]
+                ),
+            ),
+            DecryptionSpec(
+                schema="CORE_STAGING",
+                table="LENDING_ADJUDICATIONS",
+                columns=["offer_results"],
+                format="yaml",
+            ),
+            DecryptionSpec(
+                schema="CORE_STAGING",
+                table="LENDING_LOAN_ATTRIBUTES",
+                columns=["value"],
+                whereclause=literal_column("$1:key").in_(["external_id"]),
+            ),
+        ],
+        "target_schema": "PII_STAGING",
+    },
+    executor_config={
+        "KubernetesExecutor": {
+            "annotations": {
+                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                                          "KubernetesAirflowNonProdZetatangoPiiRole"
+            },
+            "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
+        }
+    },
+)
+
+import_idp_prod = PythonOperator(
+    task_id="zt-production-elt-idp__import",
+    python_callable=export_to_snowflake,
+    op_kwargs={
+        "heroku_app": "zt-production-elt-idp",
+        "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0DB594617CE5BEC42_URL",
+        "snowflake_connection": "snowflake_zetatango_production",
+        "snowflake_schema": "IDP_PRODUCTION",
+    },
+)
+
+import_idp_staging = PythonOperator(
+    task_id="zt-staging-elt-idp__import",
+    python_callable=export_to_snowflake,
+    op_kwargs={
+        "heroku_app": "zt-staging-elt-idp",
+        "snowflake_connection": "snowflake_zetatango_staging",
+        "snowflake_schema": "IDP_STAGING",
+    },
+)
+
+import_kyc_prod = PythonOperator(
+    task_id="zt-production-elt-kyc__import",
+    python_callable=export_to_snowflake,
+    op_kwargs={
+        "heroku_app": "zt-production-elt-kyc",
+        "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0467EC30D24A2723A_URL",
+        "snowflake_connection": "snowflake_zetatango_production",
+        "snowflake_schema": "KYC_PRODUCTION",
+    },
+)
+
+import_kyc_staging = PythonOperator(
+    task_id="zt-staging-elt-kyc__import",
+    python_callable=export_to_snowflake,
+    op_kwargs={
+        "heroku_app": "zt-staging-elt-kyc",
+        "snowflake_connection": "snowflake_zetatango_staging",
+        "snowflake_schema": "KYC_STAGING",
+    },
+)
+
+decrypt_kyc_prod = PythonOperator(
+    task_id="zt-production-elt-kyc__pii_decryption",
+    python_callable=decrypt_pii_columns,
+    op_kwargs={
+        "snowflake_connection": "snowflake_zetatango_production",
+        "decryption_specs": [
+            DecryptionSpec(
+                schema="KYC_PRODUCTION",
+                table="INDIVIDUALS_APPLICANTS",
+                columns=[
+                    "date_of_birth",
+                    "first_name",
+                    "last_name",
+                    "middle_name",
+                ],
+            ),
+            DecryptionSpec(
+                schema="KYC_PRODUCTION",
+                table="INDIVIDUAL_ATTRIBUTES",
+                columns=["value"],
+                format="marshal",
+                whereclause=literal_column("$1:key").in_(
+                    ["default_beacon_score"]
+                ),
+            ),
+        ],
+        "target_schema": "PII_PRODUCTION",
+    },
+    executor_config={
+        "KubernetesExecutor": {
+            "annotations": {
+                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                                          "KubernetesAirflowProductionZetatangoPiiRole"
+            }
+        },
+        "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
+    },
+)
+
+decrypt_kyc_staging = PythonOperator(
+    task_id="zt-staging-elt-kyc__pii_decryption",
+    python_callable=decrypt_pii_columns,
+    op_kwargs={
+        "snowflake_connection": "snowflake_zetatango_staging",
+        "decryption_specs": [
+            DecryptionSpec(
+                schema="KYC_STAGING",
+                table="INDIVIDUAL_ATTRIBUTES",
+                columns=["value"],
+                format="marshal",
+                whereclause=literal_column("$1:key").in_(
+                    ["default_beacon_score"]
+                ),
+            )
+        ],
+        "target_schema": "PII_STAGING",
+    },
+    executor_config={
+        "KubernetesExecutor": {
+            "annotations": {
+                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                                          "KubernetesAirflowNonProdZetatangoPiiRole"
+            },
+            "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
+        }
+    },
+)
+
+
 def create_dag() -> DAG:
-    with DAG(
+    dag = DAG(
         dag_id="zetatango_import",
         start_date=pendulum.datetime(
             2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="30 0,9-21/4 * * *",
         default_args={"retries": 3, "retry_delay": timedelta(minutes=5)},
-    ) as dag:
-        dag << PythonOperator(
-            task_id="zt-production-elt-core__import",
-            python_callable=export_to_snowflake,
-            op_kwargs={
-                "heroku_app": "zt-production-elt-core",
-                "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
-                "snowflake_connection": "snowflake_zetatango_production",
-                "snowflake_schema": "CORE_PRODUCTION",
-            },
-        ) >> PythonOperator(
-            task_id="zt-production-elt-core__pii_decryption",
-            python_callable=decrypt_pii_columns,
-            op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_production",
-                "decryption_specs": [
-                    DecryptionSpec(
-                        schema="CORE_PRODUCTION",
-                        table="MERCHANT_ATTRIBUTES",
-                        columns=["value"],
-                        whereclause=literal_column("$1:key").in_(
-                            [
-                                "industry",
-                                "bank_connection_required",
-                                "selected_bank_account",
-                            ]
-                        ),
-                    ),
-                    DecryptionSpec(
-                        schema="CORE_PRODUCTION",
-                        table="LENDING_ADJUDICATIONS",
-                        columns=["offer_results"],
-                        format="yaml",
-                    ),
-                    DecryptionSpec(
-                        schema="CORE_PRODUCTION",
-                        table="LENDING_LOAN_ATTRIBUTES",
-                        columns=["value"],
-                        whereclause=literal_column("$1:key").in_(["external_id"]),
-                    ),
-                ],
-                "target_schema": "PII_PRODUCTION",
-            },
-            executor_config={
-                "KubernetesExecutor": {
-                    "annotations": {
-                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                        "KubernetesAirflowProductionZetatangoPiiRole"
-                    }
-                },
-                "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
-            },
-        )
+    )
 
-        dag << PythonOperator(
-            task_id="zt-production-elt-idp__import",
-            python_callable=export_to_snowflake,
-            op_kwargs={
-                "heroku_app": "zt-production-elt-idp",
-                "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0DB594617CE5BEC42_URL",
-                "snowflake_connection": "snowflake_zetatango_production",
-                "snowflake_schema": "IDP_PRODUCTION",
-            },
-        )
+    dag << import_core_prod >> decrypt_core_prod >> dbt_run >> dbt_snapshot
+    dag << import_idp_prod >> dbt_run >> dbt_snapshot
+    dag << import_kyc_prod >> decrypt_kyc_prod >> dbt_run >> dbt_snapshot
 
-        dag << PythonOperator(
-            task_id="zt-production-elt-kyc__import",
-            python_callable=export_to_snowflake,
-            op_kwargs={
-                "heroku_app": "zt-production-elt-kyc",
-                "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0467EC30D24A2723A_URL",
-                "snowflake_connection": "snowflake_zetatango_production",
-                "snowflake_schema": "KYC_PRODUCTION",
-            },
-        ) >> PythonOperator(
-            task_id="zt-production-elt-kyc__pii_decryption",
-            python_callable=decrypt_pii_columns,
-            op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_production",
-                "decryption_specs": [
-                    DecryptionSpec(
-                        schema="KYC_PRODUCTION",
-                        table="INDIVIDUALS_APPLICANTS",
-                        columns=[
-                            "date_of_birth",
-                            "first_name",
-                            "last_name",
-                            "middle_name",
-                        ],
-                    ),
-                    DecryptionSpec(
-                        schema="KYC_PRODUCTION",
-                        table="INDIVIDUAL_ATTRIBUTES",
-                        columns=["value"],
-                        format="marshal",
-                        whereclause=literal_column("$1:key").in_(
-                            ["default_beacon_score"]
-                        ),
-                    ),
-                ],
-                "target_schema": "PII_PRODUCTION",
-            },
-            executor_config={
-                "KubernetesExecutor": {
-                    "annotations": {
-                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                        "KubernetesAirflowProductionZetatangoPiiRole"
-                    }
-                },
-                "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
-            },
-        )
-
-        dag << PythonOperator(
-            task_id="zt-staging-elt-core__import",
-            python_callable=export_to_snowflake,
-            op_kwargs={
-                "heroku_app": "zt-staging-elt-core",
-                "snowflake_connection": "snowflake_zetatango_staging",
-                "snowflake_schema": "CORE_STAGING",
-            },
-        ) >> PythonOperator(
-            task_id="zt-staging-elt-core__pii_decryption",
-            python_callable=decrypt_pii_columns,
-            op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_staging",
-                "decryption_specs": [
-                    DecryptionSpec(
-                        schema="CORE_STAGING",
-                        table="MERCHANT_ATTRIBUTES",
-                        columns=["value"],
-                        whereclause=literal_column("$1:key").in_(
-                            [
-                                "industry",
-                                "bank_connection_required",
-                                "selected_bank_account",
-                            ]
-                        ),
-                    ),
-                    DecryptionSpec(
-                        schema="CORE_STAGING",
-                        table="LENDING_ADJUDICATIONS",
-                        columns=["offer_results"],
-                        format="yaml",
-                    ),
-                    DecryptionSpec(
-                        schema="CORE_STAGING",
-                        table="LENDING_LOAN_ATTRIBUTES",
-                        columns=["value"],
-                        whereclause=literal_column("$1:key").in_(["external_id"]),
-                    ),
-                ],
-                "target_schema": "PII_STAGING",
-            },
-            executor_config={
-                "KubernetesExecutor": {
-                    "annotations": {
-                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                        "KubernetesAirflowNonProdZetatangoPiiRole"
-                    },
-                    "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
-                }
-            },
-        )
-
-        dag << PythonOperator(
-            task_id="zt-staging-elt-idp__import",
-            python_callable=export_to_snowflake,
-            op_kwargs={
-                "heroku_app": "zt-staging-elt-idp",
-                "snowflake_connection": "snowflake_zetatango_staging",
-                "snowflake_schema": "IDP_STAGING",
-            },
-        )
-
-        dag << PythonOperator(
-            task_id="zt-staging-elt-kyc__import",
-            python_callable=export_to_snowflake,
-            op_kwargs={
-                "heroku_app": "zt-staging-elt-kyc",
-                "snowflake_connection": "snowflake_zetatango_staging",
-                "snowflake_schema": "KYC_STAGING",
-            },
-        ) >> PythonOperator(
-            task_id="zt-staging-elt-kyc__pii_decryption",
-            python_callable=decrypt_pii_columns,
-            op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_staging",
-                "decryption_specs": [
-                    DecryptionSpec(
-                        schema="KYC_STAGING",
-                        table="INDIVIDUAL_ATTRIBUTES",
-                        columns=["value"],
-                        format="marshal",
-                        whereclause=literal_column("$1:key").in_(
-                            ["default_beacon_score"]
-                        ),
-                    )
-                ],
-                "target_schema": "PII_STAGING",
-            },
-            executor_config={
-                "KubernetesExecutor": {
-                    "annotations": {
-                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                        "KubernetesAirflowNonProdZetatangoPiiRole"
-                    },
-                    "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
-                }
-            },
-        )
+    dag << import_core_staging >> decrypt_core_staging >> dbt_run >> dbt_snapshot
+    dag << import_idp_staging >> dbt_run >> dbt_snapshot
+    dag << import_kyc_staging >> decrypt_kyc_staging >> dbt_run >> dbt_snapshot
 
     return dag
 
