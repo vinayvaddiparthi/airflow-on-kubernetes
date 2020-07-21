@@ -1,6 +1,9 @@
 import pendulum
 from utils.table_swap_dag import create_table_swap_dag
 
+DAG_PARSE_WORKAROUND = "airflow DAG"
+
+
 globals()["airflow_cg_production_to_snowflake"] = create_table_swap_dag(
     "cg_staging_to_snowflake",
     pendulum.datetime(2020, 1, 22, tzinfo=pendulum.timezone("America/Toronto")),
