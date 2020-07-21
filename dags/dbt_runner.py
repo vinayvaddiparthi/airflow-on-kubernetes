@@ -3,7 +3,6 @@ from datetime import timedelta
 import pendulum
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
-from airflow.operators.sensors import ExternalTaskSensor
 
 
 dbt_run = DbtOperator(
