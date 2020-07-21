@@ -95,6 +95,7 @@ def get_resps_from_fields(
         for suffix, parent in [
             ("__History", sobject.replace("__History", "__c")),
             ("__Share", sobject.replace("__Share", "__c")),
+            ("FieldHistory", sobject[: -len("FieldHistory")]),
             ("History", sobject[: -len("History")]),
             ("Share", sobject[: -len("Share")]),
         ]:
@@ -232,17 +233,17 @@ def process_sobject(
     try:
         sobject = describe_sobject(salesforce, sobject_name)
     except SalesforceMalformedRequest as exc:
-        print(f"⚠️ Skipping {sobject_name} because describe_sobject raised {exc}")
+        print(f"⚠️Skipping {sobject_name} because describe_sobject raised {exc}")
         return
 
     if sobject.count == 0:
-        print(f"⚠️ Skipping {sobject_name} because it is empty")
+        print(f"⚠️Skipping {sobject_name} because it is empty")
         return
 
-    print(f"⚙️ Processing sobject {sobject.name}")
+    print(f"⚙️Processing sobject {sobject.name}")
 
     for suffix, max_date_col in [
-        ("__History", "CreatedDate"),
+        ("History", "CreatedDate"),
         ("Share", "LastModifiedDate"),
     ]:
         if sobject.name.endswith(suffix):
@@ -287,13 +288,13 @@ def process_sobject(
 
         except Exception as exc:
             print(
-                f"📝 {stmt} raised {exc}; setting max_date to None "
+                f"📝️{stmt} raised {exc}; setting max_date to None "
                 f"and num_recs_to_load to sobject.count"
             )
             num_recs_to_load = sobject.count
 
         if num_recs_to_load == 0:
-            print(f"📝 Skipping {destination_table} because there are no new records")
+            print(f"📝️Skipping {destination_table} because there are no new records")
             continue
 
         try:
@@ -308,9 +309,9 @@ def process_sobject(
             )
             put_resps_on_snowflake(schema, destination_table, engine_, resps)
         except Exception as exc:
-            print(f"⚠️ put_resps_on_snowflake raised \n{exc}")
+            print(f"⚠️put_resps_on_snowflake on {destination_table} raised \n{exc}")
 
-        print(f"✨ Done processing {sobject.name}")
+        print(f"✨️Done processing {sobject.name}")
 
 
 def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str) -> None:
