@@ -41,10 +41,6 @@ globals()["airflow_cg_production_to_snowflake"] = create_table_swap_dag(
             "dst": {"schema": "staging", "table": "customer_historicalcustomer"},
         },
         {
-            "src": {"schema": "cg-lms", "table": "financing_discountrates"},
-            "dst": {"schema": "staging", "table": "financing_discountrates"},
-        },
-        {
             "src": {"schema": "cg-lms", "table": "financing_facility"},
             "dst": {"schema": "staging", "table": "financing_facility"},
         },
@@ -63,10 +59,6 @@ globals()["airflow_cg_production_to_snowflake"] = create_table_swap_dag(
         {
             "src": {"schema": "cg-lms", "table": "financing_financingstatistics"},
             "dst": {"schema": "staging", "table": "financing_financingstatistics"},
-        },
-        {
-            "src": {"schema": "cg-lms", "table": "financing_historicaldiscountrates"},
-            "dst": {"schema": "staging", "table": "financing_historicaldiscountrates"},
         },
         {
             "src": {"schema": "cg-lms", "table": "financing_historicalfacility"},
