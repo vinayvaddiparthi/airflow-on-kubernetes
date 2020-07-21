@@ -1,9 +1,9 @@
 from airflow import DAG
-import datetime
+from datetime import timedelta
 import pendulum
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
-
+from airflow.operators.sensors import ExternalTaskSensor
 
 with DAG(
     "dbt_runner",
@@ -13,13 +13,19 @@ with DAG(
         2020, 4, 21, tzinfo=pendulum.timezone("America/Toronto")
     ),
 ) as dag:
-    dag << DbtOperator(
+    dag << ExternalTaskSensor(
+        task_id="dbt_check",
+        external_dag_id="zetatango_import",
+        execution_delta=timedelta(hours=1),
+        timeout=300,
+    ) >> DbtOperator(
         task_id="dbt_run",
         pool="snowflake_pool",
-        execution_timeout=datetime.timedelta(hours=1),
+        execution_timeout=timedelta(hours=1),
+        action=DbtAction.run,
     ) >> DbtOperator(
         task_id="dbt_snapshot",
         pool="snowflake_pool",
-        execution_timeout=datetime.timedelta(hours=1),
+        execution_timeout=timedelta(hours=1),
         action=DbtAction.snapshot,
     )
