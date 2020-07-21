@@ -41,12 +41,12 @@ class DecryptionSpec:
 
 
 def export_to_snowflake(
-        snowflake_connection: str,
-        snowflake_schema: str,
-        source_schema: str = "public",
-        heroku_app: Optional[str] = None,
-        heroku_endpoint_url_env_var: str = "DATABASE_URL",
-        heroku_postgres_connection: Optional[str] = None,
+    snowflake_connection: str,
+    snowflake_schema: str,
+    source_schema: str = "public",
+    heroku_app: Optional[str] = None,
+    heroku_endpoint_url_env_var: str = "DATABASE_URL",
+    heroku_postgres_connection: Optional[str] = None,
 ) -> None:
     if not (heroku_postgres_connection or heroku_app):
         raise Exception(
@@ -62,8 +62,8 @@ def export_to_snowflake(
             heroku3.from_key(
                 HttpHook.get_connection("heroku_production_api_key").password
             )
-                .app(heroku_app)
-                .config()[heroku_endpoint_url_env_var],
+            .app(heroku_app)
+            .config()[heroku_endpoint_url_env_var],
             isolation_level="REPEATABLE_READ",
         )
     )
@@ -74,15 +74,15 @@ def export_to_snowflake(
         tables = (
             x[0]
             for x in tx.execute(
-            Select(
-                columns=[column("table_name")],
-                from_obj=text('"information_schema"."tables"'),
-                whereclause=and_(
-                    literal_column("table_schema") == literal(source_schema),
-                    literal_column("table_type") == literal("BASE TABLE"),
-                ),
-            )
-        ).fetchall()
+                Select(
+                    columns=[column("table_name")],
+                    from_obj=text('"information_schema"."tables"'),
+                    whereclause=and_(
+                        literal_column("table_schema") == literal(source_schema),
+                        literal_column("table_type") == literal("BASE TABLE"),
+                    ),
+                )
+            ).fetchall()
         )
 
     source_raw_conn: connection = source_engine.raw_connection()
@@ -104,11 +104,11 @@ def export_to_snowflake(
 
 
 def stage_table_in_snowflake(
-        source_raw_conn: connection,
-        snowflake_engine: Engine,
-        source_schema: str,
-        destination_schema: str,
-        table: str,
+    source_raw_conn: connection,
+    snowflake_engine: Engine,
+    source_schema: str,
+    destination_schema: str,
+    table: str,
 ) -> str:
     stage_guid = random_identifier()
     with snowflake_engine.begin() as tx:
@@ -118,7 +118,7 @@ def stage_table_in_snowflake(
         ).fetchall()
 
         with cast(
-                psycopg2.extensions.cursor, source_raw_conn.cursor()
+            psycopg2.extensions.cursor, source_raw_conn.cursor()
         ) as cursor, tempfile.TemporaryDirectory() as tempdir:
             csv_filepath = Path(tempdir, table).with_suffix(".csv")
             pq_filepath = Path(tempdir, table).with_suffix(".pq")
@@ -157,9 +157,9 @@ def stage_table_in_snowflake(
 
 
 def decrypt_pii_columns(
-        snowflake_connection: str,
-        decryption_specs: List[DecryptionSpec],
-        target_schema: str,
+    snowflake_connection: str,
+    decryption_specs: List[DecryptionSpec],
+    target_schema: str,
 ) -> None:
     from pyporky.symmetric import SymmetricPorky
     from json import loads as json_loads, dumps as json_dumps
@@ -211,12 +211,12 @@ def decrypt_pii_columns(
         dst_stage = random_identifier()
         stmt = Select(
             columns=[literal_column(f"{spec.table}.$1:id").label("id")]
-                    + [
-                        func.base64_decode_string(
-                            literal_column(f"{spec.table}.$1:encrypted_{col}")
-                        ).label(col)
-                        for col in spec.columns
-                    ],
+            + [
+                func.base64_decode_string(
+                    literal_column(f"{spec.table}.$1:encrypted_{col}")
+                ).label(col)
+                for col in spec.columns
+            ],
             from_obj=text(f"{spec.schema}.{spec.table}"),
             whereclause=spec.whereclause,
         )
@@ -283,11 +283,7 @@ decrypt_core_prod = PythonOperator(
                 table="MERCHANT_ATTRIBUTES",
                 columns=["value"],
                 whereclause=literal_column("$1:key").in_(
-                    [
-                        "industry",
-                        "bank_connection_required",
-                        "selected_bank_account",
-                    ]
+                    ["industry", "bank_connection_required", "selected_bank_account",]
                 ),
             ),
             DecryptionSpec(
@@ -309,7 +305,7 @@ decrypt_core_prod = PythonOperator(
         "KubernetesExecutor": {
             "annotations": {
                 "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                                          "KubernetesAirflowProductionZetatangoPiiRole"
+                "KubernetesAirflowProductionZetatangoPiiRole"
             }
         },
         "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
@@ -327,11 +323,7 @@ decrypt_core_staging = PythonOperator(
                 table="MERCHANT_ATTRIBUTES",
                 columns=["value"],
                 whereclause=literal_column("$1:key").in_(
-                    [
-                        "industry",
-                        "bank_connection_required",
-                        "selected_bank_account",
-                    ]
+                    ["industry", "bank_connection_required", "selected_bank_account",]
                 ),
             ),
             DecryptionSpec(
@@ -353,7 +345,7 @@ decrypt_core_staging = PythonOperator(
         "KubernetesExecutor": {
             "annotations": {
                 "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                                          "KubernetesAirflowNonProdZetatangoPiiRole"
+                "KubernetesAirflowNonProdZetatangoPiiRole"
             },
             "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
         }
@@ -411,21 +403,14 @@ decrypt_kyc_prod = PythonOperator(
             DecryptionSpec(
                 schema="KYC_PRODUCTION",
                 table="INDIVIDUALS_APPLICANTS",
-                columns=[
-                    "date_of_birth",
-                    "first_name",
-                    "last_name",
-                    "middle_name",
-                ],
+                columns=["date_of_birth", "first_name", "last_name", "middle_name",],
             ),
             DecryptionSpec(
                 schema="KYC_PRODUCTION",
                 table="INDIVIDUAL_ATTRIBUTES",
                 columns=["value"],
                 format="marshal",
-                whereclause=literal_column("$1:key").in_(
-                    ["default_beacon_score"]
-                ),
+                whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
             ),
         ],
         "target_schema": "PII_PRODUCTION",
@@ -434,7 +419,7 @@ decrypt_kyc_prod = PythonOperator(
         "KubernetesExecutor": {
             "annotations": {
                 "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                                          "KubernetesAirflowProductionZetatangoPiiRole"
+                "KubernetesAirflowProductionZetatangoPiiRole"
             }
         },
         "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
@@ -452,9 +437,7 @@ decrypt_kyc_staging = PythonOperator(
                 table="INDIVIDUAL_ATTRIBUTES",
                 columns=["value"],
                 format="marshal",
-                whereclause=literal_column("$1:key").in_(
-                    ["default_beacon_score"]
-                ),
+                whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
             )
         ],
         "target_schema": "PII_STAGING",
@@ -463,7 +446,7 @@ decrypt_kyc_staging = PythonOperator(
         "KubernetesExecutor": {
             "annotations": {
                 "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                                          "KubernetesAirflowNonProdZetatangoPiiRole"
+                "KubernetesAirflowNonProdZetatangoPiiRole"
             },
             "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
         }
