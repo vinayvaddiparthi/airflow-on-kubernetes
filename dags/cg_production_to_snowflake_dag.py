@@ -3,6 +3,7 @@ from utils.table_swap_dag import create_table_swap_dag
 
 DAG_PARSE_WORKAROUND = "airflow DAG"
 
+
 globals()["cg_production_to_snowflake"] = create_table_swap_dag(
     "cg_production_to_snowflake",
     pendulum.datetime(2020, 2, 4, tzinfo=pendulum.timezone("America/Toronto")),
@@ -49,10 +50,6 @@ globals()["cg_production_to_snowflake"] = create_table_swap_dag(
             "dst": {"schema": "production", "table": "customer_historicalcustomer"},
         },
         {
-            "src": {"schema": "cg-lms", "table": "financing_discountrates"},
-            "dst": {"schema": "production", "table": "financing_discountrates"},
-        },
-        {
             "src": {"schema": "cg-lms", "table": "financing_facility"},
             "dst": {"schema": "production", "table": "financing_facility"},
         },
@@ -71,13 +68,6 @@ globals()["cg_production_to_snowflake"] = create_table_swap_dag(
         {
             "src": {"schema": "cg-lms", "table": "financing_financingstatistics"},
             "dst": {"schema": "production", "table": "financing_financingstatistics"},
-        },
-        {
-            "src": {"schema": "cg-lms", "table": "financing_historicaldiscountrates"},
-            "dst": {
-                "schema": "production",
-                "table": "financing_historicaldiscountrates",
-            },
         },
         {
             "src": {"schema": "cg-lms", "table": "financing_historicalfacility"},
