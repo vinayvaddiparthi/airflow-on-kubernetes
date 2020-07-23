@@ -1,11 +1,15 @@
 import os
 from datetime import datetime
 
+import pendulum
 import pytest
 from zeep import Client
 import pandas as pd
 
-from platform_journal_entry_dag import build_journal_entry, process_grouped_transactions
+from platform_journal_entry_dag import (
+    build_journal_entry,
+    process_grouped_transactions,
+)
 
 client = Client(os.environ["ns_wsdl_sb"])
 passport_type = client.get_type("ns0:Passport")

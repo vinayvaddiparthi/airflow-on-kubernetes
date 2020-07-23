@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pendulum
@@ -7,6 +7,7 @@ from airflow.operators.python_operator import PythonOperator
 import pandas as pd
 from airflow import DAG
 from airflow.hooks.base_hook import BaseHook
+from numpy import datetime64
 from sqlalchemy import text, cast, column, Date
 from sqlalchemy.sql import Select
 from zeep import Client
@@ -25,7 +26,9 @@ def build_journal_entry(
     )
     # get transaction_date
     datetime_type = client.get_type("xsd:dateTime")
-    transaction_date = datetime_type(grouped_transactions["posted_at"].max())
+    transaction_date = datetime_type(
+        pendulum.instance(grouped_transactions["posted_at"].max(), tz="America/Toronto")
+    )
 
     # build journal_entry_line_list
     journalentryline_type = client.get_type("ns31:JournalEntryLine")
@@ -145,6 +148,18 @@ def create_journal_entry_for_transaction(ds: datetime, **kwargs: Any) -> None:
                 "ns_subsidiary_id",
             ),
         )
+        df.astype(
+            {
+                "correlation_guid": object,
+                "posted_at": datetime64,
+                "credit_amount": object,
+                "debit_amount": object,
+                "account_number": object,
+                "facility": object,
+                "ns_account_internal_id": object,
+                "ns_subsidiary_id": object,
+            }
+        )
         groups = df.groupby("correlation_guid")
         succeeded = []
         failed = []
@@ -206,6 +221,7 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 4, 21, tzinfo=pendulum.timezone("America/Toronto")
     ),
+    default_args={"retries": 5, "retry_delay": timedelta(minutes=30)},
 ) as dag:
     dag << PythonOperator(
         task_id="get_transactions_by_created_date",
