@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pendulum
@@ -10,6 +10,25 @@ from airflow.hooks.base_hook import BaseHook
 from sqlalchemy import text, cast, column, Date
 from sqlalchemy.sql import Select
 from zeep import Client
+
+
+def add_time_zone(date_value: Any) -> str:
+    """
+    The posted_at datetime value comes without timezone,
+    NetSuite will do timezone conversion from GMT -5 to GMT,
+    and zero out the hours, minutes, seconds
+    ex. 2020-07-20T21:00:00 in ERP will be 2020-07-21.
+    So we tag the timezone together with the timestamp
+    :param date_value: the posted_at value from platform transactions
+    :return: a string value of datetime with timezone
+    """
+    time_zone = "America/Toronto"
+    if isinstance(date_value, str):
+        return pendulum.from_format(
+            date_value.replace("T", " "), "%Y-%m-%d %H:%M:%S", tz=time_zone
+        )
+    else:
+        return pendulum.instance(date_value, tz=time_zone)
 
 
 def build_journal_entry(
@@ -25,7 +44,9 @@ def build_journal_entry(
     )
     # get transaction_date
     datetime_type = client.get_type("xsd:dateTime")
-    transaction_date = datetime_type(grouped_transactions["posted_at"].max())
+    transaction_date = datetime_type(
+        add_time_zone(grouped_transactions["posted_at"].max())
+    )
 
     # build journal_entry_line_list
     journalentryline_type = client.get_type("ns31:JournalEntryLine")
@@ -206,6 +227,7 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 4, 21, tzinfo=pendulum.timezone("America/Toronto")
     ),
+    default_args={"retries": 5, "retry_delay": timedelta(minutes=30)},
 ) as dag:
     dag << PythonOperator(
         task_id="get_transactions_by_created_date",

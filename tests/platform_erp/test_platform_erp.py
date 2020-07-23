@@ -1,11 +1,16 @@
 import os
 from datetime import datetime
 
+import pendulum
 import pytest
 from zeep import Client
 import pandas as pd
 
-from platform_journal_entry_dag import build_journal_entry, process_grouped_transactions
+from platform_journal_entry_dag import (
+    build_journal_entry,
+    process_grouped_transactions,
+    add_time_zone,
+)
 
 client = Client(os.environ["ns_wsdl_sb"])
 passport_type = client.get_type("ns0:Passport")
@@ -52,6 +57,22 @@ transaction_dup = {
 }
 
 created_at = "2020-01-01"
+
+
+def test_add_time_zone():
+    time_zone = "America/Toronto"
+    date_value1 = "2020-07-20T21:00:00"
+    date_value2 = "2020-07-20 21:00:00"
+    date_value3 = datetime.strptime("2020-07-20 21:00:00", "%Y-%m-%d %H:%M:%S")
+    assert add_time_zone(date_value1) == pendulum.from_format(
+        "2020-07-20 21:00:00", "%Y-%m-%d %H:%M:%S", tz=time_zone
+    )
+    assert add_time_zone(date_value2) == pendulum.from_format(
+        "2020-07-20 21:00:00", "%Y-%m-%d %H:%M:%S", tz=time_zone
+    )
+    assert add_time_zone(date_value3) == pendulum.from_format(
+        "2020-07-20 21:00:00", "%Y-%m-%d %H:%M:%S", tz=time_zone
+    )
 
 
 def test_process_grouped_transactions_dup():
