@@ -463,13 +463,15 @@ def create_dag() -> DAG:
         schedule_interval="30 0,9-21/4 * * *",
         default_args={"retries": 3, "retry_delay": timedelta(minutes=5)},
     ) as dag:
-        dag << import_core_prod >> decrypt_core_prod >> dbt_run >> dbt_snapshot
-        dag << import_idp_prod >> dbt_run >> dbt_snapshot
-        dag << import_kyc_prod >> decrypt_kyc_prod >> dbt_run >> dbt_snapshot
+        dag << import_core_prod >> decrypt_core_prod
+        dag << import_idp_prod
+        dag << import_kyc_prod >> decrypt_kyc_prod
+        [decrypt_core_prod, decrypt_kyc_prod] >> dbt_run >> dbt_snapshot
 
-        dag << import_core_staging >> decrypt_core_staging >> dbt_run >> dbt_snapshot
-        dag << import_idp_staging >> dbt_run >> dbt_snapshot
-        dag << import_kyc_staging >> decrypt_kyc_staging >> dbt_run >> dbt_snapshot
+        dag << import_core_staging >> decrypt_core_staging
+        dag << import_idp_staging
+        dag << import_kyc_staging >> decrypt_kyc_staging
+        [decrypt_core_staging, decrypt_kyc_staging] >> dbt_run >> dbt_snapshot
 
     return dag
 
