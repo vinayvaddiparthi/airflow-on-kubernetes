@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pendulum
@@ -10,6 +10,24 @@ from airflow.hooks.base_hook import BaseHook
 from sqlalchemy import text, cast, column, Date
 from sqlalchemy.sql import Select
 from zeep import Client
+
+
+def round_date_value(date_value: Any) -> str:
+    """
+    The posted_at datetime value comes without timezone,
+    this will be recognized as date value similar to a UTC conversion,
+    ex. 2020-07-20T21:00:00 in ERP will be 2020-07-21.
+    ERP doesn't need time granularity, but API need time in format.
+    So we round the datetime to date and add 12:00:00 to all of them
+    :param date_value: the posted_at value from platform transactions
+    :return: a string value of datetime in format of %Y-%m-%dT12:00:00
+    """
+    if isinstance(date_value, str):
+        if "T" in date_value:
+            return date_value.split("T")[0] + "T12:00:00"
+        return date_value[0:10] + "T12:00:00"
+    else:
+        return date_value.strftime("%Y-%m-%dT12:00:00")
 
 
 def build_journal_entry(
@@ -25,7 +43,9 @@ def build_journal_entry(
     )
     # get transaction_date
     datetime_type = client.get_type("xsd:dateTime")
-    transaction_date = datetime_type(grouped_transactions["posted_at"].max())
+    transaction_date = datetime_type(
+        round_date_value(grouped_transactions["posted_at"].max())
+    )
 
     # build journal_entry_line_list
     journalentryline_type = client.get_type("ns31:JournalEntryLine")
@@ -206,6 +226,7 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 4, 21, tzinfo=pendulum.timezone("America/Toronto")
     ),
+    default_args={"retries": 5, "retry_delay": timedelta(minutes=30)},
 ) as dag:
     dag << PythonOperator(
         task_id="get_transactions_by_created_date",

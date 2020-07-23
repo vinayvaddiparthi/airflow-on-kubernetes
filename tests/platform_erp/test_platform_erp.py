@@ -5,7 +5,11 @@ import pytest
 from zeep import Client
 import pandas as pd
 
-from platform_journal_entry_dag import build_journal_entry, process_grouped_transactions
+from platform_journal_entry_dag import (
+    build_journal_entry,
+    process_grouped_transactions,
+    round_date_value,
+)
 
 client = Client(os.environ["ns_wsdl_sb"])
 passport_type = client.get_type("ns0:Passport")
@@ -52,6 +56,15 @@ transaction_dup = {
 }
 
 created_at = "2020-01-01"
+
+
+def test_round_date_value():
+    date_value1 = "2020-07-20T21:00:00"
+    date_value2 = "2020-07-20"
+    date_value3 = datetime.strptime("2020-07-20 21:00:00", "%Y-%m-%d %H:%M:%S")
+    assert round_date_value(date_value1) == "2020-07-20T12:00:00"
+    assert round_date_value(date_value2) == "2020-07-20T12:00:00"
+    assert round_date_value(date_value3) == "2020-07-20T12:00:00"
 
 
 def test_process_grouped_transactions_dup():
