@@ -1,9 +1,23 @@
 from airflow import DAG
-import datetime
+from datetime import timedelta
 import pendulum
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
 
+
+dbt_run = DbtOperator(
+    task_id="dbt_run",
+    pool="snowflake_pool",
+    execution_timeout=timedelta(hours=1),
+    action=DbtAction.run,
+)
+
+dbt_snapshot = DbtOperator(
+    task_id="dbt_snapshot",
+    pool="snowflake_pool",
+    execution_timeout=timedelta(hours=1),
+    action=DbtAction.snapshot,
+)
 
 with DAG(
     "dbt_runner",
@@ -13,13 +27,4 @@ with DAG(
         2020, 4, 21, tzinfo=pendulum.timezone("America/Toronto")
     ),
 ) as dag:
-    dag << DbtOperator(
-        task_id="dbt_run",
-        pool="snowflake_pool",
-        execution_timeout=datetime.timedelta(hours=1),
-    ) >> DbtOperator(
-        task_id="dbt_snapshot",
-        pool="snowflake_pool",
-        execution_timeout=datetime.timedelta(hours=1),
-        action=DbtAction.snapshot,
-    )
+    dag << dbt_run >> dbt_snapshot
