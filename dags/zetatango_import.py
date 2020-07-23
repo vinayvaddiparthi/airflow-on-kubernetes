@@ -455,22 +455,21 @@ decrypt_kyc_staging = PythonOperator(
 
 
 def create_dag() -> DAG:
-    dag = DAG(
+    with DAG(
         dag_id="zetatango_import",
         start_date=pendulum.datetime(
             2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="30 0,9-21/4 * * *",
         default_args={"retries": 3, "retry_delay": timedelta(minutes=5)},
-    )
+    ) as dag:
+        dag << import_core_prod >> decrypt_core_prod >> dbt_run >> dbt_snapshot
+        dag << import_idp_prod >> dbt_run >> dbt_snapshot
+        dag << import_kyc_prod >> decrypt_kyc_prod >> dbt_run >> dbt_snapshot
 
-    dag << import_core_prod >> decrypt_core_prod >> dbt_run >> dbt_snapshot
-    dag << import_idp_prod >> dbt_run >> dbt_snapshot
-    dag << import_kyc_prod >> decrypt_kyc_prod >> dbt_run >> dbt_snapshot
-
-    dag << import_core_staging >> decrypt_core_staging >> dbt_run >> dbt_snapshot
-    dag << import_idp_staging >> dbt_run >> dbt_snapshot
-    dag << import_kyc_staging >> decrypt_kyc_staging >> dbt_run >> dbt_snapshot
+        dag << import_core_staging >> decrypt_core_staging >> dbt_run >> dbt_snapshot
+        dag << import_idp_staging >> dbt_run >> dbt_snapshot
+        dag << import_kyc_staging >> decrypt_kyc_staging >> dbt_run >> dbt_snapshot
 
     return dag
 

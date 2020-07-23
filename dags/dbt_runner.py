@@ -19,13 +19,12 @@ dbt_snapshot = DbtOperator(
     action=DbtAction.snapshot,
 )
 
-dag = DAG(
+with DAG(
     "dbt_runner",
     max_active_runs=1,
     schedule_interval=None,
     start_date=pendulum.datetime(
         2020, 4, 21, tzinfo=pendulum.timezone("America/Toronto")
     ),
-)
-
-dag << dbt_run >> dbt_snapshot
+) as dag:
+    dag << dbt_run >> dbt_snapshot
