@@ -1,4 +1,4 @@
-FROM python:3.8-slim
+FROM python:3.8.3-slim
 
 # Never prompts the user for choices on installation/configuration of packages
 ENV DEBIAN_FRONTEND noninteractive
