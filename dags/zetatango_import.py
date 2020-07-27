@@ -26,8 +26,6 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
 
 from utils import random_identifier
-from dbt_runner import dbt_run
-from dbt_runner import dbt_snapshot
 
 
 @attr.s
@@ -466,12 +464,10 @@ def create_dag() -> DAG:
         dag << import_core_prod >> decrypt_core_prod
         dag << import_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
-        [decrypt_core_prod, decrypt_kyc_prod] >> dbt_run >> dbt_snapshot
 
         dag << import_core_staging >> decrypt_core_staging
         dag << import_idp_staging
         dag << import_kyc_staging >> decrypt_kyc_staging
-        [decrypt_core_staging, decrypt_kyc_staging] >> dbt_run >> dbt_snapshot
 
     return dag
 
