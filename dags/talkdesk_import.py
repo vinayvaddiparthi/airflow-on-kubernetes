@@ -17,6 +17,7 @@ from fs_s3fs import S3FS
 from sqlalchemy import create_engine, func, Table, MetaData, Column
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select
+from snowflake.sqlalchemy import VARIANT
 
 from pyporky.symmetric import SymmetricPorky
 
@@ -185,7 +186,7 @@ def create_dag() -> DAG:
 
 
 if __name__ == "__main__":
-    from snowflake.sqlalchemy import URL, VARIANT
+    from snowflake.sqlalchemy import URL
     from unittest.mock import patch, MagicMock
 
     mock = MagicMock()
