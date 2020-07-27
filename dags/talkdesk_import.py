@@ -1,7 +1,9 @@
+import base64
 import datetime
 import json
 import logging
 import os
+from io import BytesIO
 from time import sleep
 from typing import Any, Optional, Dict
 
@@ -16,6 +18,8 @@ from sqlalchemy import create_engine, func, Table, MetaData, Column
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select
 
+from pyporky.symmetric import SymmetricPorky
+
 MAX_RUNS = 360
 
 
@@ -26,6 +30,7 @@ def import_talkdesk(
     bucket_name: str,
     execution_date: pendulum.datetime,
     next_execution_date: pendulum.datetime,
+    cmk_key_id: str,
     **kwargs: Any,
 ) -> None:
     try:
@@ -86,7 +91,9 @@ def import_talkdesk(
     if status == "failed":
         raise Exception(resp.text)
 
-    fs = S3FS(f"s3://{bucket_name}")
+    fs = S3FS(bucket_name)
+
+    porky = SymmetricPorky(aws_region="ca-central-1")
 
     for entry in data.get("entries", []):  # for each entry in the calls report
         call_id: str = entry["call_id"]
@@ -121,11 +128,25 @@ def import_talkdesk(
         # download all recordings and re-upload them to S3
         for recording in embedded.get("recordings", []):
             media_link = recording["_links"]["media"]["href"]
-            with session.get(media_link, stream=True) as in_, fs.open(
+            with session.get(
+                media_link, stream=True
+            ) as in_, BytesIO() as intrm_, fs.open(
                 f"{recording['id']}.mp3", mode="w+b"
             ) as out_:
                 for chunk in in_.iter_content(chunk_size=8192):
-                    out_.write(chunk)
+                    intrm_.write(chunk)
+                    key, data, nonce = porky.encrypt(
+                        data=intrm_.read(), cmk_key_id=cmk_key_id,
+                    )
+                out_.write(
+                    json.dumps(
+                        {
+                            "key": base64.b64encode(key).decode("utf-8"),
+                            "data": base64.b64encode(data).decode("utf-8"),
+                            "nonce": base64.b64encode(nonce).decode("utf-8"),
+                        }
+                    ).encode("utf-8")
+                )
 
 
 def create_dag() -> DAG:
@@ -146,6 +167,7 @@ def create_dag() -> DAG:
                 "talkdesk_conn": "http_talkdesk",
                 "schema": "TALKDESK",
                 "bucket_name": "tc-talkdesk",
+                "cmk_key_id": "04bc297e-6ec2-4fa0-b3aa-ffb29d40f306",
             },
             provide_context=True,
             retry_delay=datetime.timedelta(hours=1),
@@ -200,6 +222,7 @@ if __name__ == "__main__":
             bucket_name="tc-talkdesk",
             execution_date=pendulum.datetime(2019, 9, 29),
             next_execution_date=pendulum.datetime(2019, 9, 30),
+            cmk_key_id="04bc297e-6ec2-4fa0-b3aa-ffb29d40f306",
         )
 else:
     globals()["talkdeskdag"] = create_dag()
