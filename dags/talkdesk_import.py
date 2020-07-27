@@ -40,6 +40,8 @@ def import_talkdesk(
     except KeyError:
         pass
 
+    logging.info(f"Importing calls from {execution_date} to {next_execution_date}")
+
     taskdesk_connection = BaseHook.get_connection(talkdesk_conn)
 
     metadata = MetaData()
@@ -89,14 +91,18 @@ def import_talkdesk(
 
         run += 1
 
+    logging.debug(data)
+
     if status == "failed":
         raise Exception(resp.text)
 
     fs = S3FS(bucket_name)
-
     porky = SymmetricPorky(aws_region="ca-central-1")
 
-    for entry in data.get("entries", []):  # for each entry in the calls report
+    entries = data.get("entries", [])
+    logging.info(f"entries list contains {len(entries)} records")
+
+    for entry in entries:  # for each entry in the calls report
         call_id: str = entry["call_id"]
 
         # get the recordings report associated with the entry
@@ -156,7 +162,7 @@ def create_dag() -> DAG:
         start_date=pendulum.datetime(
             2015, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
-        schedule_interval="@daily",
+        schedule_interval=datetime.timedelta(days=1),
         catchup=True,
         max_active_runs=4,
     ) as dag:
@@ -221,8 +227,8 @@ if __name__ == "__main__":
             "talkdesk_conn",
             schema="TALKDESK",
             bucket_name="tc-talkdesk",
-            execution_date=pendulum.datetime(2019, 9, 29),
-            next_execution_date=pendulum.datetime(2019, 9, 30),
+            execution_date=pendulum.datetime(2018, 1, 1),
+            next_execution_date=pendulum.datetime(2018, 6, 15),
             cmk_key_id="04bc297e-6ec2-4fa0-b3aa-ffb29d40f306",
         )
 else:
