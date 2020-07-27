@@ -40,134 +40,139 @@ def import_talkdesk(
     except KeyError:
         pass
 
-    logging.info(f"Importing calls from {execution_date} to {next_execution_date}")
+    for i in range((next_execution_date - execution_date).days):
+        start_dt = execution_date + datetime.timedelta(days=i)
+        end_dt = start_dt + datetime.timedelta(days=1)
 
-    taskdesk_connection = BaseHook.get_connection(talkdesk_conn)
+        logging.info(f"⚙️Importing calls from {start_dt} to {end_dt}")
 
-    metadata = MetaData()
-    engine: Engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
+        taskdesk_connection = BaseHook.get_connection(talkdesk_conn)
 
-    t = Table(
-        "calls",
-        metadata,
-        Column("call", VARIANT),
-        Column("recordings", VARIANT),
-        schema=schema,
-    )
-    t.create(engine, checkfirst=True)
+        metadata = MetaData()
+        engine: Engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
 
-    session = OAuth2Session(
-        client_id=taskdesk_connection.login,
-        client_secret=taskdesk_connection.password,
-        scope="reports:read reports:write recordings:read",
-        token_endpoint=taskdesk_connection.host,
-        grant_type="client_credentials",
-    )
-    session.fetch_token()
+        t = Table(
+            "calls",
+            metadata,
+            Column("call", VARIANT),
+            Column("recordings", VARIANT),
+            schema=schema,
+        )
+        t.create(engine, checkfirst=True)
 
-    initial_payload = {
-        "format": "json",
-        "timespan": {
-            "from": execution_date.isoformat(),
-            "to": next_execution_date.isoformat(),
-        },
-    }
+        session = OAuth2Session(
+            client_id=taskdesk_connection.login,
+            client_secret=taskdesk_connection.password,
+            scope="reports:read reports:write recordings:read",
+            token_endpoint=taskdesk_connection.host,
+            grant_type="client_credentials",
+        )
+        session.fetch_token()
 
-    resp = session.post(
-        "https://api.talkdeskapp.com/reports/calls/jobs", json=initial_payload,
-    )
+        initial_payload = {
+            "format": "json",
+            "timespan": {"from": start_dt.isoformat(), "to": end_dt.isoformat(),},
+        }
 
-    run: int = 0
-    while (status := (data := resp.json()).get("status")) not in [
-        None,
-        "done",
-        "failed",
-    ] and run < MAX_RUNS:
-        logging.info(f"💤 Sleeping for 10 seconds because status is {status} ({run})")
-        sleep(10)
-        resp = session.get(
-            data["_links"]["self"]["href"]
-        )  # Will be autoredirected to the report file
-
-        run += 1
-
-    logging.debug(data)
-
-    if status == "failed":
-        raise Exception(resp.text)
-
-    fs = S3FS(bucket_name)
-    porky = SymmetricPorky(aws_region="ca-central-1")
-
-    entries = data.get("entries", [])
-    logging.info(f"entries list contains {len(entries)} records")
-
-    for entry in entries:  # for each entry in the calls report
-        call_id: str = entry["call_id"]
-
-        # get the recordings report associated with the entry
-        recordings: Optional[Dict] = (
-            session.get(recording_url).json()
-            if (recording_url := entry.get("recording_url"))
-            else None
+        resp = session.post(
+            "https://api.talkdeskapp.com/reports/calls/jobs", json=initial_payload,
         )
 
-        logging.debug(f"call id: {call_id} recording: {recordings}")
-
-        #  insert call and recordings metadata in Snowflake
-        with engine.begin() as tx:
-            selectable = Select(
-                [
-                    func.parse_json(json.dumps(entry)).label("call"),
-                    func.parse_json(json.dumps(recordings)).label("recordings"),
-                ]
+        run: int = 0
+        while (status := (data := resp.json()).get("status")) not in [
+            None,
+            "done",
+            "failed",
+        ] and run < MAX_RUNS:
+            logging.info(
+                f"💤 Sleeping for 10 seconds because status is {status} ({run})"
             )
-            tx.execute(t.insert().from_select(["call", "recordings"], selectable))
+            sleep(10)
+            resp = session.get(
+                data["_links"]["self"]["href"]
+            )  # Will be autoredirected to the report file
 
-        if not recordings:
-            logging.warning(f"⚠️Could not find recording_url key in {call_id}")
-            continue
+            run += 1
 
-        if not (embedded := recordings.get("_embedded")):
-            logging.warning(f"⚠️Could not find _embedded key in {call_id}")
-            continue
+        logging.debug(data)
 
-        # download all recordings and re-upload them to S3
-        for recording in embedded.get("recordings", []):
-            media_link = recording["_links"]["media"]["href"]
-            with session.get(
-                media_link, stream=True
-            ) as in_, BytesIO() as intrm_, fs.open(
-                f"{recording['id']}.mp3", mode="w+b"
-            ) as out_:
-                for chunk in in_.iter_content(chunk_size=8192):
-                    intrm_.write(chunk)
-                    key, data, nonce = porky.encrypt(
-                        data=intrm_.read(), cmk_key_id=cmk_key_id,
-                    )
-                out_.write(
-                    json.dumps(
-                        {
-                            "key": base64.b64encode(key).decode("utf-8"),
-                            "data": base64.b64encode(data).decode("utf-8"),
-                            "nonce": base64.b64encode(nonce).decode("utf-8"),
-                        }
-                    ).encode("utf-8")
+        if status == "failed":
+            raise Exception(resp.text)
+
+        fs = S3FS(bucket_name)
+        porky = SymmetricPorky(aws_region="ca-central-1")
+
+        entries = data.get("entries", [])
+        logging.info(f"entries list contains {len(entries)} records")
+
+        for entry in entries:  # for each entry in the calls report
+            call_id: str = entry["call_id"]
+
+            # get the recordings report associated with the entry
+            recordings: Optional[Dict] = (
+                session.get(recording_url).json()
+                if (recording_url := entry.get("recording_url"))
+                else None
+            )
+
+            logging.debug(f"call id: {call_id} recording: {recordings}")
+
+            #  insert call and recordings metadata in Snowflake
+            with engine.begin() as tx:
+                selectable = Select(
+                    [
+                        func.parse_json(json.dumps(entry)).label("call"),
+                        func.parse_json(json.dumps(recordings)).label("recordings"),
+                    ]
                 )
+                tx.execute(t.insert().from_select(["call", "recordings"], selectable))
+
+            if not recordings:
+                logging.warning(f"⚠️Could not find recording_url key in {call_id}")
+                continue
+
+            if not (embedded := recordings.get("_embedded")):
+                logging.warning(f"⚠️Could not find _embedded key in {call_id}")
+                continue
+
+            # download all recordings and re-upload them to S3
+            for recording in embedded.get("recordings", []):
+                media_link = recording["_links"]["media"]["href"]
+                with session.get(
+                    media_link, stream=True
+                ) as in_, BytesIO() as intrm_, fs.open(
+                    f"{recording['id']}.mp3", mode="w+b"
+                ) as out_:
+                    for chunk in in_.iter_content(chunk_size=8192):
+                        intrm_.write(chunk)
+                        key, data, nonce = porky.encrypt(
+                            data=intrm_.read(), cmk_key_id=cmk_key_id,
+                        )
+                    out_.write(
+                        json.dumps(
+                            {
+                                "key": base64.b64encode(key).decode("utf-8"),
+                                "data": base64.b64encode(data).decode("utf-8"),
+                                "nonce": base64.b64encode(nonce).decode("utf-8"),
+                            }
+                        ).encode("utf-8")
+                    )
+
+        logging.info(f"✨ Done importing calls from {start_dt} to {end_dt}")
 
 
 def create_dag() -> DAG:
     with DAG(
-        "talkdesk_import",
+        "talkdesk_import_monthly",
         start_date=pendulum.datetime(
             2015, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
-        schedule_interval=datetime.timedelta(days=1),
+        schedule_interval=datetime.timedelta(weeks=4),
         catchup=True,
         max_active_runs=4,
     ) as dag:
         dag << PythonOperator(
-            task_id="import_talkdesk",
+            task_id="talkdesk_import",
             python_callable=import_talkdesk,
             op_kwargs={
                 "snowflake_conn": "snowflake_talkdesk",
