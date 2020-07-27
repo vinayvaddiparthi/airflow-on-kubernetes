@@ -40,12 +40,6 @@ def import_talkdesk(
     except KeyError:
         pass
 
-    for i in range((next_execution_date - execution_date).days):
-        start_dt = execution_date + datetime.timedelta(days=i)
-        end_dt = start_dt + datetime.timedelta(days=1)
-
-        logging.info(f"⚙️Importing calls from {start_dt} to {end_dt}")
-
         taskdesk_connection = BaseHook.get_connection(talkdesk_conn)
 
         metadata = MetaData()
@@ -68,6 +62,12 @@ def import_talkdesk(
             grant_type="client_credentials",
         )
         session.fetch_token()
+
+    for i in range((next_execution_date - execution_date).days):
+        start_dt = execution_date + datetime.timedelta(days=i)
+        end_dt = start_dt + datetime.timedelta(days=1)
+
+        logging.info(f"⚙ Importing calls from {start_dt} to {end_dt}")
 
         initial_payload = {
             "format": "json",
