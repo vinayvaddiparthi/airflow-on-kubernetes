@@ -40,28 +40,28 @@ def import_talkdesk(
     except KeyError:
         pass
 
-        taskdesk_connection = BaseHook.get_connection(talkdesk_conn)
+    taskdesk_connection = BaseHook.get_connection(talkdesk_conn)
 
-        metadata = MetaData()
-        engine: Engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
+    metadata = MetaData()
+    engine: Engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
 
-        t = Table(
-            "calls",
-            metadata,
-            Column("call", VARIANT),
-            Column("recordings", VARIANT),
-            schema=schema,
-        )
-        t.create(engine, checkfirst=True)
+    t = Table(
+        "calls",
+        metadata,
+        Column("call", VARIANT),
+        Column("recordings", VARIANT),
+        schema=schema,
+    )
+    t.create(engine, checkfirst=True)
 
-        session = OAuth2Session(
-            client_id=taskdesk_connection.login,
-            client_secret=taskdesk_connection.password,
-            scope="reports:read reports:write recordings:read",
-            token_endpoint=taskdesk_connection.host,
-            grant_type="client_credentials",
-        )
-        session.fetch_token()
+    session = OAuth2Session(
+        client_id=taskdesk_connection.login,
+        client_secret=taskdesk_connection.password,
+        scope="reports:read reports:write recordings:read",
+        token_endpoint=taskdesk_connection.host,
+        grant_type="client_credentials",
+    )
+    session.fetch_token()
 
     for i in range((next_execution_date - execution_date).days):
         start_dt = execution_date + datetime.timedelta(days=i)
