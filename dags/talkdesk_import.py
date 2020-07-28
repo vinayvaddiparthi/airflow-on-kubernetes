@@ -14,6 +14,7 @@ from airflow.hooks.base_hook import BaseHook
 from airflow.operators.python_operator import PythonOperator
 from authlib.integrations.requests_client import OAuth2Session
 from fs_s3fs import S3FS
+from requests.adapters import HTTPAdapter
 from sqlalchemy import create_engine, func, Table, MetaData, Column
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select
@@ -61,6 +62,9 @@ def import_talkdesk(
         token_endpoint=taskdesk_connection.host,
         grant_type="client_credentials",
     )
+    session.mount("http://", HTTPAdapter(max_retries=3))
+    session.mount("https://", HTTPAdapter(max_retries=3))
+
     session.fetch_token()
 
     for i in range((next_execution_date - execution_date).days):
