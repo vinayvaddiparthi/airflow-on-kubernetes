@@ -1,9 +1,7 @@
-import base64
 import datetime
 import json
 import logging
 import os
-from io import BytesIO
 from time import sleep
 from typing import Any, Optional, Dict
 
@@ -18,8 +16,6 @@ from sqlalchemy import create_engine, func, Table, MetaData, Column
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select
 from snowflake.sqlalchemy import VARIANT
-
-from pyporky.symmetric import SymmetricPorky
 
 MAX_RUNS = 360
 
@@ -103,7 +99,6 @@ def import_talkdesk(
                 raise Exception(resp.text)
 
             fs = S3FS(bucket_name)
-            porky = SymmetricPorky(aws_region="ca-central-1")
 
             entries = data.get("entries", [])
             logging.info(f"entries list contains {len(entries)} records")
@@ -133,35 +128,21 @@ def import_talkdesk(
                     )
 
                 if not recordings:
-                    logging.warning(f"⚠️Could not find recording_url key in {call_id}")
+                    logging.warning(f"⚠ Could not find recording_url key in {call_id}")
                     continue
 
                 if not (embedded := recordings.get("_embedded")):
-                    logging.warning(f"⚠️Could not find _embedded key in {call_id}")
+                    logging.warning(f"⚠ Could not find _embedded key in {call_id}")
                     continue
 
                 # download all recordings and re-upload them to S3
                 for recording in embedded.get("recordings", []):
                     media_link = recording["_links"]["media"]["href"]
-                    with session.get(
-                        media_link, stream=True
-                    ) as in_, BytesIO() as intrm_, fs.open(
+                    with session.get(media_link, stream=True) as in_, fs.open(
                         f"{recording['id']}.mp3", mode="w+b"
                     ) as out_:
                         for chunk in in_.iter_content(chunk_size=8192):
-                            intrm_.write(chunk)
-                            key, data, nonce = porky.encrypt(
-                                data=intrm_.read(), cmk_key_id=cmk_key_id,
-                            )
-                        out_.write(
-                            json.dumps(
-                                {
-                                    "key": base64.b64encode(key).decode("utf-8"),
-                                    "data": base64.b64encode(data).decode("utf-8"),
-                                    "nonce": base64.b64encode(nonce).decode("utf-8"),
-                                }
-                            ).encode("utf-8")
-                        )
+                            out_.write(chunk)
 
             token = session.token
 
@@ -189,8 +170,8 @@ def create_dag() -> DAG:
                 "cmk_key_id": "04bc297e-6ec2-4fa0-b3aa-ffb29d40f306",
             },
             provide_context=True,
-            retry_delay=datetime.timedelta(hours=1),
-            retries=3,
+            retry_delay=datetime.timedelta(minutes=5),
+            retries=5,
             executor_config={
                 "KubernetesExecutor": {
                     "annotations": {
