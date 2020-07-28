@@ -185,9 +185,11 @@ def create_dag() -> DAG:
             retry_delay=datetime.timedelta(hours=1),
             retries=3,
             executor_config={
-                "annotations": {
-                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                    "KubernetesAirflowProductionTalkdeskRole"
+                "KubernetesExecutor": {
+                    "annotations": {
+                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                        "KubernetesAirflowProductionTalkdeskRole"
+                    },
                 },
                 "resources": {"request_memory": "512Mi"},
             },
