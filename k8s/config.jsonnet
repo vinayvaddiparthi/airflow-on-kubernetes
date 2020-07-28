@@ -21,7 +21,7 @@ local airflowCfg = {
       log_filename_template:"{{ti.dag_id}}/{{ti.task_id}}/{{ts}}/{{try_number}}.log",
       log_processor_filename_template:"{{filename}}.log",
       dag_processor_manager_log_location:"/usr/local/airflow/logs/dag_processor_manager/dag_processor_manager.log",
-      hostname_callable:"airflow.utils.net:get_host_ip_address",
+      hostname_callable:"socket:getfqdn",
       default_timezone:"utc",
       executor:"KubernetesExecutor",
       store_serialized_dags:true,
