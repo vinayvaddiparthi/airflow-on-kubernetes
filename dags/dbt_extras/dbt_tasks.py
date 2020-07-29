@@ -1,5 +1,7 @@
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
+from datetime import timedelta
+
 
 dbt_run = DbtOperator(
     task_id="dbt_run",
