@@ -129,6 +129,16 @@ def fetch_calls_for_date_range(
 
             logging.debug(f"call id: {call_id} recording: {recordings}")
 
+            # insert call and recordings metadata in Snowflake
+            with engine.begin() as tx:
+                selectable = Select(
+                    [
+                        func.parse_json(json.dumps(entry)).label("call"),
+                        func.parse_json(json.dumps(recordings)).label("recordings"),
+                    ]
+                )
+                tx.execute(t.insert().from_select(["call", "recordings"], selectable))
+
             if not recordings:
                 logging.info(f"⚠ Could not find recording_url key in {call_id}")
                 continue
@@ -144,16 +154,6 @@ def fetch_calls_for_date_range(
                 fs.writebytes(fp, session.get(media_link).content)
 
                 logging.info(f"☎ Uploaded recording {fp} to S3")
-
-            # insert call and recordings metadata in Snowflake
-            with engine.begin() as tx:
-                selectable = Select(
-                    [
-                        func.parse_json(json.dumps(entry)).label("call"),
-                        func.parse_json(json.dumps(recordings)).label("recordings"),
-                    ]
-                )
-                tx.execute(t.insert().from_select(["call", "recordings"], selectable))
 
             token = session.token
 
