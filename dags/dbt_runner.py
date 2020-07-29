@@ -1,5 +1,4 @@
 from airflow import DAG
-from datetime import timedelta
 import pendulum
 from dbt_extras.dbt_tasks import dbt_run, dbt_snapshot
 
