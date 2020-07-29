@@ -157,3 +157,4 @@ salesforce-bulk==2.1.0
 dbt==0.17.0
 transitions
 fs-s3fs
+retrying
