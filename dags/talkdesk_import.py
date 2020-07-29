@@ -12,6 +12,7 @@ from airflow.hooks.base_hook import BaseHook
 from airflow.operators.python_operator import PythonOperator
 from authlib.integrations.requests_client import OAuth2Session
 from fs_s3fs import S3FS
+from retrying import retry
 from sqlalchemy import create_engine, func, Table, MetaData, Column
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select
@@ -58,95 +59,103 @@ def import_talkdesk(
         "grant_type": "client_credentials",
     }
 
-    with OAuth2Session(**oauth_args) as session:
-        token = session.fetch_token()
-
     for i in range((next_execution_date - execution_date).days):
         start_dt = execution_date + datetime.timedelta(days=i)
         end_dt = start_dt + datetime.timedelta(days=1)
+        fetch_calls_for_date_range(bucket_name, end_dt, engine, oauth_args, start_dt, t)
+        logging.info(f"✨ Done importing calls from {start_dt} to {end_dt}")
 
-        logging.info(f"⚙ Importing calls from {start_dt} to {end_dt}")
 
+@retry(stop_max_attempt_number=3)
+def fetch_calls_for_date_range(
+    bucket_name: str,
+    end_dt: pendulum.datetime,
+    engine: Engine,
+    oauth_args: Dict,
+    start_dt: pendulum.datetime,
+    t: Table,
+) -> None:
+
+    logging.info(f"⚙ Importing calls from {start_dt} to {end_dt}")
+
+    with OAuth2Session(**oauth_args) as session:
+        token = session.fetch_token()
+
+        initial_payload = {
+            "format": "json",
+            "timespan": {"from": start_dt.isoformat(), "to": end_dt.isoformat(),},
+        }
+
+        resp = session.post(
+            "https://api.talkdeskapp.com/reports/calls/jobs", json=initial_payload,
+        )
+
+        run: int = 0
+        while (status := (data := resp.json()).get("status")) not in [
+            None,
+            "done",
+            "failed",
+        ] and run < MAX_RUNS:
+            logging.info(
+                f"💤 Sleeping for 10 seconds because status is {status} ({run})"
+            )
+            sleep(10)
+            resp = session.get(
+                data["_links"]["self"]["href"]
+            )  # Will be autoredirected to the report file
+
+            run += 1
+
+        logging.debug(data)
+
+        if status == "failed":
+            raise Exception(resp.text)
+
+        fs = S3FS(bucket_name)
+
+        entries = data.get("entries", [])
+        logging.info(f"entries list contains {len(entries)} records")
+
+    for entry in entries:  # for each entry in the calls report
         with OAuth2Session(**oauth_args, token=token) as session:
-            initial_payload = {
-                "format": "json",
-                "timespan": {"from": start_dt.isoformat(), "to": end_dt.isoformat(),},
-            }
+            call_id: str = entry["call_id"]
 
-            resp = session.post(
-                "https://api.talkdeskapp.com/reports/calls/jobs", json=initial_payload,
+            # get the recordings report associated with the entry
+            recordings: Optional[Dict] = (
+                session.get(recording_url).json()
+                if (recording_url := entry.get("recording_url"))
+                else None
             )
 
-            run: int = 0
-            while (status := (data := resp.json()).get("status")) not in [
-                None,
-                "done",
-                "failed",
-            ] and run < MAX_RUNS:
-                logging.info(
-                    f"💤 Sleeping for 10 seconds because status is {status} ({run})"
+            logging.debug(f"call id: {call_id} recording: {recordings}")
+
+            if not recordings:
+                logging.info(f"⚠ Could not find recording_url key in {call_id}")
+                continue
+
+            if not (embedded := recordings.get("_embedded")):
+                logging.warning(f"⚠ Could not find _embedded key in {call_id}")
+                continue
+
+            # download all recordings and re-upload them to S3
+            for recording in embedded.get("recordings", []):
+                fp = f"{recording['id']}.mp3"
+                media_link = recording["_links"]["media"]["href"]
+                fs.writebytes(fp, session.get(media_link).content)
+
+                logging.info(f"☎ Uploaded recording {fp} to S3")
+
+            # insert call and recordings metadata in Snowflake
+            with engine.begin() as tx:
+                selectable = Select(
+                    [
+                        func.parse_json(json.dumps(entry)).label("call"),
+                        func.parse_json(json.dumps(recordings)).label("recordings"),
+                    ]
                 )
-                sleep(10)
-                resp = session.get(
-                    data["_links"]["self"]["href"]
-                )  # Will be autoredirected to the report file
-
-                run += 1
-
-            logging.debug(data)
-
-            if status == "failed":
-                raise Exception(resp.text)
-
-            fs = S3FS(bucket_name)
-
-            entries = data.get("entries", [])
-            logging.info(f"entries list contains {len(entries)} records")
-
-            for entry in entries:  # for each entry in the calls report
-                call_id: str = entry["call_id"]
-
-                # get the recordings report associated with the entry
-                recordings: Optional[Dict] = (
-                    session.get(recording_url).json()
-                    if (recording_url := entry.get("recording_url"))
-                    else None
-                )
-
-                logging.debug(f"call id: {call_id} recording: {recordings}")
-
-                #  insert call and recordings metadata in Snowflake
-                with engine.begin() as tx:
-                    selectable = Select(
-                        [
-                            func.parse_json(json.dumps(entry)).label("call"),
-                            func.parse_json(json.dumps(recordings)).label("recordings"),
-                        ]
-                    )
-                    tx.execute(
-                        t.insert().from_select(["call", "recordings"], selectable)
-                    )
-
-                if not recordings:
-                    logging.warning(f"⚠ Could not find recording_url key in {call_id}")
-                    continue
-
-                if not (embedded := recordings.get("_embedded")):
-                    logging.warning(f"⚠ Could not find _embedded key in {call_id}")
-                    continue
-
-                # download all recordings and re-upload them to S3
-                for recording in embedded.get("recordings", []):
-                    media_link = recording["_links"]["media"]["href"]
-                    with session.get(media_link, stream=True) as in_, fs.open(
-                        f"{recording['id']}.mp3", mode="w+b"
-                    ) as out_:
-                        for chunk in in_.iter_content(chunk_size=8192):
-                            out_.write(chunk)
+                tx.execute(t.insert().from_select(["call", "recordings"], selectable))
 
             token = session.token
-
-        logging.info(f"✨ Done importing calls from {start_dt} to {end_dt}")
 
 
 def create_dag() -> DAG:
@@ -222,8 +231,8 @@ if __name__ == "__main__":
             "talkdesk_conn",
             schema="TALKDESK",
             bucket_name="tc-talkdesk",
-            execution_date=pendulum.datetime(2017, 6, 21),
-            next_execution_date=pendulum.datetime(2017, 6, 22),
+            execution_date=pendulum.datetime(2017, 11, 3),
+            next_execution_date=pendulum.datetime(2017, 11, 4),
             cmk_key_id="04bc297e-6ec2-4fa0-b3aa-ffb29d40f306",
         )
 else:
