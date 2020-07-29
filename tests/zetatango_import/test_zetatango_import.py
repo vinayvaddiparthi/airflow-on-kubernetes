@@ -8,7 +8,7 @@ class TestZetatangoImportDag(unittest.TestCase):
         cls.dagbag = DagBag()
 
     def test_dag_loaded(self):
-        dag = self.dagbag.get_dag(dag_id='zetatango_import')
+        dag = self.dagbag.get_dag(dag_id="zetatango_import")
         self.assertDictEqual(self.dagbag.import_errors, {})
         self.assertIsNotNone(dag)
         self.assertEqual(len(dag.tasks), 1)
