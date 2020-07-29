@@ -13,7 +13,16 @@ from airflow.operators.python_operator import PythonOperator
 from authlib.integrations.requests_client import OAuth2Session
 from fs_s3fs import S3FS
 from retrying import retry
-from sqlalchemy import create_engine, func, Table, MetaData, Column
+from sqlalchemy import (
+    create_engine,
+    func,
+    Table,
+    MetaData,
+    Column,
+    literal_column,
+    cast,
+    VARCHAR,
+)
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select
 from snowflake.sqlalchemy import VARIANT
@@ -114,10 +123,24 @@ def fetch_calls_for_date_range(
         fs = S3FS(bucket_name)
 
         entries = data.get("entries", [])
-        logging.info(f"entries list contains {len(entries)} records")
 
-    for entry in entries:  # for each entry in the calls report
-        with OAuth2Session(**oauth_args, token=token) as session:
+        with engine.begin() as tx:
+            ids = [entry.get("call_id") for entry in entries]
+            stmt = Select(
+                columns=[cast(literal_column("call:call_id"), VARCHAR)],
+                from_obj=t,
+                whereclause=literal_column("call:call_id").in_(ids),
+            )
+            ids_in_db = [row[0] for row in tx.execute(stmt).fetchall()]
+
+        logging.info(
+            f"entries list contains {len(entries)} records of which {len(ids_in_db)} are already imported"
+        )
+
+    for entry in [
+        entry for entry in entries if entry.get("call_id") not in ids_in_db
+    ]:  # for each entry in the calls report
+        with OAuth2Session(**oauth_args, token=token) as session, engine.begin() as tx:
             call_id: str = entry["call_id"]
 
             # get the recordings report associated with the entry
@@ -129,31 +152,25 @@ def fetch_calls_for_date_range(
 
             logging.debug(f"call id: {call_id} recording: {recordings}")
 
-            # insert call and recordings metadata in Snowflake
-            with engine.begin() as tx:
-                selectable = Select(
-                    [
-                        func.parse_json(json.dumps(entry)).label("call"),
-                        func.parse_json(json.dumps(recordings)).label("recordings"),
-                    ]
-                )
-                tx.execute(t.insert().from_select(["call", "recordings"], selectable))
+            if recordings and (embedded := recordings.get("_embedded")):
+                # download all recordings and re-upload them to S3
+                for recording in embedded.get("recordings", []):
+                    fp = f"{recording['id']}.mp3"
+                    media_link = recording["_links"]["media"]["href"]
+                    fs.writebytes(fp, session.get(media_link).content)
 
-            if not recordings:
+                    logging.info(f"☎ Uploaded recording {fp} to S3")
+            else:
                 logging.info(f"⚠ Could not find recording_url key in {call_id}")
-                continue
 
-            if not (embedded := recordings.get("_embedded")):
-                logging.warning(f"⚠ Could not find _embedded key in {call_id}")
-                continue
-
-            # download all recordings and re-upload them to S3
-            for recording in embedded.get("recordings", []):
-                fp = f"{recording['id']}.mp3"
-                media_link = recording["_links"]["media"]["href"]
-                fs.writebytes(fp, session.get(media_link).content)
-
-                logging.info(f"☎ Uploaded recording {fp} to S3")
+            # insert call and recordings metadata in Snowflake
+            selectable = Select(
+                [
+                    func.parse_json(json.dumps(entry)).label("call"),
+                    func.parse_json(json.dumps(recordings)).label("recordings"),
+                ]
+            )
+            tx.execute(t.insert().from_select(["call", "recordings"], selectable))
 
             token = session.token
 
@@ -231,8 +248,8 @@ if __name__ == "__main__":
             "talkdesk_conn",
             schema="TALKDESK",
             bucket_name="tc-talkdesk",
-            execution_date=pendulum.datetime(2017, 11, 3),
-            next_execution_date=pendulum.datetime(2017, 11, 4),
+            execution_date=pendulum.datetime(2018, 2, 22),
+            next_execution_date=pendulum.datetime(2018, 2, 23),
             cmk_key_id="04bc297e-6ec2-4fa0-b3aa-ffb29d40f306",
         )
 else:
