@@ -454,9 +454,7 @@ decrypt_kyc_staging = PythonOperator(
 )
 
 dbt_run = DbtOperator(
-    task_id="dbt_run",
-    execution_timeout=timedelta(hours=1),
-    action=DbtAction.run,
+    task_id="dbt_run", execution_timeout=timedelta(hours=1), action=DbtAction.run,
 )
 
 dbt_snapshot = DbtOperator(
