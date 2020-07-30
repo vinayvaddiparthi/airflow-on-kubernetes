@@ -196,8 +196,8 @@ def create_dag() -> DAG:
                 "cmk_key_id": "04bc297e-6ec2-4fa0-b3aa-ffb29d40f306",
             },
             provide_context=True,
-            retry_delay=datetime.timedelta(minutes=5),
-            retries=5,
+            retry_delay=datetime.timedelta(minutes=10),
+            retries=10,
             executor_config={
                 "KubernetesExecutor": {
                     "annotations": {
