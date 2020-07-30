@@ -451,6 +451,20 @@ decrypt_kyc_staging = PythonOperator(
     },
 )
 
+dbt_run = DbtOperator(
+    task_id="dbt_run",
+    pool="snowflake_pool",
+    execution_timeout=timedelta(hours=1),
+    action=DbtAction.run,
+)
+
+dbt_snapshot = DbtOperator(
+    task_id="dbt_snapshot",
+    pool="snowflake_pool",
+    execution_timeout=timedelta(hours=1),
+    action=DbtAction.snapshot,
+)
+
 
 def create_dag() -> DAG:
     with DAG(
@@ -464,10 +478,12 @@ def create_dag() -> DAG:
         dag << import_core_prod >> decrypt_core_prod
         dag << import_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
+        [decrypt_core_prod, decrypt_kyc_prod] >> dbt_run >> dbt_snapshot
 
         dag << import_core_staging >> decrypt_core_staging
         dag << import_idp_staging
         dag << import_kyc_staging >> decrypt_kyc_staging
+        [decrypt_core_staging, decrypt_kyc_staging] >> dbt_run >> dbt_snapshot
 
     return dag
 
