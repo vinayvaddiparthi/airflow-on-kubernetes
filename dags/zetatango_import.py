@@ -26,6 +26,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
 
 from utils import random_identifier
+from dbt_extras.dbt_operator import DbtOperator
+from dbt_extras.dbt_action import DbtAction
 
 
 @attr.s
