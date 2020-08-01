@@ -12,6 +12,7 @@ from airflow.hooks.base_hook import BaseHook
 from airflow.operators.python_operator import PythonOperator
 from authlib.integrations.requests_client import OAuth2Session
 from fs_s3fs import S3FS
+from oauthlib.oauth2 import OAuth2Token
 from retrying import retry
 from sqlalchemy import (
     create_engine,
@@ -83,12 +84,13 @@ def fetch_calls_for_date_range(
     oauth_args: Dict,
     start_dt: pendulum.datetime,
     t: Table,
+    token: Optional[OAuth2Token] = None,
 ) -> None:
 
     logging.info(f"⚙ Importing calls from {start_dt} to {end_dt}")
 
-    with OAuth2Session(**oauth_args) as session:
-        token = session.fetch_token()
+    with OAuth2Session(**oauth_args, token=token) as session:
+        token = session.fetch_token() if not session.token else session.token
 
         initial_payload = {
             "format": "json",
