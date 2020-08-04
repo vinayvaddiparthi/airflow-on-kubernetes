@@ -5,7 +5,7 @@ import logging
 import json
 import pendulum
 import pandas as pd
-import secrets
+import attr
 
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -17,62 +17,46 @@ from pmdarima.arima import auto_arima
 from utils import random_identifier
 from pathlib import Path
 
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, cast
+
+from helpers.auto_arima_parameters import AutoArimaParameters, ArimaProjectionParameters
+
+from snowflake.sqlalchemy import VARIANT
+from sqlalchemy.sql import select, func, text
+from sqlalchemy import (
+    Table,
+    MetaData,
+    Column,
+    VARCHAR,
+    Date,
+    Numeric,
+    DateTime,
+)
 
 
-def create_table(snowflake_connection: str) -> None:
-    try:
-        snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-        create_table_query = (
-            'CREATE TABLE IF NOT EXISTS "ZETATANGO"."CORE_PRODUCTION"."CASH_FLOW_PROJECTIONS"'
-            " (MERCHANT_GUID VARCHAR NOT NULL, ACCOUNT_GUID VARCHAR NOT NULL,"
-            " PROJECTIONS VARIANT NOT NULL, LAST_CASH_FLOW_DATE DATE NOT NULL,"
-            " PARAMETERS_HASH NUMBER(19,0) NOT NULL, GENERATED_AT DATETIME NOT NULL)"
-        )
+def create_table(snowflake_connection: str, schema: str,) -> None:
+    metadata = MetaData()
+    snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
 
-        with snowflake_engine.begin() as tx:
-            tx.execute(create_table_query).fetchall()
-    except:
-        e = sys.exc_info()
-        logging.error(f"❌ Error creating table: {e}")
-    finally:
-        snowflake_engine.dispose()
+    cash_flow_projections = Table(
+        "cash_flow_projections",
+        metadata,
+        Column("merchant_guid", VARCHAR, nullable=False),
+        Column("account_guid", VARCHAR, nullable=False),
+        Column("projections", VARIANT, nullable=False),
+        Column("last_cash_flow_date", Date, nullable=False),
+        Column("parameters_hash", Numeric(19, 0), nullable=False),
+        Column("generated_at", DateTime, nullable=False),
+        schema=schema,
+    )
 
-
-def algorithm_details() -> Dict[str, Any]:
-    # TODO: Make all these parameters config params so we can update without a code change
-    auto_arima_params = {
-        "start_p": 0,
-        "max_p": 5,
-        "start_q": 0,
-        "max_q": 5,
-        "max_d": 2,
-        "start_P": 0,
-        "max_P": 2,
-        "start_Q": 0,
-        "max_Q": 2,
-        "max_D": 1,
-        "max_order": 5,
-        "stepwise": True,
-        "alpha": 0.2,
-        "supress_warnings": True,
-        "random": True,
-        "n_fits": 50,
-        "random_state": 20,
-    }
-
-    arima_projection_params = {"n_periods": 14, "alpha": 0.2}
-
-    return {
-        "id": secrets.token_hex(32),
-        "version": os.environ.get("CI_PIPELINE_ID"),
-        "auto_arima_params": auto_arima_params,
-        "arima_projection_params": arima_projection_params,
-    }
+    cash_flow_projections.create(snowflake_engine, checkfirst=True)
 
 
 def calculate_projection(
-    data: Dict, auto_arima_params: Dict, arima_projection_params: Dict
+    data: Dict,
+    auto_arima_params: AutoArimaParameters,
+    arima_projection_params: ArimaProjectionParameters,
 ) -> Tuple[str, Dict[str, Any]]:
     df = pd.DataFrame.from_dict(data, orient="index")
     df = df[["credits", "debits"]]
@@ -82,10 +66,10 @@ def calculate_projection(
     full_index = pd.date_range(df.index.min(), df.index.max())
     df = df.reindex(full_index, fill_value=0)
 
-    arima_debits_model = auto_arima(df["debits"], **auto_arima_params)
-    arima_credits_model = auto_arima(df["credits"], **auto_arima_params)
+    arima_debits_model = auto_arima(df["debits"], **(attr.asdict(auto_arima_params)))
+    arima_credits_model = auto_arima(df["credits"], **(attr.asdict(auto_arima_params)))
 
-    days_to_project = arima_projection_params["n_periods"]
+    days_to_project = arima_projection_params.n_periods
 
     prediction_start_date = df.index.max() + timedelta(days=1)
     prediction_index = pd.date_range(
@@ -94,8 +78,12 @@ def calculate_projection(
     )
 
     predictions = {
-        "credits prediction": arima_credits_model.predict(**arima_projection_params),
-        "debits prediction": arima_debits_model.predict(**arima_projection_params),
+        "credits prediction": arima_credits_model.predict(
+            **(attr.asdict(arima_projection_params))
+        ),
+        "debits prediction": arima_debits_model.predict(
+            **(attr.asdict(arima_projection_params))
+        ),
     }
 
     prediction_df = pd.DataFrame(predictions, index=prediction_index)
@@ -109,26 +97,35 @@ def cash_flow_projection(
     account_guid: str,
     daily_cash_flow: str,
     snowflake_connection: str,
+    task_instance_key_str: str,
 ) -> None:
     try:
         snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+        auto_arima_parameters = AutoArimaParameters()
+        arima_projection_parameters = ArimaProjectionParameters()
 
-        details = algorithm_details()
+        details = {
+            "id": task_instance_key_str,
+            "version": os.environ.get("CI_PIPELINE_ID"),
+            "auto_arima_params": attr.asdict(auto_arima_parameters),
+            "arima_projection_params": attr.asdict(arima_projection_parameters),
+        }
         cash_flow_data = json.loads(daily_cash_flow)
 
         results = calculate_projection(
-            cash_flow_data,
-            details["auto_arima_params"],
-            details["arima_projection_params"],
+            cash_flow_data, auto_arima_parameters, arima_projection_parameters,
         )
 
         last_cash_flow_date = results[0]
         details["data"] = results[1]
 
-        parameters_to_hash = {
-            "auto_arima_params": details["auto_arima_params"],
-            "arima_projection_params": details["arima_projection_params"],
+        parameters_to_hash: Dict[str, Dict[str, Any]] = {
+            "auto_arima_params": cast(Dict[str, Any], details["auto_arima_params"]),
+            "arima_projection_params": cast(
+                Dict[str, Any], details["arima_projection_params"]
+            ),
         }
+        parameters_to_hash["auto_arima_params"].pop("random_state", None)
 
         with snowflake_engine.begin() as tx, tempfile.TemporaryDirectory() as path:
             file_identifier = random_identifier()
@@ -180,25 +177,61 @@ def cash_flow_projection(
         snowflake_engine.dispose()
 
 
-def generate_projections(snowflake_connection: str, num_threads: int = 4) -> None:
-    try:
-        snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-        cash_flow_query = """
-            WITH object_debits_credits AS (
-              SELECT account_guid, merchant_guid, date,
-                     OBJECT_CONSTRUCT('debits', debits, 'credits', credits, 'balance',
-                                     opening_balance) AS object
-              FROM "ANALYTICS_PRODUCTION"."DBT_ARIO"."FCT_DAILY_BANK_ACCOUNT_BALANCE"
-              ORDER BY date DESC
+def generate_projections(
+    snowflake_connection: str,
+    num_threads: int,
+    task_instance_key_str: str,
+    schema: str,
+    **kwargs: Any,
+) -> None:
+    metadata = MetaData()
+    snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+
+    fct_daily_bank_account_balance = Table(
+        "fct_daily_bank_account_balance",
+        metadata,
+        autoload=True,
+        autoload_with=snowflake_engine,
+        schema=schema,
+    )
+
+    with snowflake_engine.begin() as tx:
+        table_query = (
+            select(
+                columns=[
+                    fct_daily_bank_account_balance.c.merchant_guid,
+                    fct_daily_bank_account_balance.c.account_guid,
+                    fct_daily_bank_account_balance.c.date,
+                    func.object_construct(
+                        text("'debits'"),
+                        fct_daily_bank_account_balance.c.debits,
+                        text("'credits'"),
+                        fct_daily_bank_account_balance.c.credits,
+                        text("'balance'"),
+                        fct_daily_bank_account_balance.c.opening_balance,
+                    ).label("object"),
+                ],
+                from_obj=fct_daily_bank_account_balance,
             )
-            SELECT merchant_guid, account_guid, OBJECT_AGG(date::varchar, object) AS daily_cash_flow
-            FROM object_debits_credits
-            GROUP BY merchant_guid, account_guid"""
+            .order_by(fct_daily_bank_account_balance.c.date.desc())
+            .cte("object_debits_credits")
+        )
 
-        # Get the set of downloaded flinks responses
-        cash_flow = pd.read_sql_query(cash_flow_query, snowflake_engine)
+        statement = (
+            select(
+                columns=[
+                    table_query.c.merchant_guid,
+                    table_query.c.account_guid,
+                    func.object_agg(table_query.c.date, table_query.c.object).label(
+                        "daily_cash_flow"
+                    ),
+                ]
+            )
+            .group_by(table_query.c.merchant_guid, table_query.c.account_guid)
+            .select_from(table_query)
+        )
 
-        for _index, row in cash_flow.iterrows():
+        for row in tx.execute(statement).fetchall():
             with ThreadPoolExecutor(max_workers=num_threads) as executor:
                 executor.submit(
                     cash_flow_projection,
@@ -206,13 +239,8 @@ def generate_projections(snowflake_connection: str, num_threads: int = 4) -> Non
                     row["account_guid"],
                     row["daily_cash_flow"],
                     snowflake_connection,
+                    task_instance_key_str,
                 )
-
-    except:
-        e = sys.exc_info()
-        logging.error(f"❌ Error accessing daily cash flow: {e}")
-    finally:
-        snowflake_engine.dispose()
 
 
 def create_dag() -> DAG:
@@ -227,13 +255,18 @@ def create_dag() -> DAG:
         dag << PythonOperator(
             task_id="create_table",
             python_callable=create_table,
-            op_kwargs={"snowflake_connection": "snowflake_zetatango_production",},
+            op_kwargs={
+                "snowflake_connection": "snowflake_zetatango_production",
+                "schema": "ZETATANGO.CORE_PRODUCTION",
+            },
         ) >> PythonOperator(
             task_id="generate_projections",
             python_callable=generate_projections,
+            provide_context=True,
             op_kwargs={
                 "snowflake_connection": "snowflake_zetatango_production",
                 "num_threads": 10,
+                "schema": "DBT_ARIO",
             },
         )
 
@@ -262,7 +295,7 @@ if __name__ == "__main__":
             url, connect_args={"authenticator": "externalbrowser",},
         ),
     ) as mock_engine:
-        create_table("snowflake_connection")
-        generate_projections("snowflake_connection", 1)
+        create_table("snowflake_connection", "ZETATANGO.CORE_STAGING")
+        generate_projections("snowflake_connection", 1, "task_id", "DBT_ARIO")
 else:
     globals()["generate_cash_flow_projections"] = create_dag()
