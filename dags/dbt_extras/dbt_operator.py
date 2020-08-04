@@ -61,6 +61,7 @@ class DbtOperator(BashOperator):
         super(DbtOperator, self).__init__(
             bash_command="git clone https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab.com/tc-data/curated-data-warehouse.git"
             "&& cd curated-data-warehouse"
+            "&& git pull origin master"
             f"&& {command}",
             env=env,
             *args,
