@@ -481,7 +481,6 @@ def create_dag() -> DAG:
         dag << import_core_staging >> decrypt_core_staging
         dag << import_idp_staging
         dag << import_kyc_staging >> decrypt_kyc_staging
-        [decrypt_core_staging, decrypt_kyc_staging] >> dbt_run >> dbt_snapshot
 
     return dag
 

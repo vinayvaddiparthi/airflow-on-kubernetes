@@ -55,12 +55,15 @@ class DbtOperator(BashOperator):
 
         profiles = f"--profiles-dir {profiles_args}"
         target = f"--target {target_args}"
+        deps = " ".join(["dbt", DbtAction.deps.name, profiles, target])
         command = " ".join(["dbt", action.name, profiles, target])
         print(f"Execute command: {command}")
 
         super(DbtOperator, self).__init__(
             bash_command="git clone https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab.com/tc-data/curated-data-warehouse.git"
             "&& cd curated-data-warehouse"
+            "&& git pull origin master"
+            f"&& {deps}"
             f"&& {command}",
             env=env,
             *args,
