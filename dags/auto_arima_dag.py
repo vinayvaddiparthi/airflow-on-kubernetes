@@ -178,24 +178,27 @@ def cash_flow_projection(
 
 
 def generate_projections(
-    snowflake_connection: str,
+    snowflake_zetatango_connection: str,
+    snowflake_analytics_connection: str,
     num_threads: int,
     task_instance_key_str: str,
     schema: str,
     **kwargs: Any,
 ) -> None:
     metadata = MetaData()
-    snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+    production_engine = SnowflakeHook(
+        snowflake_analytics_connection
+    ).get_sqlalchemy_engine()
 
     fct_daily_bank_account_balance = Table(
         "fct_daily_bank_account_balance",
         metadata,
         autoload=True,
-        autoload_with=snowflake_engine,
+        autoload_with=production_engine,
         schema=schema,
     )
 
-    with snowflake_engine.begin() as tx:
+    with production_engine.begin() as tx:
         table_query = (
             select(
                 columns=[
@@ -238,7 +241,7 @@ def generate_projections(
                     row["merchant_guid"],
                     row["account_guid"],
                     row["daily_cash_flow"],
-                    snowflake_connection,
+                    snowflake_zetatango_connection,
                     task_instance_key_str,
                 )
 
@@ -257,14 +260,15 @@ def create_dag() -> DAG:
             python_callable=create_table,
             op_kwargs={
                 "snowflake_connection": "snowflake_zetatango_production",
-                "schema": "ZETATANGO.CORE_PRODUCTION",
+                "schema": "CORE_PRODUCTION",
             },
         ) >> PythonOperator(
             task_id="generate_projections",
             python_callable=generate_projections,
             provide_context=True,
             op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_production",
+                "snowflake_zetatango_connection": "snowflake_zetatango_production",
+                "snowflake_analytics_connection": "snowflake_analytics_production",
                 "num_threads": 10,
                 "schema": "DBT_ARIO",
             },
@@ -279,23 +283,33 @@ if __name__ == "__main__":
     from snowflake.sqlalchemy import URL
 
     account = os.environ.get("SNOWFLAKE_ACCOUNT")
-    database = os.environ.get("SNOWFLAKE_DATABASE")
-    role = os.environ.get("SNOWFLAKE_ROLE")
     user = os.environ.get("SNOWFLAKE_USER")
+    role = "SYSADMIN"
 
-    url = (
-        URL(account=account, database=database, role=role, user=user)
-        if user
-        else URL(account=account, database=database, role=role)
+    zetatango_database = "ZETATANGO"
+    production_database = "ANALYTICS_PRODUCTION"
+
+    zetatango_engine = create_engine(
+        URL(account=account, database=zetatango_database, role=role, user=user),
+        connect_args={"authenticator": "externalbrowser"},
+    )
+    production_engine = create_engine(
+        URL(account=account, database=production_database, role=role, user=user,),
+        connect_args={"authenticator": "externalbrowser"},
     )
 
     with patch(
         "dags.auto_arima_dag.SnowflakeHook.get_sqlalchemy_engine",
-        return_value=create_engine(
-            url, connect_args={"authenticator": "externalbrowser",},
-        ),
-    ) as mock_engine:
-        create_table("snowflake_connection", "ZETATANGO.CORE_STAGING")
-        generate_projections("snowflake_connection", 1, "task_id", "DBT_ARIO")
+        #         return_value=zetatango_engine # For create_table
+        return_value=production_engine,  # For generate_projections
+    ):
+        #         create_table("snowflake_zetatango_production", "CORE_STAGING")
+        generate_projections(
+            "snowflake_zetatango_production",
+            "snowflake_analytics_connection",
+            1,
+            "task_id",
+            "DBT_ARIO",
+        )
 else:
     globals()["generate_cash_flow_projections"] = create_dag()
