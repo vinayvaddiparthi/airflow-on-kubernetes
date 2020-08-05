@@ -53,13 +53,32 @@ def create_table(snowflake_connection: str, schema: str,) -> None:
     cash_flow_projections.create(snowflake_engine, checkfirst=True)
 
 
+def calculate_balance_projection(df: pd.DataFrame, prediction_df: pd.DataFrame) -> None:
+    running_balance = (
+        df["balance"].iloc[-1] + df["credits"].iloc[-1] - df["debits"].iloc[-1]
+    )
+
+    projected_opening_balances = []
+    projected_opening_balances.append(running_balance)
+
+    for index in range(1, len(prediction_df.index)):
+        running_balance = (
+            running_balance
+            + prediction_df["credits_prediction"].iloc[index]
+            - prediction_df["debits_prediction"].iloc[index]
+        )
+
+        projected_opening_balances.append(running_balance)
+
+    prediction_df["balance_prediction"] = projected_opening_balances
+
+
 def calculate_projection(
     data: Dict,
     auto_arima_params: AutoArimaParameters,
     arima_projection_params: ArimaProjectionParameters,
 ) -> Tuple[str, Dict[str, Any]]:
     df = pd.DataFrame.from_dict(data, orient="index")
-    df = df[["credits", "debits"]]
 
     df.index = pd.to_datetime(df.index)
 
@@ -78,16 +97,18 @@ def calculate_projection(
     )
 
     predictions = {
-        "credits prediction": arima_credits_model.predict(
+        "credits_prediction": arima_credits_model.predict(
             **(attr.asdict(arima_projection_params))
         ),
-        "debits prediction": arima_debits_model.predict(
+        "debits_prediction": arima_debits_model.predict(
             **(attr.asdict(arima_projection_params))
         ),
     }
 
     prediction_df = pd.DataFrame(predictions, index=prediction_index)
     prediction_df.index = pd.to_datetime(prediction_df.index).astype(str)
+
+    calculate_balance_projection(df, prediction_df)
 
     return df.index.max(), prediction_df.to_dict()
 
@@ -97,7 +118,7 @@ def cash_flow_projection(
     account_guid: str,
     daily_cash_flow: str,
     snowflake_connection: str,
-    task_instance_key_str: str,
+    projection_id: str,
 ) -> None:
     try:
         snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
@@ -105,7 +126,7 @@ def cash_flow_projection(
         arima_projection_parameters = ArimaProjectionParameters()
 
         details = {
-            "id": task_instance_key_str,
+            "id": projection_id,
             "version": os.environ.get("CI_PIPELINE_ID"),
             "auto_arima_params": attr.asdict(auto_arima_parameters),
             "arima_projection_params": attr.asdict(arima_projection_parameters),
@@ -182,6 +203,7 @@ def generate_projections(
     snowflake_analytics_connection: str,
     num_threads: int,
     task_instance_key_str: str,
+    ts_nodash: str,
     schema: str,
     **kwargs: Any,
 ) -> None:
@@ -234,6 +256,8 @@ def generate_projections(
             .select_from(table_query)
         )
 
+        projection_id: str = f"{task_instance_key_str}_{ts_nodash}"
+
         for row in tx.execute(statement).fetchall():
             with ThreadPoolExecutor(max_workers=num_threads) as executor:
                 executor.submit(
@@ -242,7 +266,7 @@ def generate_projections(
                     row["account_guid"],
                     row["daily_cash_flow"],
                     snowflake_zetatango_connection,
-                    task_instance_key_str,
+                    projection_id,
                 )
 
 
@@ -309,6 +333,7 @@ if __name__ == "__main__":
             "snowflake_analytics_connection",
             1,
             "task_id",
+            "task_ts",
             "DBT_ARIO",
         )
 else:
