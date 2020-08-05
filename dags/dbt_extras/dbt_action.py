@@ -12,3 +12,4 @@ class DbtAction(enum.Enum):
     debug = 4
     seed = 5
     docs = 6
+    deps = 0
