@@ -24,7 +24,6 @@ from helpers.auto_arima_parameters import AutoArimaParameters, ArimaProjectionPa
 
 from snowflake.sqlalchemy import VARIANT
 from sqlalchemy.sql import select, func, text
-from sqlalchemy.engine import Engine
 from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, Numeric, DateTime
 
 
@@ -156,7 +155,7 @@ def skip_projection(
 
         if len(results) > 0:
             logging.info(
-                f"✔️️ Skipping generating projections for {merchant_guid} - {account_guid}"
+                f"⏩️️ Skipping generating projections for {merchant_guid} - {account_guid}"
             )
             return True
         else:
@@ -366,47 +365,21 @@ def create_dag() -> DAG:
         return dag
 
 
-def test_get_sqlalchemy_engine(self: SnowflakeHook, engine_kwargs: Dict = {}) -> Engine:
-    connection_name = getattr(self, self.conn_name_attr)
-
-    account = os.environ.get("SNOWFLAKE_ACCOUNT")
-    user = os.environ.get("SNOWFLAKE_USER")
-    role = "SYSADMIN"
-
-    zetatango_database = "ZETATANGO"
-    production_database = "ANALYTICS_PRODUCTION"
-
-    zetatango_engine = create_engine(
-        URL(account=account, database=zetatango_database, role=role, user=user),
-        connect_args={"authenticator": "externalbrowser"},
-    )
-    production_engine = create_engine(
-        URL(account=account, database=production_database, role=role, user=user,),
-        connect_args={"authenticator": "externalbrowser"},
-    )
-
-    if connection_name == "snowflake_zetatango_production":
-        return zetatango_engine
-    else:
-        return production_engine
-
-
 if __name__ == "__main__":
-    from sqlalchemy import create_engine
-    from snowflake.sqlalchemy import URL
+    from tests.helpers.snowflake_hook import test_get_sqlalchemy_engine
 
     # Monkeypatch the get engine function to return the right engine depending on the connection string
     SnowflakeHook.get_sqlalchemy_engine = test_get_sqlalchemy_engine
 
     create_table("snowflake_zetatango_production", "CORE_STAGING")
-    generate_projections(
-        "snowflake_zetatango_production",
-        "snowflake_analytics_connection",
-        1,
-        "task_id",
-        "task_ts",
-        "DBT_ARIO",
-        "CORE_STAGING",
-    )
+#     generate_projections(
+#         "snowflake_zetatango_production",
+#         "snowflake_analytics_connection",
+#         1,
+#         "task_id",
+#         "task_ts",
+#         "DBT_ARIO",
+#         "CORE_STAGING",
+#     )
 else:
     globals()["generate_cash_flow_projections"] = create_dag()
