@@ -1,6 +1,4 @@
 import os
-import tempfile
-import sys
 import logging
 import json
 import pendulum
@@ -15,16 +13,13 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from pmdarima.arima import auto_arima
 from hashlib import sha256
 
-from utils import random_identifier
-from pathlib import Path
-
 from typing import Dict, Any, cast
 
 from helpers.auto_arima_parameters import AutoArimaParameters, ArimaProjectionParameters
 
 from snowflake.sqlalchemy import VARIANT
 from sqlalchemy.sql import select, func, text
-from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, Numeric, DateTime
+from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, DateTime
 
 
 def create_table(snowflake_connection: str, schema: str,) -> None:
@@ -38,7 +33,7 @@ def create_table(snowflake_connection: str, schema: str,) -> None:
         Column("account_guid", VARCHAR, nullable=False),
         Column("projections", VARIANT, nullable=False),
         Column("last_cash_flow_date", Date, nullable=False),
-        Column("parameters_hash", Numeric(19, 0), nullable=False),
+        Column("parameters_hash", VARCHAR, nullable=False),
         Column("generated_at", DateTime, nullable=False),
         schema=schema,
     )
@@ -122,13 +117,73 @@ def skip_projection(
     account_guid: str,
     last_cash_flow_date: pd.Timestamp,
     parameters: Dict[str, Dict[str, Any]],
+    existing_projections_df: pd.DataFrame,
+) -> bool:
+    try:
+        existing_projections_df.loc[
+            (
+                merchant_guid,
+                account_guid,
+                last_cash_flow_date,
+                sha256(json.dumps(parameters).encode("utf-8")).hexdigest(),
+            )
+        ]
+
+        logging.info(
+            f"⏩️️ Skipping generating projections for {merchant_guid} - {account_guid}"
+        )
+        return True
+    except KeyError:
+        print("Not skipping")
+        return False
+
+
+def cash_flow_projection(
+    merchant_guid: str,
+    account_guid: str,
+    daily_cash_flow: str,
+    projection_id: str,
+    existing_projections_df: pd.DataFrame,
     snowflake_zetatango_connection: str,
     zetatango_schema: str,
-) -> bool:
+) -> None:
     metadata = MetaData()
     zetatango_engine = SnowflakeHook(
         snowflake_zetatango_connection
     ).get_sqlalchemy_engine()
+    auto_arima_parameters = AutoArimaParameters()
+    arima_projection_parameters = ArimaProjectionParameters()
+
+    details = {
+        "id": projection_id,
+        "version": os.environ.get("CI_PIPELINE_ID"),
+        "auto_arima_params": attr.asdict(auto_arima_parameters),
+        "arima_projection_params": attr.asdict(arima_projection_parameters),
+    }
+    cash_flow_data = json.loads(daily_cash_flow)
+
+    last_cash_flow_date = find_last_cash_flow_date(cash_flow_data)
+
+    parameters_to_hash: Dict[str, Dict[str, Any]] = {
+        "auto_arima_params": cast(Dict[str, Any], details["auto_arima_params"]),
+        "arima_projection_params": cast(
+            Dict[str, Any], details["arima_projection_params"]
+        ),
+    }
+    parameters_to_hash["auto_arima_params"].pop("random_state", None)
+
+    if skip_projection(
+        merchant_guid,
+        account_guid,
+        last_cash_flow_date,
+        parameters_to_hash,
+        existing_projections_df,
+    ):
+        return
+
+    details["data"] = calculate_projection(
+        cash_flow_data, auto_arima_parameters, arima_projection_parameters,
+    )
 
     cash_flow_projections = Table(
         "cash_flow_projections",
@@ -138,123 +193,37 @@ def skip_projection(
         schema=zetatango_schema,
     )
 
-    select_query = (
-        select(columns=[text("1")], from_obj=cash_flow_projections)
-        .where(cash_flow_projections.c.merchant_guid == merchant_guid)
-        .where(cash_flow_projections.c.account_guid == account_guid)
-        .where(
-            cash_flow_projections.c.last_cash_flow_date == last_cash_flow_date.date()
-        )
-        .where(
-            cash_flow_projections.c.parameters_hash == func.hash(json.dumps(parameters))
-        )
-    )
-
     with zetatango_engine.begin() as tx:
-        results = tx.execute(select_query).fetchall()
-
-        if len(results) > 0:
-            logging.info(
-                f"⏩️️ Skipping generating projections for {merchant_guid} - {account_guid}"
-            )
-            return True
-        else:
-            return False
-
-
-def cash_flow_projection(
-    merchant_guid: str,
-    account_guid: str,
-    daily_cash_flow: str,
-    snowflake_connection: str,
-    projection_id: str,
-    schema: str,
-) -> None:
-    try:
-        snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-        auto_arima_parameters = AutoArimaParameters()
-        arima_projection_parameters = ArimaProjectionParameters()
-
-        details = {
-            "id": projection_id,
-            "version": os.environ.get("CI_PIPELINE_ID"),
-            "auto_arima_params": attr.asdict(auto_arima_parameters),
-            "arima_projection_params": attr.asdict(arima_projection_parameters),
-        }
-        cash_flow_data = json.loads(daily_cash_flow)
-
-        last_cash_flow_date = find_last_cash_flow_date(cash_flow_data)
-
-        parameters_to_hash: Dict[str, Dict[str, Any]] = {
-            "auto_arima_params": cast(Dict[str, Any], details["auto_arima_params"]),
-            "arima_projection_params": cast(
-                Dict[str, Any], details["arima_projection_params"]
-            ),
-        }
-        parameters_to_hash["auto_arima_params"].pop("random_state", None)
-
-        if skip_projection(
-            merchant_guid,
-            account_guid,
-            last_cash_flow_date,
-            parameters_to_hash,
-            snowflake_connection,
-            schema,
-        ):
-            return
-
-        details["data"] = calculate_projection(
-            cash_flow_data, auto_arima_parameters, arima_projection_parameters,
-        )
-
-        with snowflake_engine.begin() as tx, tempfile.TemporaryDirectory() as path:
-            file_identifier = random_identifier()
-
-            tmp_file_path = Path(path) / file_identifier
-            staging_location = f'"ZETATANGO"."CORE_PRODUCTION"."{file_identifier}"'
-
-            with open(tmp_file_path, "w") as file:
-                file.write(json.dumps(details))
-
-            statements = [
-                f"CREATE OR REPLACE TEMPORARY STAGE {staging_location} FILE_FORMAT=(TYPE=JSON)",
-                f"PUT file://{tmp_file_path} @{staging_location}",
-                (
-                    f"MERGE INTO"
-                    f'  "ZETATANGO"."CORE_PRODUCTION"."CASH_FLOW_PROJECTIONS" cash_flow_projections'
-                    f" USING (SELECT '{merchant_guid}' as merchant_guid,"
-                    f"       '{account_guid}' as account_guid,"
-                    f"       '{last_cash_flow_date}' as last_cash_flow_date,"
-                    f"       HASH('{json.dumps(parameters_to_hash)}') as parameters_hash,"
-                    f"       PARSE_JSON($1) AS projection FROM @{staging_location}) projection"
-                    f" ON cash_flow_projections.merchant_guid = projection.merchant_guid and"
-                    f"    cash_flow_projections.account_guid = projection.account_guid and"
-                    f"    cash_flow_projections.last_cash_flow_date = projection.last_cash_flow_date and"
-                    f"    cash_flow_projections.parameters_hash = projection.parameters_hash"
-                    f" WHEN NOT MATCHED THEN INSERT"
-                    f"   (merchant_guid, account_guid, last_cash_flow_date, parameters_hash,"
-                    f"   generated_at, projections)"
-                    f" VALUES (projection.merchant_guid, projection.account_guid,"
-                    f"        projection.last_cash_flow_date, projection.parameters_hash,"
-                    f"        CURRENT_TIMESTAMP, projection.projection)"
+        select_query = select(
+            columns=[
+                text(f"'{merchant_guid}' as merchant_guid"),
+                text(f"'{account_guid}' as account_guid"),
+                text(f"'{last_cash_flow_date.date()}' as last_cash_flow_date"),
+                text(
+                    f"'{sha256(json.dumps(parameters_to_hash).encode('utf-8')).hexdigest()}' as parameters_hash"
                 ),
+                func.parse_json(json.dumps(details)).label("projections"),
+                func.CURRENT_TIMESTAMP().label("generated_at"),
             ]
-
-            for statement in statements:
-                tx.execute(statement).fetchall()
-
-            os.remove(tmp_file_path)
-
-        logging.info(
-            f"✔️ Successfully stored projections for {merchant_guid} - {account_guid}"
         )
-    except:
-        e = sys.exc_info()
-        logging.error(
-            f"❌ Error calculating projections for {merchant_guid} - {account_guid}: {e}"
+
+        insert_query = cash_flow_projections.insert().from_select(
+            [
+                "merchant_guid",
+                "account_guid",
+                "last_cash_flow_date",
+                "parameters_hash",
+                "projections",
+                "generated_at",
+            ],
+            select_query,
         )
-    finally:
-        snowflake_engine.dispose()
+
+        tx.execute(insert_query)
+
+    logging.info(
+        f"✔️ Successfully stored projections for {merchant_guid} - {account_guid}"
+    )
 
 
 def generate_projections(
@@ -271,6 +240,39 @@ def generate_projections(
     production_engine = SnowflakeHook(
         snowflake_analytics_connection
     ).get_sqlalchemy_engine()
+    zetatango_engine = SnowflakeHook(
+        snowflake_zetatango_connection
+    ).get_sqlalchemy_engine()
+
+    cash_flow_projections = Table(
+        "cash_flow_projections",
+        metadata,
+        autoload=True,
+        autoload_with=zetatango_engine,
+        schema=zetatango_schema,
+    )
+
+    select_query = select(
+        columns=[
+            cash_flow_projections.c.merchant_guid,
+            cash_flow_projections.c.account_guid,
+            cash_flow_projections.c.last_cash_flow_date,
+            cash_flow_projections.c.parameters_hash,
+            text("1"),
+        ],
+        from_obj=cash_flow_projections,
+    )
+
+    existing_projections_df = pd.read_sql_query(
+        select_query,
+        zetatango_engine,
+        index_col=[
+            "merchant_guid",
+            "account_guid",
+            "last_cash_flow_date",
+            "parameters_hash",
+        ],
+    )
 
     fct_daily_bank_account_balance = Table(
         "fct_daily_bank_account_balance",
@@ -327,8 +329,9 @@ def generate_projections(
                     row["merchant_guid"],
                     row["account_guid"],
                     row["daily_cash_flow"],
-                    snowflake_zetatango_connection,
                     projection_id,
+                    existing_projections_df,
+                    snowflake_zetatango_connection,
                     zetatango_schema,
                 )
 
