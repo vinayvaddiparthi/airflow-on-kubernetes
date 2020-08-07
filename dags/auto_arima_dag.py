@@ -18,7 +18,7 @@ from typing import Dict, Any, cast
 from helpers.auto_arima_parameters import AutoArimaParameters, ArimaProjectionParameters
 
 from snowflake.sqlalchemy import VARIANT
-from sqlalchemy.sql import select, func, text
+from sqlalchemy.sql import select, func, text, literal_column
 from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, DateTime
 
 
@@ -134,7 +134,6 @@ def skip_projection(
         )
         return True
     except KeyError:
-        print("Not skipping")
         return False
 
 
@@ -196,12 +195,14 @@ def cash_flow_projection(
     with zetatango_engine.begin() as tx:
         select_query = select(
             columns=[
-                text(f"'{merchant_guid}' as merchant_guid"),
-                text(f"'{account_guid}' as account_guid"),
-                text(f"'{last_cash_flow_date.date()}' as last_cash_flow_date"),
-                text(
-                    f"'{sha256(json.dumps(parameters_to_hash).encode('utf-8')).hexdigest()}' as parameters_hash"
+                literal_column(f"'{merchant_guid}'").label("merchant_guid"),
+                literal_column(f"'{account_guid}'").label("account_guid"),
+                literal_column(f"'{last_cash_flow_date.date()}'").label(
+                    "last_cash_flow_date"
                 ),
+                literal_column(
+                    f"'{sha256(json.dumps(parameters_to_hash).encode('utf-8')).hexdigest()}'"
+                ).label("parameters_hash"),
                 func.parse_json(json.dumps(details)).label("projections"),
                 func.CURRENT_TIMESTAMP().label("generated_at"),
             ]
