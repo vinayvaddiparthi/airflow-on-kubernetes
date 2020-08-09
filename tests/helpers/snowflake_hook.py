@@ -14,7 +14,7 @@ def test_get_sqlalchemy_engine(self: SnowflakeHook, engine_kwargs: Dict = {}) ->
 
     account = os.environ.get("SNOWFLAKE_ACCOUNT")
     user = os.environ.get("SNOWFLAKE_USER")
-    role = "SYSADMIN"
+    role = os.environ.get("SNOWFLAKE_ROLE")
 
     zetatango_database = "ZETATANGO"
     production_database = "ANALYTICS_PRODUCTION"
