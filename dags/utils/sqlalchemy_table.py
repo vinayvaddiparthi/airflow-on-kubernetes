@@ -35,11 +35,11 @@ def set_class_module(klass, module_name: str):
     module.__dict__[klass.__name__] = klass
 
 
-def define_table(name: str, module: str, descriptor: dict):
+def define_table(table_name: str, model_name: str, module: str, descriptor: dict):
     import_module(module, __name__)
 
     cls_dict = dict()
-    cls_dict['__tablename__'] = name
+    cls_dict['__tablename__'] = table_name
 
     column_dict = dict()
     sequence = Sequence('seq_reg_id', start=1, increment=1)
@@ -52,7 +52,7 @@ def define_table(name: str, module: str, descriptor: dict):
 
     base_classes = [Base]
     cls = ModelMeta(
-        name,
+        model_name,
         tuple(base_class for base_class in base_classes),
         cls_dict
     )
