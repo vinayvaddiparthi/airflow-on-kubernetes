@@ -1,4 +1,3 @@
-import os
 import logging
 import json
 import pendulum
@@ -13,9 +12,13 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from pmdarima.arima import auto_arima
 from hashlib import sha256
 
-from typing import Dict, Any, cast
+from typing import Dict, Any, cast, List
 
-from helpers.auto_arima_parameters import AutoArimaParameters, ArimaProjectionParameters
+from helpers.auto_arima_parameters import (
+    AutoArimaParameters,
+    ArimaProjectionParameters,
+    CashFlowProjectionParameters,
+)
 
 from snowflake.sqlalchemy import VARIANT
 from sqlalchemy.sql import select, func, text, literal_column
@@ -41,26 +44,34 @@ def create_table(snowflake_connection: str, schema: str,) -> None:
     cash_flow_projections.create(snowflake_engine, checkfirst=True)
 
 
-def calculate_balance_projection(df: pd.DataFrame, prediction_df: pd.DataFrame) -> None:
-    # We want to prevent negative balance projections
-    running_balance = max(
-        0, df["balance"].iloc[-1] + df["credits"].iloc[-1] - df["debits"].iloc[-1]
-    )
+def calculate_opening_balances(
+    opening_balance: float, df: pd.DataFrame, credits_label: str, debits_label: str
+) -> List[float]:
+    running_balance = opening_balance
 
-    projected_opening_balances = []
-    projected_opening_balances.append(running_balance)
+    opening_balances = []
+    opening_balances.append(running_balance)
 
-    for index in range(1, len(prediction_df.index)):
-        running_balance = max(
-            0,
+    for index in range(1, len(df.index)):
+        running_balance = (
             running_balance
-            + prediction_df["credits_prediction"].iloc[index]
-            - prediction_df["debits_prediction"].iloc[index],
+            + df[credits_label].iloc[index]
+            - df[debits_label].iloc[index]
         )
 
-        projected_opening_balances.append(running_balance)
+        opening_balances.append(running_balance)
 
-    prediction_df["balance_prediction"] = projected_opening_balances
+    return opening_balances
+
+
+def calculate_balance_projection(df: pd.DataFrame, prediction_df: pd.DataFrame) -> None:
+    opening_balance = (
+        df["balance"].iloc[-1] + df["credits"].iloc[-1] - df["debits"].iloc[-1]
+    )
+
+    prediction_df["balance_prediction"] = calculate_opening_balances(
+        opening_balance, prediction_df, "credits_prediction", "debits_prediction"
+    )
 
 
 def calculate_projection(
@@ -93,7 +104,14 @@ def calculate_projection(
     }
 
     prediction_df = pd.DataFrame(predictions, index=prediction_index)
-    prediction_df.index = pd.to_datetime(prediction_df.index).astype(str)
+
+    # We zero out any prediction that is negative before calculating balance
+    prediction_df["credits_prediction"] = prediction_df["credits_prediction"].apply(
+        lambda x: max(0, x)
+    )
+    prediction_df["debits_prediction"] = prediction_df["debits_prediction"].apply(
+        lambda x: max(0, x)
+    )
 
     calculate_balance_projection(cash_flow_df, prediction_df)
 
@@ -146,27 +164,63 @@ def apply_pre_projection_guardrails(
         ]
     )
 
+    logging.info(
+        f"Projection weeks: {projection_weeks}, Required weeks: {required_cash_flow_weeks}, Non-zero cash flow weeks: {non_zero_weeks}"
+    )
+
     return required_cash_flow_weeks > non_zero_weeks
 
 
 def apply_post_projection_guardrails(
     cash_flow_df: pd.DataFrame, projection_df: pd.DataFrame
 ) -> bool:
+    projection_df.index = pd.to_datetime(projection_df.index)
+    projection_df.index.rename(inplace=True, name="DateTime")
+    projection_df.sort_index(inplace=True)
+
+    weekly_actuals_df = (
+        cash_flow_df[["debits", "credits"]]
+        .groupby(pd.Grouper(level="DateTime", freq="W-MON", label="left"))
+        .sum()
+    )
+    weekly_actuals_df["balance"] = calculate_opening_balances(
+        cash_flow_df["balance"].iloc[0], weekly_actuals_df, "credits", "debits"
+    )
+
+    weekly_projections_df = (
+        projection_df[["debits_prediction", "credits_prediction"]]
+        .groupby(pd.Grouper(level="DateTime", freq="W-MON", label="left"))
+        .sum()
+    )
+
+    weekly_projections_opening_balance = max(
+        0,
+        weekly_actuals_df["balance"].iloc[-1]
+        + weekly_actuals_df["credits"].iloc[-1]
+        - weekly_actuals_df["debits"].iloc[-1],
+    )
+    weekly_projections_df["balance_prediction"] = calculate_opening_balances(
+        weekly_projections_opening_balance,
+        weekly_projections_df,
+        "credits_prediction",
+        "debits_prediction",
+    )
+
     closing_predicted_balance = (
-        projection_df["balance_prediction"].iloc[-1]
-        + projection_df["credits_prediction"].iloc[-1]
-        - projection_df["debits_prediction"].iloc[-1]
+        weekly_projections_df["balance_prediction"].iloc[-1]
+        + weekly_projections_df["credits_prediction"].iloc[-1]
+        - weekly_projections_df["debits_prediction"].iloc[-1]
     )
 
     # Validate closing balance
-    min = cash_flow_df["balance"].min() - (2 * cash_flow_df["balance"].std())
-    max = cash_flow_df["balance"].max() + (2 * cash_flow_df["balance"].std())
+    min_balance = cash_flow_df["balance"].min() - (2 * cash_flow_df["balance"].std())
+    max_balance = cash_flow_df["balance"].max() + (2 * cash_flow_df["balance"].std())
 
     logging.info(
-        f"Min: {min}, Max: {max}, Projected balance: {closing_predicted_balance}"
+        f"Min weekly balance: {min_balance}, Max weekly balance: {max_balance}, Projected closing weekly balance: {closing_predicted_balance}"
     )
 
-    return not (min <= closing_predicted_balance <= max)
+    return not (min_balance <= closing_predicted_balance <= max_balance)
 
 
 def cash_flow_projection(
@@ -184,10 +238,11 @@ def cash_flow_projection(
     ).get_sqlalchemy_engine()
     auto_arima_parameters = AutoArimaParameters()
     arima_projection_parameters = ArimaProjectionParameters()
+    cash_flow_projection_parameters = CashFlowProjectionParameters
 
     details = {
         "id": projection_id,
-        "version": os.environ.get("CI_PIPELINE_ID"),
+        "version": cash_flow_projection_parameters.version,
         "auto_arima_params": attr.asdict(auto_arima_parameters),
         "arima_projection_params": attr.asdict(arima_projection_parameters),
     }
@@ -197,6 +252,7 @@ def cash_flow_projection(
         "arima_projection_params": cast(
             Dict[str, Any], details["arima_projection_params"]
         ),
+        "cash_flow_projection_parameters": cast(Dict[str, Any], details["version"]),
     }
     parameters_to_hash["auto_arima_params"].pop("random_state", None)
 
@@ -227,8 +283,6 @@ def cash_flow_projection(
 
         return
 
-    details["data"] = projection_df.to_dict()
-
     cash_flow_projections = Table(
         "cash_flow_projections",
         metadata,
@@ -238,6 +292,9 @@ def cash_flow_projection(
     )
 
     with zetatango_engine.begin() as tx:
+        projection_df.index = pd.to_datetime(projection_df.index).astype(str)
+        details["data"] = projection_df.to_dict()
+
         select_query = select(
             columns=[
                 literal_column(f"'{merchant_guid}'").label("merchant_guid"),
@@ -362,7 +419,6 @@ def generate_projections(
             )
             .group_by(table_query.c.merchant_guid, table_query.c.account_guid)
             .select_from(table_query)
-            .limit(1)
         )
 
         projection_id: str = sha256(
