@@ -172,7 +172,6 @@ def build():
     applicants = session.query(Applicant).limit(50).all()
     for applicant in applicants:
         r.append(applicant)
-    r.export()
 
 
 default_args = {

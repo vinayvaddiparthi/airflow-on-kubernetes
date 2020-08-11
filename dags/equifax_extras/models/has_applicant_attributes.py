@@ -18,5 +18,5 @@ class HasApplicantAttributes(object):
             .filter(ApplicantAttribute.key == key)
             .first()
         )
-        value = attribute.value if attribute else ''
+        value = attribute.value if attribute else ""
         return value

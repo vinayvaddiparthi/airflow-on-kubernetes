@@ -15,9 +15,3 @@ class BaseRequestFile:
     def write(self, row):
         with open(self.path, "a+") as file:
             file.write(str(row))
-
-    def export(self):
-        print(f"Exporting file to {self.path}")
-        with open(self.path, "a+") as file:
-            for row in self.rows:
-                file.write(str(row))
