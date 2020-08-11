@@ -16,7 +16,6 @@ class AutoArimaParameters:
     max_D: int = attr.ib(default=1)
     max_order: int = attr.ib(default=5)
     stepwise: bool = attr.ib(default=True)
-    alpha: float = attr.ib(default=0.2)
     supress_warnings: bool = attr.ib(default=True)
     random: bool = attr.ib(default=True)
     n_fits: int = attr.ib(default=50)
@@ -25,5 +24,5 @@ class AutoArimaParameters:
 
 @attr.s(kw_only=True)
 class ArimaProjectionParameters:
-    n_periods: int = attr.ib(default=14)
+    n_periods: int = attr.ib(default=42)
     alpha: float = attr.ib(default=0.2)
