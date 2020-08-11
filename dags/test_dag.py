@@ -1,29 +1,19 @@
 from datetime import datetime
-
-import os
-
 import json
-
+import os
 import sqlite3
-
-from importlib import import_module
 
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 
 from sqlalchemy.orm import sessionmaker
-
 from sqlalchemy import create_engine
-
-from utils.sqlalchemy_table import Base, build_sqlalchemy_descriptor, define_table
 import sqlalchemy as sql
 
-from equifax_extras.commercial.commercial import dt_comm, dt_tcap
-from equifax_extras.models.applicant import Applicant
-from equifax_extras.models.address import Address
-from equifax_extras.models.address_relationship import AddressRelationship
-from equifax_extras.models.encryption_key import EncryptionKey
+from equifax_extras.models import Address, AddressRelationship, Applicant, ApplicantAttribute
+
+from equifax_extras.consumer.request_file import RequestFile
 
 
 def get_snowflake_engine(snowflake_connection, engine_kwargs=None):
@@ -47,12 +37,6 @@ def connect(engine):
     return session
 
 
-def load_table(engine, table):
-    metadata = sql.MetaData()
-    t = sql.Table(table, metadata, autoload=True, autoload_with=engine)
-    return t
-
-
 cwd = os.getcwd()
 tmp = os.path.join(cwd, 'tmp')
 if not os.path.exists(tmp):
@@ -73,26 +57,35 @@ def init_sqlite():
             conn.close()
 
 
-def load_addresses(snowflake_conn):
-    engine = get_local_snowflake_engine(snowflake_conn)
-    t = load_table(engine, 'ADDRESSES')
-    query = sql.select([t])
+def load_table(engine, table):
+    metadata = sql.MetaData()
+    t = sql.Table(table, metadata, autoload=True, autoload_with=engine)
+    return t
+
+
+def fetch_all(engine, table_name):
+    table = load_table(engine, table_name)
+    query = sql.select([table])
     connection = engine.connect()
     result_proxy = connection.execute(query)
     result_set = result_proxy.fetchall()
-    results = (s for s in result_set)
-    results_json = (r.values()[0] for r in results)
+    return result_set
+
+
+def load_addresses(engine):
+    result_set = fetch_all(engine, 'ADDRESSES')
 
     sqlite_engine = create_engine(sqlite_db_url)
-    session = connect(sqlite_engine)
 
     if sqlite_engine.dialect.has_table(sqlite_engine, Address.__tablename__):
         Address.__table__.drop(bind=sqlite_engine)
 
     if not sqlite_engine.dialect.has_table(sqlite_engine, Address.__tablename__):
         Address.__table__.create(bind=sqlite_engine)
-        for j in results_json:
-            d = json.loads(j)
+        session = connect(sqlite_engine)
+        for result in result_set:
+            result_json = result.values()[0]
+            d = json.loads(result_json)
             d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
             d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
             record = Address(**d)
@@ -100,26 +93,20 @@ def load_addresses(snowflake_conn):
         session.commit()
 
 
-def load_address_relationships(snowflake_conn):
-    engine = get_local_snowflake_engine(snowflake_conn)
-    t = load_table(engine, 'ADDRESS_RELATIONSHIPS')
-    query = sql.select([t])
-    connection = engine.connect()
-    result_proxy = connection.execute(query)
-    result_set = result_proxy.fetchall()
-    results = (s for s in result_set)
-    results_json = (r.values()[0] for r in results)
+def load_address_relationships(engine):
+    result_set = fetch_all(engine, 'ADDRESS_RELATIONSHIPS')
 
     sqlite_engine = create_engine(sqlite_db_url)
-    session = connect(sqlite_engine)
 
     if sqlite_engine.dialect.has_table(sqlite_engine, AddressRelationship.__tablename__):
         AddressRelationship.__table__.drop(bind=sqlite_engine)
 
     if not sqlite_engine.dialect.has_table(sqlite_engine, AddressRelationship.__tablename__):
         AddressRelationship.__table__.create(bind=sqlite_engine)
-        for j in results_json:
-            d = json.loads(j)
+        session = connect(sqlite_engine)
+        for result in result_set:
+            result_json = result.values()[0]
+            d = json.loads(result_json)
             d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
             d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
             if d['party_type'] == "Individuals::Applicant":
@@ -131,56 +118,48 @@ def load_address_relationships(snowflake_conn):
         session.commit()
 
 
-def load_applicants(snowflake_conn):
-    engine = get_local_snowflake_engine(snowflake_conn)
-    t = load_table(engine, 'INDIVIDUALS_APPLICANTS')
-    query = sql.select([t])
-    connection = engine.connect()
-    result_proxy = connection.execute(query)
-    result_set = result_proxy.fetchall()
-    results = (s for s in result_set)
-    results_json = (r.values()[0] for r in results)
+def load_applicants(engine):
+    result_set = fetch_all(engine, 'INDIVIDUALS_APPLICANTS')
 
     sqlite_engine = create_engine(sqlite_db_url)
-    session = connect(sqlite_engine)
 
     if sqlite_engine.dialect.has_table(sqlite_engine, Applicant.__tablename__):
         Applicant.__table__.drop(bind=sqlite_engine)
 
     if not sqlite_engine.dialect.has_table(sqlite_engine, Applicant.__tablename__):
         Applicant.__table__.create(bind=sqlite_engine)
-        for j in results_json:
-            d = json.loads(j)
+        session = connect(sqlite_engine)
+        for result in result_set:
+            result_json = result.values()[0]
+            d = json.loads(result_json)
             d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
             d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
-            applicant = Applicant(**d)
-            session.add(applicant)
+            record = Applicant(**d)
+            session.add(record)
         session.commit()
 
 
-def load_encryption_keys(snowflake_conn):
-    engine = get_local_snowflake_engine(snowflake_conn)
-    t = load_table(engine, 'ENCRYPTION_KEYS')
-    query = sql.select([t])
-    connection = engine.connect()
-    result_proxy = connection.execute(query)
-    result_set = result_proxy.fetchall()
-    results = (s for s in result_set)
-    results_json = (r.values()[0] for r in results)
+def load_applicant_attributes(engine):
+    result_set = fetch_all(engine, 'INDIVIDUAL_ATTRIBUTES')
 
     sqlite_engine = create_engine(sqlite_db_url)
-    session = connect(sqlite_engine)
 
-    if sqlite_engine.dialect.has_table(sqlite_engine, EncryptionKey.__tablename__):
-        EncryptionKey.__table__.drop(bind=sqlite_engine)
+    if sqlite_engine.dialect.has_table(sqlite_engine, ApplicantAttribute.__tablename__):
+        ApplicantAttribute.__table__.drop(bind=sqlite_engine)
 
-    if not sqlite_engine.dialect.has_table(sqlite_engine, EncryptionKey.__tablename__):
-        EncryptionKey.__table__.create(bind=sqlite_engine)
-        for j in results_json:
-            d = json.loads(j)
+    if not sqlite_engine.dialect.has_table(sqlite_engine, ApplicantAttribute.__tablename__):
+        ApplicantAttribute.__table__.create(bind=sqlite_engine)
+        session = connect(sqlite_engine)
+        for result in result_set:
+            result_json = result.values()[0]
+            d = json.loads(result_json)
+            # Delete deprecated individual_id if present
+            d.pop('individual_id', None)
+            applicant_id = d.pop('individuals_applicant_id', None)
+            d['applicant_id'] = applicant_id
             d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
             d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
-            record = EncryptionKey(**d)
+            record = ApplicantAttribute(**d)
             session.add(record)
         session.commit()
 
@@ -189,16 +168,11 @@ def build():
     sqlite_engine = create_engine(sqlite_db_url)
     session = connect(sqlite_engine)
 
-    applicant = session.query(Applicant).first()
-    # print(applicant.date_of_birth)
-    # print(applicant.first_name)
-    # print(applicant.middle_name)
-    # print(applicant.last_name)
-    print("------------------------------------DEBUG")
-    print(applicant.addresses)
-    print(applicant.physical_address)
-    print(applicant.legal_business_address)
-    print("------------------------------------DEBUG")
+    r = RequestFile("tmp/request_file.txt")
+    applicants = session.query(Applicant).limit(50).all()
+    for applicant in applicants:
+        r.append(applicant)
+    r.export()
 
 
 default_args = {
@@ -224,8 +198,10 @@ with DAG(
 
 if __name__ == "__main__":
     init_sqlite()
-    # load_applicants('snowflake_conn')
-    # load_encryption_keys('snowflake_conn')
-    # load_addresses('snowflake_conn')
-    # load_address_relationships('snowflake_conn')
+
+    e = get_local_snowflake_engine('snowflake_conn')
+    load_applicants(e)
+    load_applicant_attributes(e)
+    load_addresses(e)
+    load_address_relationships(e)
     build()
