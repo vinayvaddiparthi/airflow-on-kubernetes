@@ -26,3 +26,8 @@ class AutoArimaParameters:
 class ArimaProjectionParameters:
     n_periods: int = attr.ib(default=42)
     alpha: float = attr.ib(default=0.2)
+
+
+@attr.s(kw_only=True)
+class CashFlowProjectionParameters:
+    version: int = 1
