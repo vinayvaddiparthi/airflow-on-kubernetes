@@ -1,13 +1,12 @@
 from sqlalchemy.orm import relationship
 from sqlalchemy import event
-
 from sqlalchemy import and_
 
 from .address import Address
 from .address_relationship import AddressRelationship
 
-PHYSICAL_ADDRESS = 'physical_address'
-LEGAL_BUSINESS_ADDRESS = 'legal_business_address'
+PHYSICAL_ADDRESS = "physical_address"
+LEGAL_BUSINESS_ADDRESS = "legal_business_address"
 
 
 class HasAddresses(object):
@@ -29,23 +28,23 @@ def setup_listener(_mapper, class_):
     class_.addresses = relationship(
         Address,
         primaryjoin=class_.id == AddressRelationship.party_id,
-        secondary="address_relationships"
+        secondary=AddressRelationship.__tablename__,
     )
 
     class_.physical_addresses = relationship(
         Address,
         primaryjoin=and_(
             class_.id == AddressRelationship.party_id,
-            AddressRelationship.category == PHYSICAL_ADDRESS
+            AddressRelationship.category == PHYSICAL_ADDRESS,
         ),
-        secondary="address_relationships"
+        secondary=AddressRelationship.__tablename__,
     )
 
     class_.legal_business_addresses = relationship(
         Address,
         primaryjoin=and_(
             class_.id == AddressRelationship.party_id,
-            AddressRelationship.category == LEGAL_BUSINESS_ADDRESS
+            AddressRelationship.category == LEGAL_BUSINESS_ADDRESS,
         ),
-        secondary="address_relationships"
+        secondary=AddressRelationship.__tablename__,
     )

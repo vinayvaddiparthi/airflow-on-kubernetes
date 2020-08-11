@@ -1,19 +1,17 @@
 from sqlalchemy import Column
 from sqlalchemy import Integer, String
 
-from .encrypted import encrypted
+from .base import Base
 
+from .encrypted import encrypted
+from .has_addresses import HasAddresses
+from .has_applicant_attributes import HasApplicantAttributes
 from .has_guid import HasGuid
 from .rails_model import RailsModel
 
-from .base import Base
 
-
-from .has_addresses import HasAddresses
-
-
-class Applicant(Base, RailsModel, HasGuid, HasAddresses):
-    __tablename__ = 'applicants'
+class Applicant(Base, RailsModel, HasGuid, HasAddresses, HasApplicantAttributes):
+    __tablename__ = "applicants"
 
     email_address_id = Column(String)
 
