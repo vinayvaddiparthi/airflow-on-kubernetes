@@ -42,18 +42,20 @@ def create_table(snowflake_connection: str, schema: str,) -> None:
 
 
 def calculate_balance_projection(df: pd.DataFrame, prediction_df: pd.DataFrame) -> None:
-    running_balance = (
-        df["balance"].iloc[-1] + df["credits"].iloc[-1] - df["debits"].iloc[-1]
+    # We want to prevent negative balance projections
+    running_balance = max(
+        0, df["balance"].iloc[-1] + df["credits"].iloc[-1] - df["debits"].iloc[-1]
     )
 
     projected_opening_balances = []
     projected_opening_balances.append(running_balance)
 
     for index in range(1, len(prediction_df.index)):
-        running_balance = (
+        running_balance = max(
+            0,
             running_balance
             + prediction_df["credits_prediction"].iloc[index]
-            - prediction_df["debits_prediction"].iloc[index]
+            - prediction_df["debits_prediction"].iloc[index],
         )
 
         projected_opening_balances.append(running_balance)
@@ -61,35 +63,21 @@ def calculate_balance_projection(df: pd.DataFrame, prediction_df: pd.DataFrame) 
     prediction_df["balance_prediction"] = projected_opening_balances
 
 
-def find_last_cash_flow_date(data: Dict) -> pd.Timestamp:
-    df = pd.DataFrame.from_dict(data, orient="index")
-
-    df.index = pd.to_datetime(df.index)
-    df.sort_index(inplace=True)
-
-    return df.index.max()
-
-
 def calculate_projection(
-    data: Dict,
+    cash_flow_df: pd.DataFrame,
     auto_arima_params: AutoArimaParameters,
     arima_projection_params: ArimaProjectionParameters,
-) -> Dict[str, Any]:
-    df = pd.DataFrame.from_dict(data, orient="index")
-
-    df.index = pd.to_datetime(df.index)
-
-    full_index = pd.date_range(df.index.min(), df.index.max())
-    df = df.reindex(full_index, fill_value=0)
-
-    df.sort_index(inplace=True)
-
-    arima_debits_model = auto_arima(df["debits"], **(attr.asdict(auto_arima_params)))
-    arima_credits_model = auto_arima(df["credits"], **(attr.asdict(auto_arima_params)))
+) -> pd.DataFrame:
+    arima_debits_model = auto_arima(
+        cash_flow_df["debits"], **(attr.asdict(auto_arima_params))
+    )
+    arima_credits_model = auto_arima(
+        cash_flow_df["credits"], **(attr.asdict(auto_arima_params))
+    )
 
     days_to_project = arima_projection_params.n_periods
 
-    prediction_start_date = df.index.max() + timedelta(days=1)
+    prediction_start_date = cash_flow_df.index.max() + timedelta(days=1)
     prediction_index = pd.date_range(
         prediction_start_date,
         prediction_start_date + timedelta(days=(days_to_project - 1)),
@@ -107,9 +95,9 @@ def calculate_projection(
     prediction_df = pd.DataFrame(predictions, index=prediction_index)
     prediction_df.index = pd.to_datetime(prediction_df.index).astype(str)
 
-    calculate_balance_projection(df, prediction_df)
+    calculate_balance_projection(cash_flow_df, prediction_df)
 
-    return prediction_df.to_dict()
+    return prediction_df
 
 
 def skip_projection(
@@ -137,10 +125,54 @@ def skip_projection(
         return False
 
 
+def apply_pre_projection_guardrails(
+    cash_flow_df: pd.DataFrame, arima_projection_params: ArimaProjectionParameters
+) -> bool:
+    projection_weeks = int(
+        arima_projection_params.n_periods / 7
+    )  # Determine how many weeks we are going to project for
+    required_cash_flow_weeks = projection_weeks * 3
+
+    weekly_debits_credits_df = (
+        cash_flow_df[["debits", "credits"]]
+        .groupby(pd.Grouper(level="DateTime", freq="W-MON", label="left"))
+        .sum()
+    )
+
+    non_zero_weeks = len(
+        weekly_debits_credits_df[
+            (weekly_debits_credits_df["credits"] > 0)
+            & (weekly_debits_credits_df["debits"] > 0)
+        ]
+    )
+
+    return required_cash_flow_weeks > non_zero_weeks
+
+
+def apply_post_projection_guardrails(
+    cash_flow_df: pd.DataFrame, projection_df: pd.DataFrame
+) -> bool:
+    closing_predicted_balance = (
+        projection_df["balance_prediction"].iloc[-1]
+        + projection_df["credits_prediction"].iloc[-1]
+        - projection_df["debits_prediction"].iloc[-1]
+    )
+
+    # Validate closing balance
+    min = cash_flow_df["balance"].min() - (2 * cash_flow_df["balance"].std())
+    max = cash_flow_df["balance"].max() + (2 * cash_flow_df["balance"].std())
+
+    logging.info(
+        f"Min: {min}, Max: {max}, Projected balance: {closing_predicted_balance}"
+    )
+
+    return not (min <= closing_predicted_balance <= max)
+
+
 def cash_flow_projection(
     merchant_guid: str,
     account_guid: str,
-    daily_cash_flow: str,
+    cash_flow_df: pd.DataFrame,
     projection_id: str,
     existing_projections_df: pd.DataFrame,
     snowflake_zetatango_connection: str,
@@ -159,9 +191,6 @@ def cash_flow_projection(
         "auto_arima_params": attr.asdict(auto_arima_parameters),
         "arima_projection_params": attr.asdict(arima_projection_parameters),
     }
-    cash_flow_data = json.loads(daily_cash_flow)
-
-    last_cash_flow_date = find_last_cash_flow_date(cash_flow_data)
 
     parameters_to_hash: Dict[str, Dict[str, Any]] = {
         "auto_arima_params": cast(Dict[str, Any], details["auto_arima_params"]),
@@ -174,15 +203,31 @@ def cash_flow_projection(
     if skip_projection(
         merchant_guid,
         account_guid,
-        last_cash_flow_date,
+        cash_flow_df.index.max(),
         parameters_to_hash,
         existing_projections_df,
     ):
         return
 
-    details["data"] = calculate_projection(
-        cash_flow_data, auto_arima_parameters, arima_projection_parameters,
+    if apply_pre_projection_guardrails(cash_flow_df, arima_projection_parameters):
+        logging.warning(
+            f"❌ Pre projection guardrail for {merchant_guid} - {account_guid} applied"
+        )
+
+        return
+
+    projection_df = calculate_projection(
+        cash_flow_df, auto_arima_parameters, arima_projection_parameters,
     )
+
+    if apply_post_projection_guardrails(cash_flow_df, projection_df):
+        logging.warning(
+            f"❌ Post projection guardrail for {merchant_guid} - {account_guid} applied"
+        )
+
+        return
+
+    details["data"] = projection_df.to_dict()
 
     cash_flow_projections = Table(
         "cash_flow_projections",
@@ -197,7 +242,7 @@ def cash_flow_projection(
             columns=[
                 literal_column(f"'{merchant_guid}'").label("merchant_guid"),
                 literal_column(f"'{account_guid}'").label("account_guid"),
-                literal_column(f"'{last_cash_flow_date.date()}'").label(
+                literal_column(f"'{cash_flow_df.index.max().date()}'").label(
                     "last_cash_flow_date"
                 ),
                 literal_column(
@@ -317,19 +362,32 @@ def generate_projections(
             )
             .group_by(table_query.c.merchant_guid, table_query.c.account_guid)
             .select_from(table_query)
+            .limit(1)
         )
 
         projection_id: str = sha256(
             f"{task_instance_key_str}_{ts_nodash}".encode("utf-8")
         ).hexdigest()
 
-        for row in tx.execute(statement).fetchall():
-            with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            for row in tx.execute(statement).fetchall():
+                df = pd.DataFrame.from_dict(
+                    json.loads(row["daily_cash_flow"]), orient="index"
+                )
+
+                df.index = pd.to_datetime(df.index)
+
+                full_index = pd.date_range(df.index.min(), df.index.max())
+                df = df.reindex(full_index, fill_value=0)
+
+                df.index.rename(inplace=True, name="DateTime")
+                df.sort_index(inplace=True)
+
                 executor.submit(
                     cash_flow_projection,
                     row["merchant_guid"],
                     row["account_guid"],
-                    row["daily_cash_flow"],
+                    df,
                     projection_id,
                     existing_projections_df,
                     snowflake_zetatango_connection,
