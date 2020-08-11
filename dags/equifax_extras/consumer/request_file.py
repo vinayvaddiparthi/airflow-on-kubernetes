@@ -23,20 +23,20 @@ class RequestFile(BaseRequestFile):
         p1 = FixedWidthColumn(50)
 
     def append(self, applicant):
-        reference_number = f"{applicant.id}".rjust(12, '0')
+        reference_number = f"{applicant.id}".rjust(12, "0")
 
         last_name = str(applicant.last_name, "utf-8")
         first_name = str(applicant.first_name, "utf-8")
         middle_name = str(applicant.middle_name, "utf-8")
-        suffix = applicant.attribute('suffix')
+        suffix = applicant.attribute("suffix")
 
-        sin = applicant.attribute('sin')
+        sin = applicant.attribute("sin")
         if not sin:
-            sin = '000000000'
+            sin = "000000000"
 
         dob_str = str(applicant.date_of_birth, "utf-8")
-        dob = datetime.strptime(dob_str, '%Y-%m-%d')
-        date_of_birth = dob.strftime('%m%d%y')
+        dob = datetime.strptime(dob_str, "%Y-%m-%d")
+        date_of_birth = dob.strftime("%m%d%y")
 
         physical_address = applicant.physical_address
         if physical_address:
@@ -45,12 +45,12 @@ class RequestFile(BaseRequestFile):
             province_code = physical_address.state_province
             postal_code = physical_address.postal_code
         else:
-            street_number_thoroughfare = ''
-            city = ''
-            province_code = ''
-            postal_code = ''
+            street_number_thoroughfare = ""
+            city = ""
+            province_code = ""
+            postal_code = ""
 
-        account_number = '000000000000000000'
+        account_number = "000000000000000000"
 
         row = RequestFile.Row(
             reference_number=reference_number,
@@ -64,6 +64,6 @@ class RequestFile(BaseRequestFile):
             city=city,
             province_code=province_code,
             postal_code=postal_code,
-            account_number=account_number
+            account_number=account_number,
         )
         self.write(row)

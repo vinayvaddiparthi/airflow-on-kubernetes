@@ -15,11 +15,10 @@ class BaseRow:
             attr.set(str(v))
 
     def __str__(self):
-        column_values = list(filter(
-            lambda i: type(i) == FixedWidthColumn,
-            self.__dict__.values()
-        ))
-        value = ''
+        column_values = list(
+            filter(lambda i: type(i) == FixedWidthColumn, self.__dict__.values())
+        )
+        value = ""
         for v in column_values:
             value += str(v)
         value += "\n"
@@ -27,8 +26,7 @@ class BaseRow:
 
     @classmethod
     def column_names(cls):
-        names = dict(filter(
-            lambda i: type(i[1]) == FixedWidthColumn,
-            cls.__dict__.items()
-        )).keys()
+        names = dict(
+            filter(lambda i: type(i[1]) == FixedWidthColumn, cls.__dict__.items())
+        ).keys()
         return names
