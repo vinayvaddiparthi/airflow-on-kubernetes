@@ -369,8 +369,8 @@ def generate_projections(
             f"{task_instance_key_str}_{ts_nodash}".encode("utf-8")
         ).hexdigest()
 
-        for row in tx.execute(statement).fetchall():
-            with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            for row in tx.execute(statement).fetchall():
                 df = pd.DataFrame.from_dict(
                     json.loads(row["daily_cash_flow"]), orient="index"
                 )
