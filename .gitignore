@@ -4,5 +4,6 @@
 __pycache__/
 /venv/
 /tmp/
+/dags/tmp/
 .vscode/
 .vscode

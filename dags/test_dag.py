@@ -1,40 +1,17 @@
 from datetime import datetime
-import json
 import os
 import sqlite3
 
 from airflow import DAG
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
+from airflow.models import Variable
 
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
-import sqlalchemy as sql
 
-from equifax_extras.models import Address, AddressRelationship, Applicant, ApplicantAttribute
-
-from equifax_extras.consumer.request_file import RequestFile
-
-
-def get_snowflake_engine(snowflake_connection, engine_kwargs=None):
-    if engine_kwargs is None:
-        engine_kwargs = dict()
-    engine = SnowflakeHook(snowflake_connection, role='DBT_DEVELOPMENT', database='ZETATANGO', schema='KYC_STAGING').get_sqlalchemy_engine(engine_kwargs)
-    return engine
-
-
-def get_local_snowflake_engine(snowflake_connection):
-    kwargs = {
-        'connect_args': {"authenticator": "externalbrowser"}
-    }
-    engine = get_snowflake_engine(snowflake_connection, kwargs)
-    return engine
-
-
-def connect(engine):
-    session_maker = sessionmaker(bind=engine)
-    session = session_maker()
-    return session
+from equifax_extras.models import Applicant
+from equifax_extras.consumer import RequestFile
+import equifax_extras.utils.snowflake as snowflake
 
 
 cwd = os.getcwd()
@@ -47,6 +24,7 @@ sqlite_db_url = f"sqlite:///{sqlite_db_path}"
 
 
 def init_sqlite():
+    print(f"Connecting to {sqlite_db_url}")
     conn = None
     try:
         conn = sqlite3.connect(sqlite_db_path)
@@ -57,116 +35,10 @@ def init_sqlite():
             conn.close()
 
 
-def load_table(engine, table):
-    metadata = sql.MetaData()
-    t = sql.Table(table, metadata, autoload=True, autoload_with=engine)
-    return t
-
-
-def fetch_all(engine, table_name):
-    table = load_table(engine, table_name)
-    query = sql.select([table])
-    connection = engine.connect()
-    result_proxy = connection.execute(query)
-    result_set = result_proxy.fetchall()
-    return result_set
-
-
-def load_addresses(engine):
-    result_set = fetch_all(engine, 'ADDRESSES')
-
+def generate_file():
     sqlite_engine = create_engine(sqlite_db_url)
-
-    if sqlite_engine.dialect.has_table(sqlite_engine, Address.__tablename__):
-        Address.__table__.drop(bind=sqlite_engine)
-
-    if not sqlite_engine.dialect.has_table(sqlite_engine, Address.__tablename__):
-        Address.__table__.create(bind=sqlite_engine)
-        session = connect(sqlite_engine)
-        for result in result_set:
-            result_json = result.values()[0]
-            d = json.loads(result_json)
-            d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
-            d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
-            record = Address(**d)
-            session.add(record)
-        session.commit()
-
-
-def load_address_relationships(engine):
-    result_set = fetch_all(engine, 'ADDRESS_RELATIONSHIPS')
-
-    sqlite_engine = create_engine(sqlite_db_url)
-
-    if sqlite_engine.dialect.has_table(sqlite_engine, AddressRelationship.__tablename__):
-        AddressRelationship.__table__.drop(bind=sqlite_engine)
-
-    if not sqlite_engine.dialect.has_table(sqlite_engine, AddressRelationship.__tablename__):
-        AddressRelationship.__table__.create(bind=sqlite_engine)
-        session = connect(sqlite_engine)
-        for result in result_set:
-            result_json = result.values()[0]
-            d = json.loads(result_json)
-            d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
-            d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
-            if d['party_type'] == "Individuals::Applicant":
-                d['party_type'] = "Applicant"
-            if d['party_type'] == "Entities::Merchant":
-                d['party_type'] = "Merchant"
-            record = AddressRelationship(**d)
-            session.add(record)
-        session.commit()
-
-
-def load_applicants(engine):
-    result_set = fetch_all(engine, 'INDIVIDUALS_APPLICANTS')
-
-    sqlite_engine = create_engine(sqlite_db_url)
-
-    if sqlite_engine.dialect.has_table(sqlite_engine, Applicant.__tablename__):
-        Applicant.__table__.drop(bind=sqlite_engine)
-
-    if not sqlite_engine.dialect.has_table(sqlite_engine, Applicant.__tablename__):
-        Applicant.__table__.create(bind=sqlite_engine)
-        session = connect(sqlite_engine)
-        for result in result_set:
-            result_json = result.values()[0]
-            d = json.loads(result_json)
-            d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
-            d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
-            record = Applicant(**d)
-            session.add(record)
-        session.commit()
-
-
-def load_applicant_attributes(engine):
-    result_set = fetch_all(engine, 'INDIVIDUAL_ATTRIBUTES')
-
-    sqlite_engine = create_engine(sqlite_db_url)
-
-    if sqlite_engine.dialect.has_table(sqlite_engine, ApplicantAttribute.__tablename__):
-        ApplicantAttribute.__table__.drop(bind=sqlite_engine)
-
-    if not sqlite_engine.dialect.has_table(sqlite_engine, ApplicantAttribute.__tablename__):
-        ApplicantAttribute.__table__.create(bind=sqlite_engine)
-        session = connect(sqlite_engine)
-        for result in result_set:
-            result_json = result.values()[0]
-            d = json.loads(result_json)
-            # Delete deprecated individual_id if present
-            d.pop('individual_id', None)
-            applicant_id = d.pop('individuals_applicant_id', None)
-            d['applicant_id'] = applicant_id
-            d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
-            d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
-            record = ApplicantAttribute(**d)
-            session.add(record)
-        session.commit()
-
-
-def build():
-    sqlite_engine = create_engine(sqlite_db_url)
-    session = connect(sqlite_engine)
+    session_maker = sessionmaker(bind=sqlite_engine)
+    session = session_maker()
 
     r = RequestFile("tmp/request_file.txt")
     applicants = session.query(Applicant).limit(50).all()
@@ -181,26 +53,73 @@ default_args = {
     'retries': 0
 }
 
+environment = Variable.get('environment', '')
+if environment == 'development':
+    snowflake_engine = snowflake.get_local_engine('snowflake_conn')
+else:
+    snowflake_engine = snowflake.get_engine('snowflake_conn')
+
 with DAG(
-    'test_dag',
+    dag_id="generate_file",
     catchup=False,
     default_args=default_args,
     schedule_interval='@once',
 ) as dag:
-    opr_func = PythonOperator(
-        task_id=f"test_connection",
-        python_callable=build,
-        op_kwargs={
-            "snowflake_conn": "snowflake_conn",
-        },
+    op_init_sqlite = PythonOperator(
+        task_id="init_sqlite",
+        python_callable=init_sqlite,
     )
+    op_load_addresses = PythonOperator(
+        task_id="load_addresses",
+        python_callable=snowflake.load_addresses,
+        op_kwargs={
+            "remote_engine": snowflake_engine,
+            "local_engine": create_engine(sqlite_db_url)
+        }
+    )
+    op_load_address_relationships = PythonOperator(
+        task_id="load_address_relationships",
+        python_callable=snowflake.load_address_relationships,
+        op_kwargs={
+            "remote_engine": snowflake_engine,
+            "local_engine": create_engine(sqlite_db_url)
+        }
+    )
+    op_load_applicants = PythonOperator(
+        task_id="load_applicants",
+        python_callable=snowflake.load_applicants,
+        op_kwargs={
+            "remote_engine": snowflake_engine,
+            "local_engine": create_engine(sqlite_db_url)
+        }
+    )
+    op_load_applicant_attributes = PythonOperator(
+        task_id="load_applicant_attributes",
+        python_callable=snowflake.load_applicant_attributes,
+        op_kwargs={
+            "remote_engine": snowflake_engine,
+            "local_engine": create_engine(sqlite_db_url)
+        }
+    )
+    op_generate_file = PythonOperator(
+        task_id="generate_file",
+        python_callable=generate_file
+    )
+
+load = [
+    op_load_addresses,
+    op_load_address_relationships,
+    op_load_applicants,
+    op_load_applicant_attributes
+]
+op_init_sqlite >> load >> op_generate_file
+
 
 if __name__ == "__main__":
     init_sqlite()
-
-    e = get_local_snowflake_engine('snowflake_conn')
-    load_applicants(e)
-    load_applicant_attributes(e)
-    load_addresses(e)
-    load_address_relationships(e)
-    build()
+    sqlite_engine = create_engine(sqlite_db_url)
+    snowflake.load_applicants(snowflake_engine, sqlite_engine)
+    snowflake.load_applicant_attributes(snowflake_engine, sqlite_engine)
+    snowflake.load_addresses(snowflake_engine, sqlite_engine)
+    snowflake.load_address_relationships(snowflake_engine, sqlite_engine)
+    generate_file()
