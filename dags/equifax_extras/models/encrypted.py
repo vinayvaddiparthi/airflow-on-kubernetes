@@ -3,7 +3,9 @@ from base64 import b64decode
 from pyporky.symmetric import SymmetricPorky
 from airflow.models import Variable
 
-porky = SymmetricPorky(aws_region=Variable.get("aws_kms_region", default_var='ca-central-1'))
+porky = SymmetricPorky(
+    aws_region=Variable.get("aws_kms_region", default_var="ca-central-1")
+)
 
 
 def encrypted(func):
