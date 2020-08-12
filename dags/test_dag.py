@@ -15,11 +15,11 @@ import equifax_extras.utils.snowflake as snowflake
 
 
 cwd = os.getcwd()
-tmp = os.path.join(cwd, 'tmp')
+tmp = os.path.join(cwd, "tmp")
 if not os.path.exists(tmp):
     os.mkdir(tmp)
 
-sqlite_db_path = os.path.join(tmp, 'test_database.db')
+sqlite_db_path = os.path.join(tmp, "test_database.db")
 sqlite_db_url = f"sqlite:///{sqlite_db_path}"
 
 
@@ -47,70 +47,66 @@ def generate_file():
 
 
 default_args = {
-    'owner': 'airflow',
-    'start_date': datetime(2020, 1, 1, 10, 00, 00),
-    'concurrency': 1,
-    'retries': 0
+    "owner": "airflow",
+    "start_date": datetime(2020, 1, 1, 10, 00, 00),
+    "concurrency": 1,
+    "retries": 0,
 }
 
-environment = Variable.get('environment', '')
-if environment == 'development':
-    snowflake_engine = snowflake.get_local_engine('snowflake_conn')
+environment = Variable.get("environment", "")
+if environment == "development":
+    snowflake_engine = snowflake.get_local_engine("snowflake_conn")
 else:
-    snowflake_engine = snowflake.get_engine('snowflake_conn')
+    snowflake_engine = snowflake.get_engine("snowflake_conn")
 
 with DAG(
     dag_id="generate_file",
     catchup=False,
     default_args=default_args,
-    schedule_interval='@once',
+    schedule_interval="@once",
 ) as dag:
-    op_init_sqlite = PythonOperator(
-        task_id="init_sqlite",
-        python_callable=init_sqlite,
-    )
+    op_init_sqlite = PythonOperator(task_id="init_sqlite", python_callable=init_sqlite,)
     op_load_addresses = PythonOperator(
         task_id="load_addresses",
         python_callable=snowflake.load_addresses,
         op_kwargs={
             "remote_engine": snowflake_engine,
-            "local_engine": create_engine(sqlite_db_url)
-        }
+            "local_engine": create_engine(sqlite_db_url),
+        },
     )
     op_load_address_relationships = PythonOperator(
         task_id="load_address_relationships",
         python_callable=snowflake.load_address_relationships,
         op_kwargs={
             "remote_engine": snowflake_engine,
-            "local_engine": create_engine(sqlite_db_url)
-        }
+            "local_engine": create_engine(sqlite_db_url),
+        },
     )
     op_load_applicants = PythonOperator(
         task_id="load_applicants",
         python_callable=snowflake.load_applicants,
         op_kwargs={
             "remote_engine": snowflake_engine,
-            "local_engine": create_engine(sqlite_db_url)
-        }
+            "local_engine": create_engine(sqlite_db_url),
+        },
     )
     op_load_applicant_attributes = PythonOperator(
         task_id="load_applicant_attributes",
         python_callable=snowflake.load_applicant_attributes,
         op_kwargs={
             "remote_engine": snowflake_engine,
-            "local_engine": create_engine(sqlite_db_url)
-        }
+            "local_engine": create_engine(sqlite_db_url),
+        },
     )
     op_generate_file = PythonOperator(
-        task_id="generate_file",
-        python_callable=generate_file
+        task_id="generate_file", python_callable=generate_file
     )
 
 load = [
     op_load_addresses,
     op_load_address_relationships,
     op_load_applicants,
-    op_load_applicant_attributes
+    op_load_applicant_attributes,
 ]
 op_init_sqlite >> load >> op_generate_file
 

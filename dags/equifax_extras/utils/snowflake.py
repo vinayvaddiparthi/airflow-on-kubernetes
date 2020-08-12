@@ -20,11 +20,11 @@ def get_engine(snowflake_connection, snowflake_kwargs=None, engine_kwargs=None):
 
 def get_local_engine(snowflake_connection):
     snowflake_kwargs = {
-        'role': 'DBT_DEVELOPMENT',
-        'database': 'ZETATANGO',
-        'schema': 'KYC_STAGING',
+        "role": "DBT_DEVELOPMENT",
+        "database": "ZETATANGO",
+        "schema": "KYC_STAGING",
     }
-    engine_kwargs = {'connect_args': {'authenticator': 'externalbrowser'}}
+    engine_kwargs = {"connect_args": {"authenticator": "externalbrowser"}}
     engine = get_engine(
         snowflake_connection,
         snowflake_kwargs=snowflake_kwargs,
@@ -57,7 +57,7 @@ def fetch_all(engine, table_name):
 def load_addresses(remote_engine, local_engine):
     from equifax_extras.models import Address
 
-    result_set = fetch_all(remote_engine, 'ADDRESSES')
+    result_set = fetch_all(remote_engine, "ADDRESSES")
 
     if local_engine.dialect.has_table(local_engine, Address.__tablename__):
         Address.__table__.drop(bind=local_engine)
@@ -68,8 +68,8 @@ def load_addresses(remote_engine, local_engine):
         for result in result_set:
             result_json = result.values()[0]
             d = json.loads(result_json)
-            d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
-            d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
+            d["created_at"] = datetime.strptime(d["created_at"], "%Y-%m-%d %H:%M:%S.%f")
+            d["updated_at"] = datetime.strptime(d["updated_at"], "%Y-%m-%d %H:%M:%S.%f")
             record = Address(**d)
             session.add(record)
         session.commit()
@@ -78,23 +78,25 @@ def load_addresses(remote_engine, local_engine):
 def load_address_relationships(remote_engine, local_engine):
     from equifax_extras.models import AddressRelationship
 
-    result_set = fetch_all(remote_engine, 'ADDRESS_RELATIONSHIPS')
+    result_set = fetch_all(remote_engine, "ADDRESS_RELATIONSHIPS")
 
     if local_engine.dialect.has_table(local_engine, AddressRelationship.__tablename__):
         AddressRelationship.__table__.drop(bind=local_engine)
 
-    if not local_engine.dialect.has_table(local_engine, AddressRelationship.__tablename__):
+    if not local_engine.dialect.has_table(
+        local_engine, AddressRelationship.__tablename__
+    ):
         AddressRelationship.__table__.create(bind=local_engine)
         session = connect(local_engine)
         for result in result_set:
             result_json = result.values()[0]
             d = json.loads(result_json)
-            d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
-            d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
-            if d['party_type'] == 'Individuals::Applicant':
-                d['party_type'] = 'Applicant'
-            if d['party_type'] == 'Entities::Merchant':
-                d['party_type'] = 'Merchant'
+            d["created_at"] = datetime.strptime(d["created_at"], "%Y-%m-%d %H:%M:%S.%f")
+            d["updated_at"] = datetime.strptime(d["updated_at"], "%Y-%m-%d %H:%M:%S.%f")
+            if d["party_type"] == "Individuals::Applicant":
+                d["party_type"] = "Applicant"
+            if d["party_type"] == "Entities::Merchant":
+                d["party_type"] = "Merchant"
             record = AddressRelationship(**d)
             session.add(record)
         session.commit()
@@ -103,7 +105,7 @@ def load_address_relationships(remote_engine, local_engine):
 def load_applicants(remote_engine, local_engine):
     from equifax_extras.models import Applicant
 
-    result_set = fetch_all(remote_engine, 'INDIVIDUALS_APPLICANTS')
+    result_set = fetch_all(remote_engine, "INDIVIDUALS_APPLICANTS")
 
     if local_engine.dialect.has_table(local_engine, Applicant.__tablename__):
         Applicant.__table__.drop(bind=local_engine)
@@ -114,8 +116,8 @@ def load_applicants(remote_engine, local_engine):
         for result in result_set:
             result_json = result.values()[0]
             d = json.loads(result_json)
-            d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
-            d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
+            d["created_at"] = datetime.strptime(d["created_at"], "%Y-%m-%d %H:%M:%S.%f")
+            d["updated_at"] = datetime.strptime(d["updated_at"], "%Y-%m-%d %H:%M:%S.%f")
             record = Applicant(**d)
             session.add(record)
         session.commit()
@@ -124,23 +126,25 @@ def load_applicants(remote_engine, local_engine):
 def load_applicant_attributes(remote_engine, local_engine):
     from equifax_extras.models import ApplicantAttribute
 
-    result_set = fetch_all(remote_engine, 'INDIVIDUAL_ATTRIBUTES')
+    result_set = fetch_all(remote_engine, "INDIVIDUAL_ATTRIBUTES")
 
     if local_engine.dialect.has_table(local_engine, ApplicantAttribute.__tablename__):
         ApplicantAttribute.__table__.drop(bind=local_engine)
 
-    if not local_engine.dialect.has_table(local_engine, ApplicantAttribute.__tablename__):
+    if not local_engine.dialect.has_table(
+        local_engine, ApplicantAttribute.__tablename__
+    ):
         ApplicantAttribute.__table__.create(bind=local_engine)
         session = connect(local_engine)
         for result in result_set:
             result_json = result.values()[0]
             d = json.loads(result_json)
             # Delete deprecated individual_id if present
-            d.pop('individual_id', None)
-            applicant_id = d.pop('individuals_applicant_id', None)
-            d['applicant_id'] = applicant_id
-            d['created_at'] = datetime.strptime(d['created_at'], '%Y-%m-%d %H:%M:%S.%f')
-            d['updated_at'] = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
+            d.pop("individual_id", None)
+            applicant_id = d.pop("individuals_applicant_id", None)
+            d["applicant_id"] = applicant_id
+            d["created_at"] = datetime.strptime(d["created_at"], "%Y-%m-%d %H:%M:%S.%f")
+            d["updated_at"] = datetime.strptime(d["updated_at"], "%Y-%m-%d %H:%M:%S.%f")
             record = ApplicantAttribute(**d)
             session.add(record)
         session.commit()
