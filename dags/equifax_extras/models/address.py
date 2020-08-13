@@ -6,6 +6,8 @@ from .base import Base
 from .has_guid import HasGuid
 from .rails_model import RailsModel
 
+from typing import List
+
 
 class Address(Base, RailsModel, HasGuid):
     __tablename__ = "addresses"
@@ -25,7 +27,7 @@ class Address(Base, RailsModel, HasGuid):
     verified = Column(String)
 
     @property
-    def lines(self) -> [str]:
+    def lines(self) -> List[str]:
         lines = list()
         if self.civic_line:
             lines.append(self.civic_line)
