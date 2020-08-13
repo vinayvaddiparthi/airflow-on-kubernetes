@@ -2,7 +2,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy import event
 from sqlalchemy import and_
 
-from typing import Any, Optional
+from typing import Any, List, Optional, TYPE_CHECKING
 
 from .address import Address
 from .address_relationship import AddressRelationship
@@ -11,7 +11,23 @@ PHYSICAL_ADDRESS = "physical_address"
 LEGAL_BUSINESS_ADDRESS = "legal_business_address"
 
 
-class HasAddresses(object):
+class HasAddressesType:
+    @property
+    def physical_addresses(self) -> List[Address]:
+        return list()
+
+    @property
+    def legal_business_addresses(self) -> List[Address]:
+        return list()
+
+
+if TYPE_CHECKING:
+    MixinBase = HasAddressesType
+else:
+    MixinBase = object
+
+
+class HasAddresses(MixinBase):
     @property
     def physical_address(self) -> Optional[Address]:
         if not self.physical_addresses:
