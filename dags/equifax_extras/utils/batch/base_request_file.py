@@ -14,7 +14,7 @@ class BaseRequestFile:
         self.qualified_path = os.path.join(self.parent_dir, self.filename)
 
         self.timestamp = datetime.now()
-        self.encoding = 'cp1252'
+        self.encoding = "cp1252"
 
         print(f"Creating file {self.qualified_path}")
 
