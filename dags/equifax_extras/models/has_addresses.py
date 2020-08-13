@@ -2,7 +2,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy import event
 from sqlalchemy import and_
 
-from typing import Any
+from typing import Any, Optional
 
 from .address import Address
 from .address_relationship import AddressRelationship
@@ -13,13 +13,13 @@ LEGAL_BUSINESS_ADDRESS = "legal_business_address"
 
 class HasAddresses(object):
     @property
-    def physical_address(self) -> Address:
+    def physical_address(self) -> Optional[Address]:
         if not self.physical_addresses:
             return None
         return self.physical_addresses[0]
 
     @property
-    def legal_business_address(self) -> Address:
+    def legal_business_address(self) -> Optional[Address]:
         if not self.legal_business_addresses:
             return None
         return self.legal_business_addresses[0]

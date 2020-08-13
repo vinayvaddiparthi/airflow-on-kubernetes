@@ -2,7 +2,7 @@ from .fixed_width_column import FixedWidthColumn
 
 from copy import deepcopy
 
-from typing import Any
+from typing import Any, KeysView
 
 
 class BaseRow:
@@ -27,7 +27,7 @@ class BaseRow:
         return value
 
     @classmethod
-    def column_names(cls) -> [str]:
+    def column_names(cls) -> KeysView:
         names = dict(
             filter(lambda i: type(i[1]) == FixedWidthColumn, cls.__dict__.items())
         ).keys()

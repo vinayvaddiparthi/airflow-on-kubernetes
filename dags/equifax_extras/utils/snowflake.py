@@ -4,14 +4,14 @@ import sqlalchemy as sql
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
 
-from typing import Any
+from typing import Any, Optional
 
 import json
 from datetime import datetime
 
 
 def get_engine(
-    snowflake_connection: str, snowflake_kwargs: dict = None, engine_kwargs: dict = None
+    snowflake_connection: str, snowflake_kwargs: Optional[Any] = None, engine_kwargs: Optional[Any] = None
 ) -> Engine:
     if snowflake_kwargs is None:
         snowflake_kwargs = dict()
@@ -59,7 +59,7 @@ def fetch_all(engine: Engine, table_name: str) -> Any:
     return result_set
 
 
-def load_addresses(remote_engine: Engine, local_engine: Engine):
+def load_addresses(remote_engine: Engine, local_engine: Engine) -> None:
     from equifax_extras.models import Address
 
     result_set = fetch_all(remote_engine, "ADDRESSES")
@@ -80,7 +80,7 @@ def load_addresses(remote_engine: Engine, local_engine: Engine):
         session.commit()
 
 
-def load_address_relationships(remote_engine, local_engine):
+def load_address_relationships(remote_engine: Engine, local_engine: Engine) -> None:
     from equifax_extras.models import AddressRelationship
 
     result_set = fetch_all(remote_engine, "ADDRESS_RELATIONSHIPS")
@@ -107,7 +107,7 @@ def load_address_relationships(remote_engine, local_engine):
         session.commit()
 
 
-def load_applicants(remote_engine, local_engine):
+def load_applicants(remote_engine: Engine, local_engine: Engine) -> None:
     from equifax_extras.models import Applicant
 
     result_set = fetch_all(remote_engine, "INDIVIDUALS_APPLICANTS")
@@ -128,7 +128,7 @@ def load_applicants(remote_engine, local_engine):
         session.commit()
 
 
-def load_applicant_attributes(remote_engine, local_engine):
+def load_applicant_attributes(remote_engine: Engine, local_engine: Engine) -> None:
     from equifax_extras.models import ApplicantAttribute
 
     result_set = fetch_all(remote_engine, "INDIVIDUAL_ATTRIBUTES")

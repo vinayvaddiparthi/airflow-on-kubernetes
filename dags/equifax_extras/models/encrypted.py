@@ -8,7 +8,7 @@ porky = SymmetricPorky(aws_region="ca-central-1")
 
 
 def encrypted(func: Callable) -> Callable:
-    def decrypt(*args: Any):
+    def decrypt(*args: Any) -> bytes:
         encrypted_value = func(*args)
         if not encrypted_value:
             return b""

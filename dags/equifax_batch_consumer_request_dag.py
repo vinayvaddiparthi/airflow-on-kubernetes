@@ -16,6 +16,8 @@ from equifax_extras.models import Applicant
 from equifax_extras.consumer import RequestFile
 import equifax_extras.utils.snowflake as snowflake
 
+from typing import Optional
+
 
 cwd = os.getcwd()
 tmp = os.path.join(cwd, "tmp")
@@ -38,7 +40,7 @@ def init_sqlite() -> None:
             conn.close()
 
 
-def generate_file(**context) -> None:
+def generate_file(**context: Optional[str]) -> None:
     sqlite_engine = create_engine(sqlite_db_url)
     session_maker = sessionmaker(bind=sqlite_engine)
     session = session_maker()
@@ -58,7 +60,7 @@ def generate_file(**context) -> None:
     r.write_footer()
 
 
-def upload_file(**context) -> None:
+def upload_file(**context: Optional[str]) -> None:
     s3 = S3Hook(aws_conn_id="s3_connection")
 
     run_id = context["dag_run"].run_id
