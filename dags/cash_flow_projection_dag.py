@@ -26,7 +26,7 @@ from helpers.auto_arima_parameters import (
 )
 
 from snowflake.sqlalchemy import VARIANT
-from sqlalchemy.sql import select, func, text, literal_column
+from sqlalchemy.sql import select, func, text, literal_column, literal
 from sqlalchemy.engine import Engine
 from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, DateTime
 
@@ -132,35 +132,27 @@ def store_flinks_response(
 def copy_transactions(
     snowflake_connection: str, schema: str, bucket_name: str, num_threads: int = 4
 ) -> None:
-    metadata = MetaData()
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+    metadata = MetaData(bind=snowflake_engine)
 
     merchant_documents = Table(
-        "merchant_documents",
-        metadata,
-        autoload=True,
-        autoload_with=snowflake_engine,
-        schema=schema,
+        "merchant_documents", metadata, autoload=True, schema=schema,
     )
 
     flinks_raw_responses = Table(
-        "flinks_raw_responses",
-        metadata,
-        autoload=True,
-        autoload_with=snowflake_engine,
-        schema=schema,
+        "flinks_raw_responses", metadata, autoload=True, schema=schema,
     )
 
     merchant_documents_select = select(
         columns=[
-            sqlalchemy.cast(literal_column("fields:cloud_file_path"), VARCHAR).label(
+            sqlalchemy.cast(func.get("fields", "cloud_file_path"), VARCHAR).label(
                 "file_path"
             )
         ],
         from_obj=merchant_documents,
     ).where(
-        sqlalchemy.cast(literal_column("fields:doc_type"), VARCHAR)
-        == text("'flinks_raw_response'")
+        sqlalchemy.cast(func.get("fields", "doc_type"), VARCHAR)
+        == literal("'flinks_raw_response'")
     )
 
     flinks_raw_responses_select = select(
@@ -177,7 +169,7 @@ def copy_transactions(
         flinks_raw_responses_select, snowflake_engine
     )
 
-    # The set difference is what we need to downloaded. file_paths are unique so this is a safe operation
+    # The set difference is what we need to download. file_paths are unique so this is a safe operation
     to_download = all_flinks_responses[
         ~all_flinks_responses["file_path"].isin(
             downloaded_flinks_responses["file_path"]
@@ -257,12 +249,7 @@ def calculate_projection(
     prediction_df = pd.DataFrame(predictions, index=prediction_index)
 
     # We zero out any prediction that is negative before calculating balance
-    prediction_df["credits_prediction"] = prediction_df["credits_prediction"].apply(
-        lambda x: max(0, x)
-    )
-    prediction_df["debits_prediction"] = prediction_df["debits_prediction"].apply(
-        lambda x: max(0, x)
-    )
+    prediction_df.clip(lower=0, inplace=True)
 
     calculate_balance_projection(cash_flow_df, prediction_df)
 
