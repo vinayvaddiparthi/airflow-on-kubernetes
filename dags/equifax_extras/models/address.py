@@ -25,7 +25,7 @@ class Address(Base, RailsModel, HasGuid):
     verified = Column(String)
 
     @property
-    def lines(self):
+    def lines(self) -> [str]:
         lines = []
         if self.civic_line:
             lines.append(self.civic_line)
@@ -35,11 +35,11 @@ class Address(Base, RailsModel, HasGuid):
         return lines
 
     @property
-    def country_name(self):
+    def country_name(self) -> str:
         return "Canada"
 
     @property
-    def civic_line(self):
+    def civic_line(self) -> str:
         if not self.premise_number and not self.thoroughfare:
             return ""
 
@@ -53,20 +53,20 @@ class Address(Base, RailsModel, HasGuid):
             return f"{self.premise_number} {self.thoroughfare}"
 
     @property
-    def post_box_line(self):
+    def post_box_line(self) -> str:
         if not self.post_box_type and not self.post_box_number:
             return ""
 
         return f"{self.post_box_type} {self.post_box_number}"
 
     @property
-    def municipal_line(self):
+    def municipal_line(self) -> str:
         return f"{self.city} {self.state_province} {self.country_alpha_3} {self.postal_code}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         separator = " "
         return separator.join(self.lines)
 
-    def __str__(self):
+    def __str__(self) -> str:
         separator = " "
         return separator.join(self.lines)

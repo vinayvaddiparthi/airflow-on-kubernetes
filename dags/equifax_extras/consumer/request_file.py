@@ -3,6 +3,7 @@ from datetime import datetime
 from equifax_extras.utils.batch.fixed_width_column import FixedWidthColumn
 from equifax_extras.utils.batch.base_row import BaseRow
 from equifax_extras.utils.batch.base_request_file import BaseRequestFile
+from equifax_extras.models import Applicant
 
 
 class RequestFile(BaseRequestFile):
@@ -22,7 +23,7 @@ class RequestFile(BaseRequestFile):
         account_number = FixedWidthColumn(18)
         p1 = FixedWidthColumn(50)
 
-    def append(self, applicant):
+    def append(self, applicant: Applicant) -> None:
         reference_number = f"{applicant.id}".rjust(12, "0")
 
         last_name = str(applicant.last_name, "utf-8")

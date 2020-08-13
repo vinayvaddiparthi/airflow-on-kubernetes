@@ -19,7 +19,7 @@ class ApplicantAttribute(Base, RailsModel, HasGuid):
     @property
     @marshalled
     @encrypted
-    def value(self):
+    def value(self) -> str:
         return self.encrypted_value
 
     encryption_epoch = Column(Integer)
@@ -29,8 +29,8 @@ class ApplicantAttribute(Base, RailsModel, HasGuid):
     key = Column(String)
     partition_guid = Column(String)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.key}: {self.value}"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.key}: {self.value}"

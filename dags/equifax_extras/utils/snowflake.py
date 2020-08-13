@@ -1,13 +1,16 @@
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 
 import sqlalchemy as sql
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import sessionmaker, Session
+
+from typing import Any
 
 import json
 from datetime import datetime
 
 
-def get_engine(snowflake_connection, snowflake_kwargs=None, engine_kwargs=None):
+def get_engine(snowflake_connection: str, snowflake_kwargs: dict = None, engine_kwargs: dict = None) -> Engine:
     if snowflake_kwargs is None:
         snowflake_kwargs = dict()
     if engine_kwargs is None:
@@ -18,7 +21,7 @@ def get_engine(snowflake_connection, snowflake_kwargs=None, engine_kwargs=None):
     return engine
 
 
-def get_local_engine(snowflake_connection):
+def get_local_engine(snowflake_connection: str) -> Engine:
     snowflake_kwargs = {
         "role": "DBT_DEVELOPMENT",
         "database": "ZETATANGO",
@@ -33,19 +36,19 @@ def get_local_engine(snowflake_connection):
     return engine
 
 
-def connect(engine):
+def connect(engine: Engine) -> Session:
     session_maker = sessionmaker(bind=engine)
     session = session_maker()
     return session
 
 
-def load_table(engine, table):
+def load_table(engine: Engine, table_name: str) -> sql.Table:
     metadata = sql.MetaData()
-    t = sql.Table(table, metadata, autoload=True, autoload_with=engine)
-    return t
+    table = sql.Table(table_name, metadata, autoload=True, autoload_with=engine)
+    return table
 
 
-def fetch_all(engine, table_name):
+def fetch_all(engine: Engine, table_name: str) -> Any:
     table = load_table(engine, table_name)
     query = sql.select([table])
     connection = engine.connect()
@@ -54,7 +57,7 @@ def fetch_all(engine, table_name):
     return result_set
 
 
-def load_addresses(remote_engine, local_engine):
+def load_addresses(remote_engine: Engine, local_engine: Engine):
     from equifax_extras.models import Address
 
     result_set = fetch_all(remote_engine, "ADDRESSES")

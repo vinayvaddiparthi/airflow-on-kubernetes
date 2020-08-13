@@ -8,6 +8,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.models import Variable
 from airflow.hooks.S3_hook import S3Hook
 
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 
@@ -25,7 +26,7 @@ sqlite_db_path = os.path.join(output_dir, "tmp_database.db")
 sqlite_db_url = f"sqlite:///{sqlite_db_path}"
 
 
-def init_sqlite():
+def init_sqlite() -> None:
     print(f"Connecting to {sqlite_db_url}")
     conn = None
     try:
@@ -37,7 +38,7 @@ def init_sqlite():
             conn.close()
 
 
-def generate_file(**context):
+def generate_file(**context) -> None:
     sqlite_engine = create_engine(sqlite_db_url)
     session_maker = sessionmaker(bind=sqlite_engine)
     session = session_maker()
@@ -57,7 +58,7 @@ def generate_file(**context):
     r.write_footer()
 
 
-def upload_file(**context):
+def upload_file(**context) -> None:
     s3 = S3Hook(aws_conn_id="s3_connection")
 
     run_id = context["dag_run"].run_id
@@ -71,7 +72,7 @@ def upload_file(**context):
     bucket.upload_file(file_path, remote_path)
 
 
-def get_snowflake_engine():
+def get_snowflake_engine() -> Engine:
     environment = Variable.get("environment", "")
     if environment == "development":
         snowflake_engine = snowflake.get_local_engine("snowflake_conn")
@@ -161,4 +162,4 @@ if __name__ == "__main__":
     snowflake.load_addresses(snowflake_engine, sqlite_engine)
     snowflake.load_address_relationships(snowflake_engine, sqlite_engine)
     generate_file(**mock_context)
-    # upload_file(**mock_context)
+    upload_file(**mock_context)
