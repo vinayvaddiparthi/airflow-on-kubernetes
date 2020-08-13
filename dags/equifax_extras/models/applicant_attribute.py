@@ -16,7 +16,7 @@ class ApplicantAttribute(Base, RailsModel, HasGuid):
     encrypted_value = Column(String)
     encrypted_value_iv = Column(String)
 
-    @property
+    @property  # type: ignore
     @marshalled
     @encrypted
     def value(self) -> str:

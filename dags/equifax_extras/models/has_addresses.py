@@ -42,7 +42,7 @@ class HasAddresses(MixinBase):
 
 
 @event.listens_for(HasAddresses, "mapper_configured", propagate=True)
-def setup_listener(_mapper: Any, class_: Any):
+def setup_listener(_mapper: Any, class_: Any) -> None:
     class_.addresses = relationship(
         Address,
         primaryjoin=class_.id == AddressRelationship.party_id,
