@@ -42,7 +42,7 @@ def generate_file(**context):
     session_maker = sessionmaker(bind=sqlite_engine)
     session = session_maker()
 
-    run_id = context['dag_run'].run_id
+    run_id = context["dag_run"].run_id
     file_name = f"equifax_batch_consumer_request_{run_id}.txt"
     file_path = os.path.join(output_dir, file_name)
 
@@ -58,9 +58,9 @@ def generate_file(**context):
 
 
 def upload_file(**context):
-    s3 = S3Hook(aws_conn_id='s3_connection')
+    s3 = S3Hook(aws_conn_id="s3_connection")
 
-    run_id = context['dag_run'].run_id
+    run_id = context["dag_run"].run_id
     file_name = f"equifax_batch_consumer_request_{run_id}.txt"
     file_path = os.path.join(output_dir, file_name)
 
@@ -94,10 +94,7 @@ with DAG(
     default_args=default_args,
     schedule_interval="@once",
 ) as dag:
-    op_init_sqlite = PythonOperator(
-        task_id="init_sqlite",
-        python_callable=init_sqlite,
-    )
+    op_init_sqlite = PythonOperator(task_id="init_sqlite", python_callable=init_sqlite,)
     op_load_addresses = PythonOperator(
         task_id="load_addresses",
         python_callable=snowflake.load_addresses,
@@ -135,12 +132,9 @@ with DAG(
         python_callable=generate_file,
         execution_timeout=timedelta(hours=3),
         provide_context=True,
-
     )
     op_upload_file = PythonOperator(
-        task_id="upload_file",
-        python_callable=upload_file,
-        provide_context=True,
+        task_id="upload_file", python_callable=upload_file, provide_context=True,
     )
 
 load = [
@@ -156,10 +150,8 @@ if __name__ == "__main__":
     from collections import namedtuple
     import random
 
-    MockDagRun = namedtuple('MockDagRun', ['run_id'])
-    mock_context = {
-        "dag_run": MockDagRun(random.randint(10000, 99999))
-    }
+    MockDagRun = namedtuple("MockDagRun", ["run_id"])
+    mock_context = {"dag_run": MockDagRun(random.randint(10000, 99999))}
 
     init_sqlite()
     sqlite_engine = create_engine(sqlite_db_url)
