@@ -20,7 +20,7 @@ class Applicant(Base, RailsModel, HasGuid, HasAddresses, HasApplicantAttributes)
 
     @property
     @encrypted
-    def date_of_birth(self):
+    def date_of_birth(self) -> str:
         return self.encrypted_date_of_birth
 
     encrypted_first_name = Column(String)
@@ -28,7 +28,7 @@ class Applicant(Base, RailsModel, HasGuid, HasAddresses, HasApplicantAttributes)
 
     @property
     @encrypted
-    def first_name(self):
+    def first_name(self) -> str:
         return self.encrypted_first_name
 
     encrypted_last_name = Column(String)
@@ -36,7 +36,7 @@ class Applicant(Base, RailsModel, HasGuid, HasAddresses, HasApplicantAttributes)
 
     @property
     @encrypted
-    def last_name(self):
+    def last_name(self) -> str:
         return self.encrypted_last_name
 
     encrypted_middle_name = Column(String)
@@ -44,7 +44,7 @@ class Applicant(Base, RailsModel, HasGuid, HasAddresses, HasApplicantAttributes)
 
     @property
     @encrypted
-    def middle_name(self):
+    def middle_name(self) -> str:
         return self.encrypted_middle_name
 
     encryption_epoch = Column(Integer)

@@ -2,9 +2,11 @@ from datetime import datetime
 from pathlib import Path
 import os
 
+from .base_row import BaseRow
+
 
 class BaseRequestFile:
-    def __init__(self, path):
+    def __init__(self, path: str):
         self.path = path
         self.rows = []
 
@@ -22,18 +24,18 @@ class BaseRequestFile:
         file = open(self.path, "w+", encoding=self.encoding)
         file.close()
 
-    def write_header(self):
+    def write_header(self) -> None:
         time_tag = self.timestamp.strftime("%Y%m%d%H%M%S")
         header = f"BHDR-EQUIFAX{time_tag}ADVITFINSCOREDA2\n"
         with open(self.path, "a+", encoding=self.encoding) as file:
             file.write(header)
 
-    def write_footer(self):
+    def write_footer(self) -> None:
         time_tag = self.timestamp.strftime("%Y%m%d%H%M%S")
         trailer = f"BTRL-EQUIFAX{time_tag}ADVITFINSCOREDA2\n"
         with open(self.path, "a+", encoding=self.encoding) as file:
             file.write(trailer)
 
-    def write(self, row):
+    def write(self, row: BaseRow) -> None:
         with open(self.path, "a+", encoding=self.encoding) as file:
             file.write(str(row))

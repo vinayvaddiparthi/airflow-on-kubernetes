@@ -2,11 +2,13 @@ import json
 from base64 import b64decode
 from pyporky.symmetric import SymmetricPorky
 
+from typing import Any, Callable
+
 porky = SymmetricPorky(aws_region="ca-central-1")
 
 
-def encrypted(func):
-    def decrypt(*args):
+def encrypted(func: Callable) -> Callable:
+    def decrypt(*args: Any):
         encrypted_value = func(*args)
         if not encrypted_value:
             return b""
