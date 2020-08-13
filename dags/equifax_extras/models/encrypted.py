@@ -11,7 +11,7 @@ porky = SymmetricPorky(
 def encrypted(func):
     def decrypt(*args):
         encrypted_value = func(*args)
-        if encrypted_value is None or encrypted_value is "":
+        if not encrypted_value:
             return b""
 
         decode = b64decode(encrypted_value)
