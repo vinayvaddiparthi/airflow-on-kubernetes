@@ -12,7 +12,7 @@ class HasApplicantAttributes(object):
     def attributes(self) -> Any:
         return relationship("ApplicantAttribute")
 
-    def attribute(self, key) -> str:
+    def attribute(self, key: str) -> str:
         attribute = (
             object_session(self)
             .query(ApplicantAttribute)

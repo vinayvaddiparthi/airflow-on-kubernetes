@@ -26,7 +26,7 @@ class Address(Base, RailsModel, HasGuid):
 
     @property
     def lines(self) -> [str]:
-        lines = []
+        lines = list()
         if self.civic_line:
             lines.append(self.civic_line)
         if self.post_box_line:

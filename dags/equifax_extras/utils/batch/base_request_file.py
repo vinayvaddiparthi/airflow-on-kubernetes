@@ -8,7 +8,7 @@ from .base_row import BaseRow
 class BaseRequestFile:
     def __init__(self, path: str):
         self.path = path
-        self.rows = []
+        self.rows = list()
 
         parent_dir = os.path.dirname(path)
         self.parent_dir = parent_dir
