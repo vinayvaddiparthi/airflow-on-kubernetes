@@ -11,7 +11,9 @@ from datetime import datetime
 
 
 def get_engine(
-    snowflake_connection: str, snowflake_kwargs: Optional[Any] = None, engine_kwargs: Optional[Any] = None
+    snowflake_connection: str,
+    snowflake_kwargs: Optional[Any] = None,
+    engine_kwargs: Optional[Any] = None,
 ) -> Engine:
     if snowflake_kwargs is None:
         snowflake_kwargs = dict()
