@@ -10,7 +10,9 @@ import json
 from datetime import datetime
 
 
-def get_engine(snowflake_connection: str, snowflake_kwargs: dict = None, engine_kwargs: dict = None) -> Engine:
+def get_engine(
+    snowflake_connection: str, snowflake_kwargs: dict = None, engine_kwargs: dict = None
+) -> Engine:
     if snowflake_kwargs is None:
         snowflake_kwargs = dict()
     if engine_kwargs is None:
