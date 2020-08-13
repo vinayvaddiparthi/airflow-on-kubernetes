@@ -13,9 +13,13 @@ from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.postgres_operator import PostgresOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
+from airflow.models import Variable
+#from pyporky.symmetric import SymmetricPorky
 
-bucket = 'tc-datalake'
-prefix = 'equifax_offline_batch/consumer/output/'
+#bucket = 'tc-datalake'
+bucket = 'test-bucket-for-julien'
+prefix = 'equifax_offline_batch/consumer'
+
 result_dict_1 = {
     "customer_reference_number": 12,
     "last_name": 25,
@@ -1446,32 +1450,31 @@ default_args = {
     "owner": "tc",
     "depends_on_past": False,
     "start_date": datetime(2019, 10, 1, 7),
-    "retries": 0,
+    "retries": 0
 }
 
 dag = DAG(
-    "equifax_consumer_batch_output_dag", schedule_interval=None, default_args=default_args
+    "equifax_consumer_batch_output_dag", schedule_interval=None, default_args=default_args, catchup=False
 )
 
-def get_month_tag(date):
-    last_month = date.month - 1 if date.month > 1 else 12
-    last_year = date.year - 1 if last_month == 12 else date.year
-    return f"{last_year}{str(last_month).zfill(2)}"
+snowflake_conn = 'snowflake_equifax'
 
-snowflake_hook = BaseHook.get_connection("snowflake_test")
-#aws_hook = AwsHook(aws_conn_id="aws_default")
-#aws_credentials = aws_hook.get_credentials()
-aws_credentials = type('aws_credentials', (object,), {'access_key' : '123', 'secret_key' : '123'})
-now = datetime.now()
-month_tag = get_month_tag(now)
-path = f"equifax_offline_batch/consumer/output/tc_consumer_batch_{month_tag}.txt"
+aws_hook = AwsHook(aws_conn_id="s3_conn_id")
+aws_credentials = aws_hook.get_credentials()
 
-def convert_line(line):
+# now = datetime.now()
+# month_tag = _get_month_tag(now)
+# path = f"equifax_offline_batch/consumer/output/tc_consumer_batch_{month_tag}.txt"
+
+# def _get_month_tag(date):
+#     last_month = date.month - 1 if date.month > 1 else 12
+#     last_year = date.year - 1 if last_month == 12 else date.year
+#     return f"{last_year}{str(last_month).zfill(2)}"
+
+def _convert_line_csv(line):
     indices = _gen_arr(0, result_dict_1) + _gen_arr(94, result_dict_2)
-    #print(indices)
-    parts = ['"{}"'.format(line[i:j].strip()) for i, j in zip(indices, indices[1:] + [None])]
-    #_gen_header(**result_dict_1, **result_dict_2)
-    return '|'.join(parts)
+    parts = ['{}'.format(line[i:j].strip().replace(',', '\,')) for i, j in zip(indices, indices[1:] + [None])]
+    return ','.join(parts)
 
 def _gen_arr(start, dol):
     result = [start]
@@ -1479,23 +1482,17 @@ def _gen_arr(start, dol):
         result.append(result[-1] + dol[l])
     return result[:-1]
 
-# def _gen_header(**kwargs):
-# 	header = []
-# 	for k in kwargs:
-# 		header.append('"{}"'.format(k))
-# 	#print(','.join(header))
-# 	return ','.join(header)
-
-def get_col_def(n, l):
+def _get_col_def(n, l):
     return f"{n} varchar({l})"
 
-def convert_date_format(value):
+def _convert_date_format(value):
+    t = datetime.now()
     if "-" not in value and not value.isspace():
         try:
             m = value[:2]
             d = value[2:4]
             y = value[4:]
-            if int(y) < 20:
+            if int(y) == t.year and int(m) <= t.month or int(y) < t.year:
                 yy = f"20{y}"
             else:
                 yy = f"19{y}"
@@ -1505,291 +1502,192 @@ def convert_date_format(value):
             print(e)
     return None
 
-def get_client():
+def _get_s3():
     return boto3.client(
         "s3",
         aws_access_key_id=aws_credentials.access_key,
         aws_secret_access_key=aws_credentials.secret_key,
     )
 
-def get_file():
-    objects = get_client().list_objects(Bucket=bucket, Prefix=prefix, Delimiter="/")
+def _get_file():
+    objects = _get_s3().list_objects(Bucket=bucket, Prefix=prefix, Delimiter="/")
     for content in objects["Contents"]:
         if content["Key"].endswith("out1"):
             return content["Key"]
     return None
 
-def read_output():
-    client = get_client()
-    file_path = get_file()
-    print(f"Reading file: {file_path}")
-    obj = client.get_object(Bucket=bucket, Key=f"{file_path}")
-    body = obj["Body"].read()
-    contents = body.decode("ISO-8859-1")
-    with tempfile.TemporaryFile(mode="w+") as raw, tempfile.NamedTemporaryFile(mode="w+") as formatted:
-        raw.write(contents)
+def _get_snowflake():
+    snowflake_hook = BaseHook.get_connection(snowflake_conn)
+    if snowflake_hook.password:
+        return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine().begin()
+    else:
+        kwargs = {
+            'connect_args': {'authenticator': 'externalbrowser'}
+        }
+        return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin()
+
+
+# def fix_date_format():
+#     select = "select * from equifax.output.consumer_batch_raw"
+#     with snowflake.connector.connect(
+#         user=snowflake_hook.login,
+#         password=snowflake_hook.password,
+#         account=snowflake_hook.host,
+#         warehouse="ETL",
+#         database="EQUIFAX",
+#         schema="TEST",
+#         ocsp_fail_open=False,
+#     ) as conn:
+#         cur = conn.cursor()
+#         cur.execute(select)
+#         data = cur.fetchall()
+#         df = pd.DataFrame(data)
+#         df.columns = [des[0] for des in cur.description]
+#         print("Converting columns...")
+#         for key in [
+#             "DOB_TEXT",
+#             "PRXX014",
+#             "PRXX016",
+#             "PRXX039",
+#             "PRXX044",
+#             "INQAL009",
+#             "INQAM009",
+#             "INQMG009",
+#             "INQBK009",
+#             "INQCU009",
+#             "INQNC009",
+#             "INQAF009",
+#             "INQPF009",
+#             "INQSF009",
+#             "INQRT009",
+#             "INQRD009",
+#             "INQTE009",
+#             "INQBD009",
+#             "INQCL009",
+#         ]:
+#             df[key] = df[key].apply(lambda x: _convert_date_format(x))
+#         print("Writing to csv...")
+#         with tempfile.NamedTemporaryFile(mode="w") as file_in:
+#             df.to_csv(file_in.name, index=False, sep="\t")
+#             with open(file_in.name, "rb") as file:
+#                 print(f"Uploading converted csv to S3: {path}")
+#                 _get_s3().upload_fileobj(file, bucket, path)
+#         print("start copying from s3")
+#         table_name = "equifax.output.consumer_batch"
+#         cur.execute(f"truncate table {table_name}")
+#         cur.execute(
+#             f"""COPY INTO {table_name} FROM S3://{bucket}/{path} CREDENTIALS = (
+#                                 aws_key_id='{aws_credentials.access_key}',
+#                                 aws_secret_key='{aws_credentials.secret_key}')
+#                                 FILE_FORMAT=(field_delimiter='\t', FIELD_OPTIONALLY_ENCLOSED_BY = '"', skip_header=1, NULL_IF = ('     ','      ','         '));"""
+#         )
+
+# def merge_ref():
+#     sql = f"""
+#             insert into equifax.public.consumer_batch
+#             select '{month_tag}' as import_month,
+#                     u.account_id as accountid,
+#                     u.contract_id as contractid,
+#                     u.company_name as business_name,
+#                     c.*
+#             from equifax.input_history.consumer_202004_20200430223010 u
+#                     join equifax.output.consumer_batch c
+#                     on u.customer_reference_number = c.customer_reference_number;
+#             """
+#     with snowflake.connector.connect(
+#         user=snowflake_hook.login,
+#         password=snowflake_hook.password,
+#         account=snowflake_hook.host,
+#         warehouse="ETL",
+#         database="EQUIFAX",
+#         schema="TEST",
+#         ocsp_fail_open=False,
+#     ) as conn:
+#         cur = conn.cursor()
+#         cur.execute(sql)
+
+def get_input(s3_conn: str):
+    client = _get_s3()
+    objects = client.list_objects(Bucket=bucket, Prefix=prefix + '/input', Delimiter="/")
+    file = client.get_object(Bucket=bucket, Key='equifax_offline_batch/consumer/input/462982_tc_consumer_batch_202004_4.txt (1).out1')
+    body = file['Body'].read()
+    content = body.decode('ISO-8859-1')
+    Variable.set('file_content', content)
+
+def convert_file():
+    with tempfile.TemporaryFile(mode='w+', encoding='ISO-8859-1') as raw, tempfile.NamedTemporaryFile(mode='w+', encoding='ISO-8859-1') as formatted:
+        content = Variable.get('file_content')
+        raw.write(content)
         raw.seek(0)
-        d3 = {**result_dict_1, **result_dict_2}
         lines = []
         for line in raw.readlines():
-            if not line.startswith("BHDR-EQUIFAX") and not line.startswith(
-                "BTRL-EQUIFAX"
-            ):
-                lines.append(convert_line(line))
-        formatted.writelines(lines)
-        formatted.seek(0)
-        with open(formatted.name, mode="rb") as f:
-            get_client().upload_fileobj(f, bucket, path)
-            print(f"File uploaded:{path}")
+            if not line.startswith('BHDR-EQUIFAX') and not line.startswith('BTRL-EQUIFAX') and line:
+                lines.append(_convert_line_csv(line))
+                formatted.write(_convert_line_csv(line))
+                formatted.write('\n')
+        upload_file_s3(formatted)
 
-def create_table(snowflake_conn: str):
+def upload_file_s3(file):
+    t = datetime.now()
+    file.seek(0)
+    with open(file.name, mode="r", encoding='ISO-8859-1') as f:
+        client = _get_s3()
+        client.upload_file(file.name, bucket, f'equifax_offline_batch/consumer/output/tc_consumer_batch_{t.strftime("%Y_%m_%d_%H_%M_%S")}.csv')
+        Variable.set('t_stamp', t.strftime("%Y_%m_%d_%H_%M_%S"))
+
+def insert_snowflake():
     d3 = {**result_dict_1, **result_dict_2}
     print(f"Size of dict: {len(d3)}")
-    cols = []
-    raw_table_name = "equifax.output.consumer_batch_raw"
-    for col in d3:
-        line = get_col_def(col, d3[col])
-        cols.append(line)
-    #print(cols)
-    create = f"create or replace table {raw_table_name} ({','.join(cols)});"
-    copy = f"""COPY INTO {raw_table_name} FROM S3://{bucket}/{path} CREDENTIALS = (
-                                            aws_key_id='{aws_credentials.access_key}',
-                                            aws_secret_key='{aws_credentials.secret_key}')
-                                            FILE_FORMAT=(field_delimiter='|')
-                                            """
-    # with snowflake.connector.connect(
-    #     user=snowflake_hook.login,
-    #     password=snowflake_hook.password,
-    #     account=snowflake_hook.host,
-    #     warehouse="ETL",
-    #     database="EQUIFAX",
-    #     schema="TEST",
-    #     ocsp_fail_open=False,
-    # ) as conn:
-    #     cur = conn.cursor()
-    #     cur.execute(create)
-    #     cur.execute(copy)
-    #     conn.commit()
 
-    kwargs = {
-        'connect_args': {"authenticator": "externalbrowser"}
-    }
-    raw_table_name_test = 'SANDBOX.JMASSON.CONSUMER_BATCH_RAW'
-    #print(','.join(cols))
+    raw_table_name_test = f'SANDBOX.JMASSON.CONSUMER_BATCH_RAW_{Variable.get("t_stamp")}'
+
     cols = []
     value_cols = []
     for col in d3:
-        #print(col)
-        cols.append(get_col_def(col, d3[col]))
+        cols.append(_get_col_def(col, d3[col]))
         value_cols.append(col)
 
-    with open('/home/jmr/airflow/dags/tc_consumer_batch_202006.txt', 'r', encoding='windows-1252') as f: 
-        with open('/home/jmr/airflow/dags/tc_consumer_batch_202006utf8.txt', 'w', encoding='utf-8') as f_utf8:
-            f_utf8.write(f.read())
-            f_utf8.close()
+    with _get_snowflake() as sfh:
+        sql = f"CREATE OR REPLACE TABLE {raw_table_name_test} ({','.join(cols)});"
+        result = sfh.execute(sql)
 
-
-    #f = open('/home/jmr/airflow/dags/tc_consumer_batch_202006.txt', 'r', encoding='windows-1252')
-    #target = open('/home/jmr/airflow/dags/tc_consumer_batch_202006utf8.txt', 'w')
-    #target.write(unicode(f.read()))
-    #values = []
-    #for i in f.readlines():
-    #    print(i)
-        #value = []
-        #for s in i.split('|'):
-        #    #print(s.lstrip().rstrip())
-        #    value.append(f"'{s.lstrip().rstrip()}'")
-        #values.append(f'{",".join(value)}')
-        #print(f'({",".join(value)})')
-    #print(cols)
-    # sql = f"CREATE OR REPLACE TABLE {raw_table_name_test} ({','.join(cols)});"
-    # with SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin() as sfh:
-    #     result = sfh.execute(sql)
-    #     f = open('/home/jmr/airflow/dags/consumer_og3.csv', 'r', encoding='windows-1252')
-    #     values = []
-    #     for i in f.readlines():
-    #         print(i)
-    #         value = []
-    #         for s in i.split('|'):
-    #             #print(s.lstrip().rstrip())
-    #             value.append(f"'{s.lstrip().rstrip()}'")
-    #         values.append(f'{",".join(value)}')
-    #         print(f'({",".join(value)})')
-        #print(f'{values}'.strip('[]'))
-        #print(values)
-        #print(f"{f.readlines()}")
-        #print(f.read())
-        
-        #copy = f"""COPY INTO {raw_table_name_test} FROM {f.read()}
-        #                                    FILE_FORMAT=(field_delimiter='|')
-        #                                    """
-        #print(','.join(values))
-        #insert = f"INSERT INTO SANDBOX.JMASSON.CONSUMER_BATCH_RAW ({','.join(value_cols)}) VALUES({','.join(values)});"
+        #insert = f"INSERT INTO {raw_table_name_test} ({','.join(value_cols)}) VALUES{','.join(values)};"
+        copy = f"""COPY INTO {raw_table_name_test} FROM S3://{bucket}/equifax_offline_batch/consumer/output/tc_consumer_batch_{Variable.get("t_stamp")}.csv CREDENTIALS = (
+                                            aws_key_id='{aws_credentials.access_key}',
+                                            aws_secret_key='{aws_credentials.secret_key}')
+                                            FILE_FORMAT=(field_delimiter=',')
+                                            """
         #result = sfh.execute(insert)
-        #print(result)
+        result = sfh.execute(copy)
 
-def fix_date_format():
-    select = "select * from equifax.output.consumer_batch_raw"
-    with snowflake.connector.connect(
-        user=snowflake_hook.login,
-        password=snowflake_hook.password,
-        account=snowflake_hook.host,
-        warehouse="ETL",
-        database="EQUIFAX",
-        schema="TEST",
-        ocsp_fail_open=False,
-    ) as conn:
-        cur = conn.cursor()
-        cur.execute(select)
-        data = cur.fetchall()
-        df = pd.DataFrame(data)
-        df.columns = [des[0] for des in cur.description]
-        print("Converting columns...")
-        for key in [
-            "DOB_TEXT",
-            "PRXX014",
-            "PRXX016",
-            "PRXX039",
-            "PRXX044",
-            "INQAL009",
-            "INQAM009",
-            "INQMG009",
-            "INQBK009",
-            "INQCU009",
-            "INQNC009",
-            "INQAF009",
-            "INQPF009",
-            "INQSF009",
-            "INQRT009",
-            "INQRD009",
-            "INQTE009",
-            "INQBD009",
-            "INQCL009",
-        ]:
-            df[key] = df[key].apply(lambda x: convert_date_format(x))
-        print("Writing to csv...")
-        with tempfile.NamedTemporaryFile(mode="w") as file_in:
-            df.to_csv(file_in.name, index=False, sep="\t")
-            with open(file_in.name, "rb") as file:
-                print(f"Uploading converted csv to S3: {path}")
-                get_client().upload_fileobj(file, bucket, path)
-        print("start copying from s3")
-        table_name = "equifax.output.consumer_batch"
-        cur.execute(f"truncate table {table_name}")
-        cur.execute(
-            f"""COPY INTO {table_name} FROM S3://{bucket}/{path} CREDENTIALS = (
-                                aws_key_id='{aws_credentials.access_key}',
-                                aws_secret_key='{aws_credentials.secret_key}')
-                                FILE_FORMAT=(field_delimiter='\t', FIELD_OPTIONALLY_ENCLOSED_BY = '"', skip_header=1, NULL_IF = ('     ','      ','         '));"""
-        )
-
-def merge_ref():
-    sql = f"""
-            insert into equifax.public.consumer_batch
-            select '{month_tag}' as import_month,
-                    u.account_id as accountid,
-                    u.contract_id as contractid,
-                    u.company_name as business_name,
-                    c.*
-            from equifax.input_history.consumer_202004_20200430223010 u
-                    join equifax.output.consumer_batch c
-                    on u.customer_reference_number = c.customer_reference_number;
-            """
-    with snowflake.connector.connect(
-        user=snowflake_hook.login,
-        password=snowflake_hook.password,
-        account=snowflake_hook.host,
-        warehouse="ETL",
-        database="EQUIFAX",
-        schema="TEST",
-        ocsp_fail_open=False,
-    ) as conn:
-        cur = conn.cursor()
-        cur.execute(sql)
-
-def test_conn(snowflake_conn: str):
-    sql = f'SELECT * FROM jmasson.consumer_batch_raw'
-    kwargs = {
-        'connect_args': {"authenticator": "externalbrowser"}
-    }
-    print(SnowflakeHook(snowflake_conn))
-    print(SnowflakeHook(snowflake_conn).get_sqlalchemy_engine())
-
-    #engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs)
-    #print(engine_.begin())
-    #print(snowflake_conn)
-    #print(engine_)
-    with SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin() as s:
-        rows = s.execute(f'SELECT * FROM jmasson.consumer_batch_raw')
-        print(rows)
-        for row in rows:
-            print(row)
-
-
-# def create_dag() -> DAG:
-# 	with DAG(
-# 		f"parse_consumer_batch_output",
-# 		schedule_interval=None,
-# 		catchup=False
-# 	) as dag:
-# 		dag << PythonOperator(
-# 			task_id=f"parse",
-# 			python_callable=read_output,
-# 			op_kwargs={},
-# 			retry_delay=datetime.timedelta(hours=1),
-# 			retries=3,
-# 			executor_config={"resources": {"request_memory": "8Gi"},},
-# 		) >> PythonOperator(
-# 			task_id=f"parse",
-# 			python_callable=create_table,
-# 			retry_delay=datetime.timedelta(hours=1),
-# 			retries=3,
-# 			executor_config={"resources": {"request_memory": "8Gi"},},
-# 		) >> PythonOperator(
-
-# 		)
-
-# 		return dag
-
-# task_read_output = PythonOperator(
-#     task_id="read_output",
-#     python_callable=read_output,
-#     dag=dag
-# )
-
-task_create_table = PythonOperator(
-    task_id="create_table",
-    python_callable=create_table,
+task_get_file = PythonOperator(
+    task_id = 'get_input',
+    python_callable=get_input,
     op_kwargs={
-        "snowflake_conn": "snowflake_test"
+        "s3_conn": "s3_conn_id"
     },
     dag=dag
 )
 
-# task_fix_date_format = PythonOperator(
-#     task_id="fix_date_format",
-#     python_callable=fix_date_format,
-#     dag=dag
-# )
-
-# task_merge_ref = PythonOperator(
-#     task_id="merge_ref",
-#     python_callable=merge_ref,
-#     dag=dag
-# )
-
-task_test_conn = PythonOperator(
-    task_id = 'test_conn',
-    python_callable=test_conn,
-    op_kwargs={
-        "snowflake_conn": "snowflake_test"
-    },
+task_convert_file = PythonOperator(
+    task_id = 'convert_file',
+    python_callable=convert_file,
     dag=dag
 )
 
-task_test_conn
+# task_upload_s3 = PythonOperator(
+#     task_id = 'upload_file_s3',
+#     python_callable=upload_file_s3,
+#     dag=dag
+# )
 
-#task_read_output >> task_create_table >> task_fix_date_format >> task_merge_ref
+task_insert_snowflake = PythonOperator(
+    task_id = 'insert_snowflake',
+    python_callable=insert_snowflake,
+    dag=dag
+)
+
+task_get_file >> task_convert_file >> task_insert_snowflake
 
 if __name__ == "__main__":
     import os
@@ -1806,22 +1704,3 @@ if __name__ == "__main__":
         if role
         else URL(account=account, database=database)
     )
-
-    #mock = MagicMock()
-    #mock.login = os.environ.get("SALESFORCE_USERNAME")
-    #mock.password = os.environ.get("SALESFORCE_PASSWORD")
-    #mock.extra_dejson = {"security_token": os.environ.get("SALESFORCE_TOKEN")}
-
-    #with patch(
-    #    "dags.parse_consumer_batch_output_dag.SnowflakeHook.get_sqlalchemy_engine",
-    #    return_value=create_engine(
-    #        url, connect_args={"authenticator": "externalbrowser",},
-    #    ),
-    #) as mock_engine:
-    #test_conn('snowflake_test')
-    create_table('snowflake_test')
-        #import_sfdc("snowflake_conn", "salesforce_conn", "sfoi")
-        #read_output()
-        #create_table()
-        #fix_date_format()
-        #merge_ref()
