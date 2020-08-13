@@ -53,10 +53,14 @@ class DbtOperator(BashOperator):
                 "GITLAB_TOKEN": self.__class__.gitlab_token,
             }
 
+        models = ""
+        if "models" in kwargs:
+            models = f"--models {kwargs.get('models')}"
+
         profiles = f"--profiles-dir {profiles_args}"
         target = f"--target {target_args}"
         deps = " ".join(["dbt", DbtAction.deps.name, profiles, target])
-        command = " ".join(["dbt", action.name, profiles, target])
+        command = " ".join(["dbt", action.name, profiles, target, models])
         print(f"Execute command: {command}")
 
         super(DbtOperator, self).__init__(
