@@ -16,7 +16,7 @@ from equifax_extras.models import Applicant
 from equifax_extras.consumer import RequestFile
 import equifax_extras.utils.snowflake as snowflake
 
-from typing import Any, Optional
+from typing import Any
 
 
 cwd = os.getcwd()
@@ -40,7 +40,7 @@ def init_sqlite() -> None:
             conn.close()
 
 
-def generate_file(**context: Optional[Any]) -> None:
+def generate_file(**context: Any) -> None:
     sqlite_engine = create_engine(sqlite_db_url)
     session_maker = sessionmaker(bind=sqlite_engine)
     session = session_maker()
@@ -60,7 +60,7 @@ def generate_file(**context: Optional[Any]) -> None:
     r.write_footer()
 
 
-def upload_file(**context: Optional[Any]) -> None:
+def upload_file(**context: Any) -> None:
     s3 = S3Hook(aws_conn_id="s3_connection")
 
     run_id = context["dag_run"].run_id
@@ -72,6 +72,14 @@ def upload_file(**context: Optional[Any]) -> None:
     remote_path = f"consumer/request/{file_name}"
     print(f"Uploading {file_path} to S3: {bucket_name}/{remote_path}")
     bucket.upload_file(file_path, remote_path)
+
+
+def delete_file(**context: Any) -> None:
+    run_id = context["dag_run"].run_id
+    file_name = f"equifax_batch_consumer_request_{run_id}.txt"
+    file_path = os.path.join(output_dir, file_name)
+
+    os.remove(file_path)
 
 
 def get_snowflake_engine() -> Engine:
@@ -139,6 +147,9 @@ with DAG(
     op_upload_file = PythonOperator(
         task_id="upload_file", python_callable=upload_file, provide_context=True,
     )
+    op_delete_file = PythonOperator(
+        task_id="delete_file", python_callable=delete_file, provide_context=True,
+    )
 
 load = [
     op_load_addresses,
@@ -146,7 +157,7 @@ load = [
     op_load_applicants,
     op_load_applicant_attributes,
 ]
-op_init_sqlite >> load >> op_generate_file >> op_upload_file
+op_init_sqlite >> load >> op_generate_file >> op_upload_file >> op_delete_file
 
 
 if __name__ == "__main__":
