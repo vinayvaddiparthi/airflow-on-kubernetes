@@ -1475,6 +1475,7 @@ aws_credentials = aws_hook.get_credentials()
 #     last_year = date.year - 1 if last_month == 12 else date.year
 #     return f"{last_year}{str(last_month).zfill(2)}"
 
+
 def _convert_line_csv(line):
     indices = _gen_arr(0, result_dict_1) + _gen_arr(94, result_dict_2)
     parts = [
@@ -1483,14 +1484,17 @@ def _convert_line_csv(line):
     ]
     return ",".join(parts)
 
+
 def _gen_arr(start, dol):
     result = [start]
     for l in dol:
         result.append(result[-1] + dol[l])
     return result[:-1]
 
+
 def _get_col_def(n, l):
     return f"{n} varchar({l})"
+
 
 def _convert_date_format(value):
     t = datetime.now()
@@ -1509,12 +1513,14 @@ def _convert_date_format(value):
             print(e)
     return None
 
+
 def _get_s3():
     return boto3.client(
         "s3",
         aws_access_key_id=aws_credentials.access_key,
         aws_secret_access_key=aws_credentials.secret_key,
     )
+
 
 def _get_file():
     objects = _get_s3().list_objects(Bucket=bucket, Prefix=prefix, Delimiter="/")
@@ -1523,6 +1529,7 @@ def _get_file():
             return content["Key"]
     return None
 
+
 def _get_snowflake():
     snowflake_hook = BaseHook.get_connection(snowflake_conn)
     if snowflake_hook.password:
@@ -1530,6 +1537,7 @@ def _get_snowflake():
     else:
         kwargs = {"connect_args": {"authenticator": "externalbrowser"}}
         return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin()
+
 
 # def fix_date_format():
 #     select = "select * from equifax.output.consumer_batch_raw"
@@ -1610,18 +1618,27 @@ def _get_snowflake():
 #         cur = conn.cursor()
 #         cur.execute(sql)
 
+
 def get_input(s3_conn: str):
     client = _get_s3()
     objects = client.list_objects(
         Bucket=bucket, Prefix=prefix + "/input", Delimiter="/"
     )
-    file = client.get_object(Bucket=bucket, Key="equifax_offline_batch/consumer/input/462982_tc_consumer_batch_202004_4.txt (1).out1")
+    file = client.get_object(
+        Bucket=bucket,
+        Key="equifax_offline_batch/consumer/input/462982_tc_consumer_batch_202004_4.txt (1).out1",
+    )
     body = file["Body"].read()
     content = body.decode("ISO-8859-1")
     Variable.set("file_content", content)
 
+
 def convert_file():
-    with tempfile.TemporaryFile(mode="w+", encoding="ISO-8859-1") as raw, tempfile.NamedTemporaryFile(mode="w+", encoding="ISO-8859-1") as formatted:
+    with tempfile.TemporaryFile(
+        mode="w+", encoding="ISO-8859-1"
+    ) as raw, tempfile.NamedTemporaryFile(
+        mode="w+", encoding="ISO-8859-1"
+    ) as formatted:
         content = Variable.get("file_content")
         raw.write(content)
         raw.seek(0)
@@ -1637,6 +1654,7 @@ def convert_file():
                 formatted.write("\n")
         upload_file_s3(formatted)
 
+
 def upload_file_s3(file):
     t = datetime.now()
     file.seek(0)
@@ -1645,9 +1663,10 @@ def upload_file_s3(file):
         client.upload_file(
             file.name,
             bucket,
-            f'equifax_offline_batch/consumer/output/tc_consumer_batch_{t.strftime("%Y_%m_%d_%H_%M_%S")}.csv',
+            f"equifax_offline_batch/consumer/output/tc_consumer_batch_{t.strftime('%Y_%m_%d_%H_%M_%S')}.csv",
         )
         Variable.set("t_stamp", t.strftime("%Y_%m_%d_%H_%M_%S"))
+
 
 def insert_snowflake():
     d3 = {**result_dict_1, **result_dict_2}
@@ -1676,6 +1695,7 @@ def insert_snowflake():
         # result = sfh.execute(insert)
         result = sfh.execute(copy)
 
+
 task_get_file = PythonOperator(
     task_id="get_input",
     python_callable=get_input,
@@ -1688,7 +1708,9 @@ task_convert_file = PythonOperator(
 )
 
 # task_upload_s3 = PythonOperator(
-#     task_id = 'upload_file_s3', python_callable=upload_file_s3, dag=dag
+#     task_id = 'upload_file_s3',
+#     python_callable=upload_file_s3,
+#     dag=dag
 # )
 
 task_insert_snowflake = PythonOperator(
