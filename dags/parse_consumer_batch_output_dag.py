@@ -14,11 +14,12 @@ from airflow.operators.postgres_operator import PostgresOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.models import Variable
-#from pyporky.symmetric import SymmetricPorky
 
-#bucket = 'tc-datalake'
-bucket = 'test-bucket-for-julien'
-prefix = 'equifax_offline_batch/consumer'
+# from pyporky.symmetric import SymmetricPorky
+
+# bucket = 'tc-datalake'
+bucket = "test-bucket-for-julien"
+prefix = "equifax_offline_batch/consumer"
 
 result_dict_1 = {
     "customer_reference_number": 12,
@@ -1450,14 +1451,17 @@ default_args = {
     "owner": "tc",
     "depends_on_past": False,
     "start_date": datetime(2019, 10, 1, 7),
-    "retries": 0
+    "retries": 0,
 }
 
 dag = DAG(
-    "equifax_consumer_batch_output_dag", schedule_interval=None, default_args=default_args, catchup=False
+    "equifax_consumer_batch_output_dag",
+    schedule_interval=None,
+    default_args=default_args,
+    catchup=False,
 )
 
-snowflake_conn = 'snowflake_equifax'
+snowflake_conn = "snowflake_equifax"
 
 aws_hook = AwsHook(aws_conn_id="s3_conn_id")
 aws_credentials = aws_hook.get_credentials()
@@ -1473,8 +1477,11 @@ aws_credentials = aws_hook.get_credentials()
 
 def _convert_line_csv(line):
     indices = _gen_arr(0, result_dict_1) + _gen_arr(94, result_dict_2)
-    parts = ['{}'.format(line[i:j].strip().replace(',', '\,')) for i, j in zip(indices, indices[1:] + [None])]
-    return ','.join(parts)
+    parts = [
+        "{}".format(line[i:j].strip().replace(",", "\,"))
+        for i, j in zip(indices, indices[1:] + [None])
+    ]
+    return ",".join(parts)
 
 def _gen_arr(start, dol):
     result = [start]
@@ -1521,11 +1528,8 @@ def _get_snowflake():
     if snowflake_hook.password:
         return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine().begin()
     else:
-        kwargs = {
-            'connect_args': {'authenticator': 'externalbrowser'}
-        }
+        kwargs = {"connect_args": {"authenticator": "externalbrowser"}}
         return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin()
-
 
 # def fix_date_format():
 #     select = "select * from equifax.output.consumer_batch_raw"
@@ -1608,38 +1612,50 @@ def _get_snowflake():
 
 def get_input(s3_conn: str):
     client = _get_s3()
-    objects = client.list_objects(Bucket=bucket, Prefix=prefix + '/input', Delimiter="/")
-    file = client.get_object(Bucket=bucket, Key='equifax_offline_batch/consumer/input/462982_tc_consumer_batch_202004_4.txt (1).out1')
-    body = file['Body'].read()
-    content = body.decode('ISO-8859-1')
-    Variable.set('file_content', content)
+    objects = client.list_objects(
+        Bucket=bucket, Prefix=prefix + "/input", Delimiter="/"
+    )
+    file = client.get_object(Bucket=bucket, Key="equifax_offline_batch/consumer/input/462982_tc_consumer_batch_202004_4.txt (1).out1")
+    body = file["Body"].read()
+    content = body.decode("ISO-8859-1")
+    Variable.set("file_content", content)
 
 def convert_file():
-    with tempfile.TemporaryFile(mode='w+', encoding='ISO-8859-1') as raw, tempfile.NamedTemporaryFile(mode='w+', encoding='ISO-8859-1') as formatted:
-        content = Variable.get('file_content')
+    with tempfile.TemporaryFile(mode="w+", encoding="ISO-8859-1") as raw, tempfile.NamedTemporaryFile(mode="w+", encoding="ISO-8859-1") as formatted:
+        content = Variable.get("file_content")
         raw.write(content)
         raw.seek(0)
         lines = []
         for line in raw.readlines():
-            if not line.startswith('BHDR-EQUIFAX') and not line.startswith('BTRL-EQUIFAX') and line:
+            if (
+                not line.startswith("BHDR-EQUIFAX")
+                and not line.startswith("BTRL-EQUIFAX")
+                and line
+            ):
                 lines.append(_convert_line_csv(line))
                 formatted.write(_convert_line_csv(line))
-                formatted.write('\n')
+                formatted.write("\n")
         upload_file_s3(formatted)
 
 def upload_file_s3(file):
     t = datetime.now()
     file.seek(0)
-    with open(file.name, mode="r", encoding='ISO-8859-1') as f:
+    with open(file.name, mode="r", encoding="ISO-8859-1") as f:
         client = _get_s3()
-        client.upload_file(file.name, bucket, f'equifax_offline_batch/consumer/output/tc_consumer_batch_{t.strftime("%Y_%m_%d_%H_%M_%S")}.csv')
-        Variable.set('t_stamp', t.strftime("%Y_%m_%d_%H_%M_%S"))
+        client.upload_file(
+            file.name,
+            bucket,
+            f'equifax_offline_batch/consumer/output/tc_consumer_batch_{t.strftime("%Y_%m_%d_%H_%M_%S")}.csv',
+        )
+        Variable.set("t_stamp", t.strftime("%Y_%m_%d_%H_%M_%S"))
 
 def insert_snowflake():
     d3 = {**result_dict_1, **result_dict_2}
     print(f"Size of dict: {len(d3)}")
 
-    raw_table_name_test = f'SANDBOX.JMASSON.CONSUMER_BATCH_RAW_{Variable.get("t_stamp")}'
+    raw_table_name_test = (
+        f'SANDBOX.JMASSON.CONSUMER_BATCH_RAW_{Variable.get("t_stamp")}'
+    )
 
     cols = []
     value_cols = []
@@ -1651,40 +1667,32 @@ def insert_snowflake():
         sql = f"CREATE OR REPLACE TABLE {raw_table_name_test} ({','.join(cols)});"
         result = sfh.execute(sql)
 
-        #insert = f"INSERT INTO {raw_table_name_test} ({','.join(value_cols)}) VALUES{','.join(values)};"
+        # insert = f"INSERT INTO {raw_table_name_test} ({','.join(value_cols)}) VALUES{','.join(values)};"
         copy = f"""COPY INTO {raw_table_name_test} FROM S3://{bucket}/equifax_offline_batch/consumer/output/tc_consumer_batch_{Variable.get("t_stamp")}.csv CREDENTIALS = (
                                             aws_key_id='{aws_credentials.access_key}',
                                             aws_secret_key='{aws_credentials.secret_key}')
                                             FILE_FORMAT=(field_delimiter=',')
                                             """
-        #result = sfh.execute(insert)
+        # result = sfh.execute(insert)
         result = sfh.execute(copy)
 
 task_get_file = PythonOperator(
-    task_id = 'get_input',
+    task_id="get_input",
     python_callable=get_input,
-    op_kwargs={
-        "s3_conn": "s3_conn_id"
-    },
-    dag=dag
+    op_kwargs={"s3_conn": "s3_conn_id"},
+    dag=dag,
 )
 
 task_convert_file = PythonOperator(
-    task_id = 'convert_file',
-    python_callable=convert_file,
-    dag=dag
+    task_id="convert_file", python_callable=convert_file, dag=dag
 )
 
 # task_upload_s3 = PythonOperator(
-#     task_id = 'upload_file_s3',
-#     python_callable=upload_file_s3,
-#     dag=dag
+#     task_id = 'upload_file_s3', python_callable=upload_file_s3, dag=dag
 # )
 
 task_insert_snowflake = PythonOperator(
-    task_id = 'insert_snowflake',
-    python_callable=insert_snowflake,
-    dag=dag
+    task_id="insert_snowflake", python_callable=insert_snowflake, dag=dag
 )
 
 task_get_file >> task_convert_file >> task_insert_snowflake
