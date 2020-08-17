@@ -56,9 +56,7 @@ class DbtOperator(BashOperator):
                 "GITLAB_TOKEN": self.__class__.gitlab_token,
             }
 
-        model_argument = ""
-        if not models == "":
-            model_argument = f"--models {models}"
+        model_argument = f"--models {models}" if models else ""
 
         profiles = f"--profiles-dir {profiles_args}"
         target = f"--target {target_args}"
