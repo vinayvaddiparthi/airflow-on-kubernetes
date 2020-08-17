@@ -1,3 +1,5 @@
+import logging
+
 from enum import Enum
 from typing import Optional, Dict, Any
 
@@ -28,6 +30,7 @@ class DbtOperator(BashOperator):
         profiles_args: str = ".",
         target_args: str = "prod",
         env: Optional[Dict] = None,
+        models: str = "",
         *args: Any,
         **kwargs: Any,
     ):
@@ -53,15 +56,14 @@ class DbtOperator(BashOperator):
                 "GITLAB_TOKEN": self.__class__.gitlab_token,
             }
 
-        models = ""
-        if "models" in kwargs:
-            models = f"--models {kwargs.get('models')}"
+        model_argument = f"--models {models}" if models else ""
 
         profiles = f"--profiles-dir {profiles_args}"
         target = f"--target {target_args}"
         deps = " ".join(["dbt", DbtAction.deps.name, profiles, target])
-        command = " ".join(["dbt", action.name, profiles, target, models])
-        print(f"Execute command: {command}")
+        command = " ".join(["dbt", action.name, profiles, target, model_argument])
+
+        logging.info(f"Execute command: {command}")
 
         super(DbtOperator, self).__init__(
             bash_command="git clone https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab.com/tc-data/curated-data-warehouse.git"
