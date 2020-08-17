@@ -145,13 +145,13 @@ def copy_transactions(
 
     merchant_documents_select = select(
         columns=[
-            sqlalchemy.cast(func.get("fields", "'cloud_file_path'"), VARCHAR).label(
-                "file_path"
-            )
+            sqlalchemy.cast(
+                func.get(merchant_documents.c.fields, "cloud_file_path"), VARCHAR
+            ).label("file_path")
         ],
         from_obj=merchant_documents,
     ).where(
-        sqlalchemy.cast(func.get("fields", "'doc_type'"), VARCHAR)
+        sqlalchemy.cast(func.get(merchant_documents.c.fields, "doc_type"), VARCHAR)
         == literal("'flinks_raw_response'")
     )
 
