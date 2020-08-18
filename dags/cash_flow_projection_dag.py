@@ -626,9 +626,7 @@ def create_dag() -> DAG:
             task_id="dbt_run_process_transactions",
             execution_timeout=timedelta(hours=1),
             action=DbtAction.run,
-            op_kwargs={
-                "models": "fct_bank_account_transaction fct_daily_bank_account_balance"
-            },
+            models="fct_bank_account_transaction fct_daily_bank_account_balance",
         ) >> PythonOperator(
             task_id="generate_projections",
             python_callable=generate_projections,
@@ -644,7 +642,7 @@ def create_dag() -> DAG:
             task_id="dbt_run_generate_projections",
             execution_timeout=timedelta(hours=1),
             action=DbtAction.run,
-            op_kwargs={"models": "fct_daily_bank_account_projection"},
+            models="fct_daily_bank_account_projection",
         )
 
         return dag
