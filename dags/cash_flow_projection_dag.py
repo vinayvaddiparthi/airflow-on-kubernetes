@@ -35,7 +35,9 @@ from helpers.aws_hack import hack_clear_aws_keys
 
 
 def create_cash_flow_projection_table(
-    metadata: MetaData, snowflake_engine: Engine, schema: str,
+    metadata: MetaData,
+    snowflake_engine: Engine,
+    schema: str,
 ) -> None:
     cash_flow_projections = Table(
         "cash_flow_projections",
@@ -53,7 +55,9 @@ def create_cash_flow_projection_table(
 
 
 def create_flinks_raw_responses(
-    metadata: MetaData, snowflake_engine: Engine, schema: str,
+    metadata: MetaData,
+    snowflake_engine: Engine,
+    schema: str,
 ) -> None:
     flinks_raw_responses = Table(
         "flinks_raw_responses",
@@ -67,7 +71,10 @@ def create_flinks_raw_responses(
     flinks_raw_responses.create(snowflake_engine, checkfirst=True)
 
 
-def create_tables(snowflake_connection: str, schema: str,) -> None:
+def create_tables(
+    snowflake_connection: str,
+    schema: str,
+) -> None:
     metadata = MetaData()
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
 
@@ -76,7 +83,10 @@ def create_tables(snowflake_connection: str, schema: str,) -> None:
 
 
 def store_flinks_response(
-    file_path: str, bucket_name: str, snowflake_connection: str, schema: str,
+    file_path: str,
+    bucket_name: str,
+    snowflake_connection: str,
+    schema: str,
 ) -> None:
     hack_clear_aws_keys()
     metadata = MetaData()
@@ -121,7 +131,12 @@ def store_flinks_response(
         )
 
         insert_query = flinks_raw_responses.insert().from_select(
-            ["batch_timestamp", "file_path", "raw_response",], select_query,
+            [
+                "batch_timestamp",
+                "file_path",
+                "raw_response",
+            ],
+            select_query,
         )
 
         tx.execute(insert_query)
@@ -136,11 +151,17 @@ def copy_transactions(
     metadata = MetaData(bind=snowflake_engine)
 
     merchant_documents = Table(
-        "merchant_documents", metadata, autoload=True, schema=schema,
+        "merchant_documents",
+        metadata,
+        autoload=True,
+        schema=schema,
     )
 
     flinks_raw_responses = Table(
-        "flinks_raw_responses", metadata, autoload=True, schema=schema,
+        "flinks_raw_responses",
+        metadata,
+        autoload=True,
+        schema=schema,
     )
 
     merchant_documents_select = select(
@@ -411,7 +432,9 @@ def cash_flow_projection(
         return
 
     projection_df = calculate_projection(
-        cash_flow_df, auto_arima_parameters, arima_projection_parameters,
+        cash_flow_df,
+        auto_arima_parameters,
+        arima_projection_parameters,
     )
 
     if apply_post_projection_guardrails(cash_flow_df, projection_df):

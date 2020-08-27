@@ -94,11 +94,15 @@ def fetch_calls_for_date_range(
 
         initial_payload = {
             "format": "json",
-            "timespan": {"from": start_dt.isoformat(), "to": end_dt.isoformat(),},
+            "timespan": {
+                "from": start_dt.isoformat(),
+                "to": end_dt.isoformat(),
+            },
         }
 
         resp = session.post(
-            "https://api.talkdeskapp.com/reports/calls/jobs", json=initial_payload,
+            "https://api.talkdeskapp.com/reports/calls/jobs",
+            json=initial_payload,
         )
 
         run: int = 0
@@ -242,7 +246,10 @@ if __name__ == "__main__":
     ) as mock_conn, patch(
         "dags.talkdesk_import.SnowflakeHook.get_sqlalchemy_engine",
         return_value=create_engine(
-            url, connect_args={"authenticator": "externalbrowser",},
+            url,
+            connect_args={
+                "authenticator": "externalbrowser",
+            },
         ),
     ) as mock_engine:
         import_talkdesk(
