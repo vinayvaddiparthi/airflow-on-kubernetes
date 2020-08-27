@@ -158,7 +158,9 @@ with DAG(
     dag << PythonOperator(
         task_id="create_table",
         python_callable=create_table,
-        op_kwargs={"snowflake_connection": "snowflake_zetatango_production",},
+        op_kwargs={
+            "snowflake_connection": "snowflake_zetatango_production",
+        },
     ) >> PythonOperator(
         task_id="copy_transactions",
         python_callable=copy_transactions,

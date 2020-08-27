@@ -283,7 +283,11 @@ decrypt_core_prod = PythonOperator(
                 table="MERCHANT_ATTRIBUTES",
                 columns=["value"],
                 whereclause=literal_column("$1:key").in_(
-                    ["industry", "bank_connection_required", "selected_bank_account",]
+                    [
+                        "industry",
+                        "bank_connection_required",
+                        "selected_bank_account",
+                    ]
                 ),
             ),
             DecryptionSpec(
@@ -323,7 +327,11 @@ decrypt_core_staging = PythonOperator(
                 table="MERCHANT_ATTRIBUTES",
                 columns=["value"],
                 whereclause=literal_column("$1:key").in_(
-                    ["industry", "bank_connection_required", "selected_bank_account",]
+                    [
+                        "industry",
+                        "bank_connection_required",
+                        "selected_bank_account",
+                    ]
                 ),
             ),
             DecryptionSpec(
@@ -403,7 +411,12 @@ decrypt_kyc_prod = PythonOperator(
             DecryptionSpec(
                 schema="KYC_PRODUCTION",
                 table="INDIVIDUALS_APPLICANTS",
-                columns=["date_of_birth", "first_name", "last_name", "middle_name",],
+                columns=[
+                    "date_of_birth",
+                    "first_name",
+                    "last_name",
+                    "middle_name",
+                ],
             ),
             DecryptionSpec(
                 schema="KYC_PRODUCTION",
@@ -454,7 +467,9 @@ decrypt_kyc_staging = PythonOperator(
 )
 
 dbt_run = DbtOperator(
-    task_id="dbt_run", execution_timeout=timedelta(hours=1), action=DbtAction.run,
+    task_id="dbt_run",
+    execution_timeout=timedelta(hours=1),
+    action=DbtAction.run,
 )
 
 dbt_snapshot = DbtOperator(

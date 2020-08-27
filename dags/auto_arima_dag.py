@@ -25,7 +25,10 @@ from sqlalchemy.sql import select, func, text, literal_column
 from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, DateTime
 
 
-def create_table(snowflake_connection: str, schema: str,) -> None:
+def create_table(
+    snowflake_connection: str,
+    schema: str,
+) -> None:
     metadata = MetaData()
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
 
@@ -273,7 +276,9 @@ def cash_flow_projection(
         return
 
     projection_df = calculate_projection(
-        cash_flow_df, auto_arima_parameters, arima_projection_parameters,
+        cash_flow_df,
+        auto_arima_parameters,
+        arima_projection_parameters,
     )
 
     if apply_post_projection_guardrails(cash_flow_df, projection_df):

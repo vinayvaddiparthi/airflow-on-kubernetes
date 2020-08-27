@@ -193,7 +193,8 @@ def put_resps_on_snowflake(
 
 
 def describe_sobject(
-    salesforce: Salesforce, sobject_name: str,
+    salesforce: Salesforce,
+    sobject_name: str,
 ) -> Union[SobjectDescriptor, SalesforceMalformedRequest]:
     print(f"Getting metadata for sobject {sobject_name}")
     return SobjectDescriptor(
@@ -366,7 +367,9 @@ def create_dag(instances: List[str]) -> DAG:
                 },
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
-                executor_config={"resources": {"request_memory": "8Gi"},},
+                executor_config={
+                    "resources": {"request_memory": "8Gi"},
+                },
             )
 
         return dag
@@ -398,7 +401,10 @@ if __name__ == "__main__":
     ) as mock_conn, patch(
         "dags.sfdc_bulk_load.SnowflakeHook.get_sqlalchemy_engine",
         return_value=create_engine(
-            url, connect_args={"authenticator": "externalbrowser",},
+            url,
+            connect_args={
+                "authenticator": "externalbrowser",
+            },
         ),
     ) as mock_engine:
         import_sfdc("snowflake_conn", "salesforce_conn", "sfoi")

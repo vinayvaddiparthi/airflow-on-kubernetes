@@ -24,7 +24,12 @@ def test_get_sqlalchemy_engine(self: SnowflakeHook, engine_kwargs: Dict = {}) ->
         connect_args={"authenticator": "externalbrowser"},
     )
     production_engine = create_engine(
-        URL(account=account, database=production_database, role=role, user=user,),
+        URL(
+            account=account,
+            database=production_database,
+            role=role,
+            user=user,
+        ),
         connect_args={"authenticator": "externalbrowser"},
     )
 
