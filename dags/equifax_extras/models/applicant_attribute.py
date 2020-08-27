@@ -5,16 +5,15 @@ from sqlalchemy import Integer, String
 from .base import Base
 
 from .encrypted import encrypted
-from .has_guid import HasGuid
+from .has_id import HasId
 from .marshalled import marshalled
-from .rails_model import RailsModel
 
 
-class ApplicantAttribute(Base, RailsModel, HasGuid):
-    __tablename__ = "applicant_attributes"
+class ApplicantAttribute(Base, HasId):
+    __tablename__ = "dim_applicant_attribute"
 
+    key = Column(String)
     encrypted_value = Column(String)
-    encrypted_value_iv = Column(String)
 
     @property  # type: ignore
     @marshalled
@@ -22,12 +21,7 @@ class ApplicantAttribute(Base, RailsModel, HasGuid):
     def value(self) -> str:
         return self.encrypted_value
 
-    encryption_epoch = Column(Integer)
-
-    applicant_id = Column(Integer, ForeignKey("applicants.id"))
-
-    key = Column(String)
-    partition_guid = Column(String)
+    applicant_id = Column(Integer, ForeignKey("dim_applicant.id"))
 
     def __repr__(self) -> str:
         return f"{self.key}: {self.value}"

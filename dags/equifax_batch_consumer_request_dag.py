@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 import os
-import sqlite3
 from pathlib import Path
 
 from airflow import DAG
@@ -10,7 +9,6 @@ from airflow.hooks.S3_hook import S3Hook
 
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
 
 from equifax_extras.models import Applicant
 from equifax_extras.consumer import RequestFile
@@ -24,25 +22,26 @@ tmp = os.path.join(cwd, "tmp")
 output_dir = os.path.join(tmp, "equifax_batch")
 Path(output_dir).mkdir(exist_ok=True)
 
-sqlite_db_path = os.path.join(output_dir, "tmp_database.db")
-sqlite_db_url = f"sqlite:///{sqlite_db_path}"
 
-
-def init_sqlite() -> None:
-    print(f"Connecting to {sqlite_db_url}")
-    conn = None
-    try:
-        conn = sqlite3.connect(sqlite_db_path)
-    except sqlite3.Error as e:
-        print(e)
-    finally:
-        if conn:
-            conn.close()
+def get_snowflake_engine() -> Engine:
+    snowflake_kwargs = {
+        "role": "ANALYST_ROLE",
+        "database": "ANALYTICS_PRODUCTION",
+        "schema": "DBT_ARIO",
+    }
+    environment = Variable.get("environment", "")
+    if environment == "development":
+        snowflake_engine = snowflake.get_local_engine(
+            "snowflake_conn", snowflake_kwargs
+        )
+    else:
+        snowflake_engine = snowflake.get_engine("snowflake_conn", snowflake_kwargs)
+    return snowflake_engine
 
 
 def generate_file(**context: Any) -> None:
-    sqlite_engine = create_engine(sqlite_db_url)
-    session_maker = sessionmaker(bind=sqlite_engine)
+    engine = get_snowflake_engine()
+    session_maker = sessionmaker(bind=engine)
     session = session_maker()
 
     run_id = context["dag_run"].run_id
@@ -54,14 +53,14 @@ def generate_file(**context: Any) -> None:
 
     r = RequestFile(file_path)
     r.write_header()
-    applicants = session.query(Applicant).all()
+    applicants = session.query(Applicant).limit(10)
     for applicant in applicants:
         r.append(applicant)
     r.write_footer()
 
 
 def upload_file(**context: Any) -> None:
-    s3 = S3Hook(aws_conn_id="s3_connection")
+    s3 = S3Hook(aws_conn_id="s3_datalake")
 
     run_id = context["dag_run"].run_id
     file_name = f"equifax_batch_consumer_request_{run_id}.txt"
@@ -69,7 +68,7 @@ def upload_file(**context: Any) -> None:
 
     bucket_name = Variable.get("AWS_S3_EQUIFAX_BATCH_BUCKET_NAME")
     bucket = s3.get_bucket(bucket_name)
-    remote_path = f"consumer/request/{file_name}"
+    remote_path = f"equifax_automated_batch/request/consumer/{file_name}"
     print(f"Uploading {file_path} to S3: {bucket_name}/{remote_path}")
     bucket.upload_file(file_path, remote_path)
 
@@ -80,15 +79,6 @@ def delete_file(**context: Any) -> None:
     file_path = os.path.join(output_dir, file_name)
 
     os.remove(file_path)
-
-
-def get_snowflake_engine() -> Engine:
-    environment = Variable.get("environment", "")
-    if environment == "development":
-        snowflake_engine = snowflake.get_local_engine("snowflake_conn")
-    else:
-        snowflake_engine = snowflake.get_engine("snowflake_conn")
-    return snowflake_engine
 
 
 default_args = {
@@ -105,39 +95,6 @@ with DAG(
     default_args=default_args,
     schedule_interval="@once",
 ) as dag:
-    op_init_sqlite = PythonOperator(task_id="init_sqlite", python_callable=init_sqlite,)
-    op_load_addresses = PythonOperator(
-        task_id="load_addresses",
-        python_callable=snowflake.load_addresses,
-        op_kwargs={
-            "remote_engine": get_snowflake_engine(),
-            "local_engine": create_engine(sqlite_db_url),
-        },
-    )
-    op_load_address_relationships = PythonOperator(
-        task_id="load_address_relationships",
-        python_callable=snowflake.load_address_relationships,
-        op_kwargs={
-            "remote_engine": get_snowflake_engine(),
-            "local_engine": create_engine(sqlite_db_url),
-        },
-    )
-    op_load_applicants = PythonOperator(
-        task_id="load_applicants",
-        python_callable=snowflake.load_applicants,
-        op_kwargs={
-            "remote_engine": get_snowflake_engine(),
-            "local_engine": create_engine(sqlite_db_url),
-        },
-    )
-    op_load_applicant_attributes = PythonOperator(
-        task_id="load_applicant_attributes",
-        python_callable=snowflake.load_applicant_attributes,
-        op_kwargs={
-            "remote_engine": get_snowflake_engine(),
-            "local_engine": create_engine(sqlite_db_url),
-        },
-    )
     op_generate_file = PythonOperator(
         task_id="generate_file",
         python_callable=generate_file,
@@ -145,19 +102,17 @@ with DAG(
         provide_context=True,
     )
     op_upload_file = PythonOperator(
-        task_id="upload_file", python_callable=upload_file, provide_context=True,
+        task_id="upload_file",
+        python_callable=upload_file,
+        provide_context=True,
     )
     op_delete_file = PythonOperator(
-        task_id="delete_file", python_callable=delete_file, provide_context=True,
+        task_id="delete_file",
+        python_callable=delete_file,
+        provide_context=True,
     )
 
-load = [
-    op_load_addresses,
-    op_load_address_relationships,
-    op_load_applicants,
-    op_load_applicant_attributes,
-]
-op_init_sqlite >> load >> op_generate_file >> op_upload_file >> op_delete_file
+op_generate_file >> op_upload_file >> op_delete_file
 
 
 if __name__ == "__main__":
@@ -167,12 +122,6 @@ if __name__ == "__main__":
     MockDagRun = namedtuple("MockDagRun", ["run_id"])
     mock_context = {"dag_run": MockDagRun(random.randint(10000, 99999))}
 
-    init_sqlite()
-    sqlite_engine = create_engine(sqlite_db_url)
-    snowflake_engine = get_snowflake_engine()
-    snowflake.load_applicants(snowflake_engine, sqlite_engine)
-    snowflake.load_applicant_attributes(snowflake_engine, sqlite_engine)
-    snowflake.load_addresses(snowflake_engine, sqlite_engine)
-    snowflake.load_address_relationships(snowflake_engine, sqlite_engine)
     generate_file(**mock_context)
     upload_file(**mock_context)
+    delete_file(**mock_context)

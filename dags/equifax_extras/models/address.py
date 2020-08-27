@@ -4,13 +4,14 @@ from sqlalchemy import String, Float
 from .base import Base
 
 from .has_guid import HasGuid
-from .rails_model import RailsModel
+from .has_id import HasId
+from .has_timestamps import HasTimestamps
 
 from typing import List
 
 
-class Address(Base, RailsModel, HasGuid):
-    __tablename__ = "addresses"
+class Address(Base, HasId, HasTimestamps, HasGuid):
+    __tablename__ = "dim_address"
 
     city = Column(String)
     country_alpha_3 = Column(String)
@@ -20,7 +21,8 @@ class Address(Base, RailsModel, HasGuid):
     post_box_type = Column(String)
     postal_code = Column(String)
     premise_number = Column(String)
-    state_province = Column(String)
+    # state_province = Column(String)
+    province = Column(String)
     sub_premise_number = Column(String)
     sub_premise_type = Column(String)
     thoroughfare = Column(String)
@@ -63,7 +65,7 @@ class Address(Base, RailsModel, HasGuid):
 
     @property
     def municipal_line(self) -> str:
-        return f"{self.city} {self.state_province} {self.country_alpha_3} {self.postal_code}"
+        return f"{self.city} {self.province} {self.country_alpha_3} {self.postal_code}"
 
     def __repr__(self) -> str:
         separator = " "

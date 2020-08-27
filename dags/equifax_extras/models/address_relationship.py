@@ -7,13 +7,14 @@ from sqlalchemy_utils import generic_relationship
 from .base import Base
 
 from .has_guid import HasGuid
-from .rails_model import RailsModel
+from .has_id import HasId
+from .has_timestamps import HasTimestamps
 
 from .address import Address
 
 
-class AddressRelationship(Base, RailsModel, HasGuid):
-    __tablename__ = "address_relationships"
+class AddressRelationship(Base, HasId, HasTimestamps, HasGuid):
+    __tablename__ = "dim_address_relationship"
 
     active = Column(String)
     category = Column(String)

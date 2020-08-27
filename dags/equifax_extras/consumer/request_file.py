@@ -43,7 +43,7 @@ class RequestFile(BaseRequestFile):
         if physical_address:
             street_number_thoroughfare = physical_address.civic_line
             city = physical_address.city
-            province_code = physical_address.state_province
+            province_code = physical_address.province
             postal_code = physical_address.postal_code
         else:
             street_number_thoroughfare = ""
