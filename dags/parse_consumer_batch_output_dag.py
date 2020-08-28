@@ -1,18 +1,14 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 
 import boto3
 import pandas as pd
-import snowflake.connector
 import tempfile
+from typing import Dict, TextIO
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
-from airflow.contrib.operators.snowflake_operator import SnowflakeOperator
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
-from airflow.hooks.postgres_hook import PostgresHook
-from airflow.operators.postgres_operator import PostgresOperator
 from airflow.operators.python_operator import PythonOperator
-from airflow.utils.trigger_rule import TriggerRule
 from airflow.models import Variable
 
 # from pyporky.symmetric import SymmetricPorky
@@ -29,7 +25,7 @@ full_output_path = prefix_path + output_path + consumer_path
 
 table_name_raw = (
     # f"SANDBOX.JMASSON.CONSUMER_BATCH_RAW"
-    f"EQUIFAX.OUTPUT.CONSUMER_BATCH_RAW"
+    "EQUIFAX.OUTPUT.CONSUMER_BATCH_RAW"
 )
 table_name_raw_history = (
     # f"SANDBOX.JMASSON.CONSUMER_BATCH_RAW_HISTORY_{Variable.get('t_stamp')}"
@@ -37,7 +33,7 @@ table_name_raw_history = (
 )
 table_name = {
     # f"SANDBOX.JMASSON.CONSUMER_BATCH"
-    f"EQUIFAX.OUTPUT.CONSUMER_BATCH"
+    "EQUIFAX.OUTPUT.CONSUMER_BATCH"
 }
 table_name_history = (
     # f"SANDBOX.JMASSON.CONSUMER_BATCH_HISTORY_{Variable.get('t_stamp')}"
@@ -1490,7 +1486,7 @@ aws_hook = AwsHook(aws_conn_id="s3_datalake")
 aws_credentials = aws_hook.get_credentials()
 
 
-def _convert_line_csv(line):
+def _convert_line_csv(line: str):
     indices = _gen_arr(0, result_dict_1) + _gen_arr(94, result_dict_2)
     parts = [
         "{}".format(line[i:j].strip().replace(",", "\,"))
@@ -1499,18 +1495,18 @@ def _convert_line_csv(line):
     return ",".join(parts)
 
 
-def _gen_arr(start, dol):
+def _gen_arr(start: int, dol: Dict):
     result = [start]
     for l in dol:
         result.append(result[-1] + dol[l])
     return result[:-1]
 
 
-def _get_col_def(n, l):
+def _get_col_def(n: str, l: int):
     return f"{n} varchar({l})"
 
 
-def _convert_date_format(value):
+def _convert_date_format(value: int):
     t = datetime.now()
     if value is not None and "-" not in value and not value.isspace():
         try:
@@ -1528,7 +1524,7 @@ def _convert_date_format(value):
     return None
 
 
-def _get_s3():
+def _get_s3() -> S3.Client:
     return boto3.client(
         "s3",
         aws_access_key_id=aws_credentials.access_key,
@@ -1536,7 +1532,7 @@ def _get_s3():
     )
 
 
-def _get_file():
+def _get_file() -> None:
     objects = _get_s3().list_objects(
         Bucket=bucket, Prefix=full_response_path, Delimiter="/"
     )
@@ -1555,7 +1551,7 @@ def _get_snowflake():
         return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin()
 
 
-def _insert_snowflake(table: str, file_name: str, date_formatted=False):
+def _insert_snowflake(table: str, file_name: str, date_formatted: bool=False) -> None:
     d3 = {**result_dict_1, **result_dict_2}
     print(f"Size of dict: {len(d3)}")
 
@@ -1571,10 +1567,10 @@ def _insert_snowflake(table: str, file_name: str, date_formatted=False):
                 sfh.execute(f"CREATE OR REPLACE TABLE {table} CLONE {table_name}")
 
             truncate = f"TRUNCATE TABLE {table}"
-            result = sfh.execute(truncate)
+            sfh.execute(truncate)
         else:
             sql = f"CREATE OR REPLACE TABLE {table} ({','.join(cols)});"
-            result = sfh.execute(sql)
+            sfh.execute(sql)
 
         # insert = f"INSERT INTO {table} ({','.join(value_cols)}) VALUES{','.join(values)};"
         copy = f"""COPY INTO {table} FROM S3://{bucket}/{full_output_path}/{file_name} CREDENTIALS = (
@@ -1583,10 +1579,10 @@ def _insert_snowflake(table: str, file_name: str, date_formatted=False):
                                             FILE_FORMAT=(field_delimiter=',', FIELD_OPTIONALLY_ENCLOSED_BY = '"'{', skip_header=1' if date_formatted else ''})
                                             """
         # result = sfh.execute(insert)
-        result = sfh.execute(copy)
+        sfh.execute(copy)
 
 
-def fix_date_format():
+def fix_date_format() -> None:
     with _get_snowflake() as sfh:
         select = f"SELECT * FROM {table_name_raw}"
         result = sfh.execute(select)
@@ -1625,7 +1621,7 @@ def fix_date_format():
                 )
 
 
-def get_input(s3_conn: str):
+def get_input(s3_conn: str) -> None:
     client = _get_s3()
     objects = client.list_objects(
         Bucket=bucket, Prefix=prefix_path + response_path + consumer_path, Delimiter="/"
@@ -1639,7 +1635,7 @@ def get_input(s3_conn: str):
     Variable.set("file_content", content)
 
 
-def convert_file():
+def convert_file() -> None:
     with tempfile.TemporaryFile(
         mode="w+", encoding="ISO-8859-1"
     ) as raw, tempfile.NamedTemporaryFile(
@@ -1664,7 +1660,7 @@ def convert_file():
         )
 
 
-def upload_file_s3(file, path: str):
+def upload_file_s3(file: TextIO, path: str) -> None:
     file.seek(0)
     with open(file.name, mode="r", encoding="ISO-8859-1") as f:
         client = _get_s3()
@@ -1675,7 +1671,7 @@ def upload_file_s3(file, path: str):
         )
 
 
-def insert_snowflake_raw():
+def insert_snowflake_raw() -> None:
     _insert_snowflake(
         table_name_raw, f"tc_consumer_batch_raw_{Variable.get('t_stamp')}.csv"
     )
@@ -1684,7 +1680,7 @@ def insert_snowflake_raw():
     )
 
 
-def insert_snowflake():
+def insert_snowflake() -> None:
     _insert_snowflake(
         table_name, f"tc_consumer_batch_{Variable.get('t_stamp')}.csv", True
     )
