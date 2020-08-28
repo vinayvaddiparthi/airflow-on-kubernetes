@@ -8,9 +8,12 @@ from .has_addresses import HasAddresses
 from .has_applicant_attributes import HasApplicantAttributes
 from .has_guid import HasGuid
 from .has_id import HasId
+from .has_merchants import HasMerchants
 
 
-class Applicant(Base, HasId, HasGuid, HasAddresses, HasApplicantAttributes):
+class Applicant(
+    Base, HasId, HasGuid, HasAddresses, HasApplicantAttributes, HasMerchants
+):
     __tablename__ = "dim_applicant"
 
     email_address_id = Column(String)
@@ -42,3 +45,9 @@ class Applicant(Base, HasId, HasGuid, HasAddresses, HasApplicantAttributes):
     @encrypted
     def middle_name(self) -> str:
         return self.encrypted_middle_name
+
+    def __str__(self) -> str:
+        return str(self.first_name) + " " + str(self.last_name)
+
+    def __repr__(self) -> str:
+        return f"Applicant({self})"

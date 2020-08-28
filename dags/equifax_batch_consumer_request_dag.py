@@ -10,7 +10,7 @@ from airflow.hooks.S3_hook import S3Hook
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from equifax_extras.models import Applicant
+from equifax_extras.models import *
 from equifax_extras.consumer import RequestFile
 import equifax_extras.utils.snowflake as snowflake
 
@@ -32,10 +32,12 @@ def get_snowflake_engine() -> Engine:
     environment = Variable.get("environment", "")
     if environment == "development":
         snowflake_engine = snowflake.get_local_engine(
-            "snowflake_conn", snowflake_kwargs
+            "snowflake_analytics_production", snowflake_kwargs
         )
     else:
-        snowflake_engine = snowflake.get_engine("snowflake_conn", snowflake_kwargs)
+        snowflake_engine = snowflake.get_engine(
+            "snowflake_analytics_production", snowflake_kwargs
+        )
     return snowflake_engine
 
 
@@ -48,15 +50,18 @@ def generate_file(**context: Any) -> None:
     file_name = f"equifax_batch_consumer_request_{run_id}.txt"
     file_path = os.path.join(output_dir, file_name)
 
-    num_applicants = session.query(Applicant).count()
-    print(f"Applicant count: {num_applicants}")
+    request_file = RequestFile(file_path)
+    request_file.write_header()
 
-    r = RequestFile(file_path)
-    r.write_header()
-    applicants = session.query(Applicant).limit(10)
-    for applicant in applicants:
-        r.append(applicant)
-    r.write_footer()
+    # For each Loan in state "repaying", write its associated Applicants to the request file
+    repaying_loans = session.query(Loan).filter(Loan.state == "repaying").all()
+    for repaying_loan in repaying_loans:
+        merchant = repaying_loan.merchant
+        applicants = merchant.applicants
+        for applicant in applicants:
+            request_file.append(applicant)
+
+    request_file.write_footer()
 
 
 def upload_file(**context: Any) -> None:
@@ -83,7 +88,7 @@ def delete_file(**context: Any) -> None:
 
 default_args = {
     "owner": "airflow",
-    "start_date": datetime(2020, 1, 1, 10, 00, 00),
+    "start_date": datetime(2020, 1, 1, 00, 00, 00),
     "concurrency": 1,
     "retries": 0,
 }

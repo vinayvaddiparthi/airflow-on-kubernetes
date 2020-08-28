@@ -21,7 +21,6 @@ class Address(Base, HasId, HasTimestamps, HasGuid):
     post_box_type = Column(String)
     postal_code = Column(String)
     premise_number = Column(String)
-    # state_province = Column(String)
     province = Column(String)
     sub_premise_number = Column(String)
     sub_premise_type = Column(String)
