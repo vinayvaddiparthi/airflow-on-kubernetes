@@ -10,7 +10,7 @@ from airflow.hooks.S3_hook import S3Hook
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from equifax_extras.models import *
+from equifax_extras.models import Loan
 from equifax_extras.consumer import RequestFile
 import equifax_extras.utils.snowflake as snowflake
 
