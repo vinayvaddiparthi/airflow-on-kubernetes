@@ -1551,7 +1551,7 @@ def _get_snowflake():
         return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin()
 
 
-def _insert_snowflake(table: str, file_name: str, date_formatted: bool=False) -> None:
+def _insert_snowflake(table: str, file_name: str, date_formatted: bool = False) -> None:
     d3 = {**result_dict_1, **result_dict_2}
     print(f"Size of dict: {len(d3)}")
 
