@@ -4,13 +4,11 @@ from sqlalchemy import Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import generic_relationship
 
-from .base import Base
+from equifax_extras.models.base import Base
 
-from .has_guid import HasGuid
-from .has_id import HasId
-from .has_timestamps import HasTimestamps
-
-from .address import Address
+from equifax_extras.models.has_guid import HasGuid
+from equifax_extras.models.has_id import HasId
+from equifax_extras.models.has_timestamps import HasTimestamps
 
 
 class AddressRelationship(Base, HasId, HasTimestamps, HasGuid):
@@ -20,7 +18,7 @@ class AddressRelationship(Base, HasId, HasTimestamps, HasGuid):
     category = Column(String)
     deactivated_at = Column(String)
 
-    address_id = Column(Integer, ForeignKey(f"{Address.__tablename__}.id"))
+    address_id = Column(Integer, ForeignKey("dim_address.id"))
     party_id = Column(Integer)
     party_type = Column(String)
 

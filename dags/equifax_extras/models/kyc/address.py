@@ -1,11 +1,11 @@
 from sqlalchemy import Column
 from sqlalchemy import String, Float
 
-from .base import Base
+from equifax_extras.models.base import Base
 
-from .has_guid import HasGuid
-from .has_id import HasId
-from .has_timestamps import HasTimestamps
+from equifax_extras.models.has_guid import HasGuid
+from equifax_extras.models.has_id import HasId
+from equifax_extras.models.has_timestamps import HasTimestamps
 
 from typing import List
 
@@ -48,7 +48,7 @@ class Address(Base, HasId, HasTimestamps, HasGuid):
 
         if self.sub_premise_type and self.sub_premise_number:
             return f"{self.premise_number} {self.thoroughfare} {self.sub_premise_type} {self.sub_premise_number}"
-        elif self.sub_premise_number != "":
+        elif self.sub_premise_number:
             return (
                 f"{self.sub_premise_number}-{self.premise_number} {self.thoroughfare}"
             )

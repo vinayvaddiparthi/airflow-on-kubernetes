@@ -3,7 +3,8 @@ from datetime import datetime
 from equifax_extras.utils.batch.fixed_width_column import FixedWidthColumn
 from equifax_extras.utils.batch.base_row import BaseRow
 from equifax_extras.utils.batch.base_request_file import BaseRequestFile
-from equifax_extras.models import Applicant
+from equifax_extras.models.core import Loan
+from equifax_extras.models.kyc import Applicant
 
 
 class RequestFile(BaseRequestFile):
@@ -23,7 +24,7 @@ class RequestFile(BaseRequestFile):
         account_number = FixedWidthColumn(18)
         p1 = FixedWidthColumn(50)
 
-    def append(self, applicant: Applicant) -> None:
+    def append(self, applicant: Applicant, loan: Loan) -> None:
         reference_number = f"{applicant.id}".rjust(12, "0")
 
         last_name = str(applicant.last_name, "utf-8")
@@ -51,7 +52,7 @@ class RequestFile(BaseRequestFile):
             province_code = ""
             postal_code = ""
 
-        account_number = "000000000000000000"
+        account_number = loan.sfoi_account_id
 
         row = RequestFile.Row(
             reference_number=reference_number,

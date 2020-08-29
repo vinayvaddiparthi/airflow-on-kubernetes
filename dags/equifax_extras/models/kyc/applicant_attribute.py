@@ -2,11 +2,11 @@ from sqlalchemy import Column
 from sqlalchemy import ForeignKey
 from sqlalchemy import Integer, String
 
-from .base import Base
+from equifax_extras.models.base import Base
 
-from .encrypted import encrypted
-from .has_id import HasId
-from .marshalled import marshalled
+from equifax_extras.models.encrypted import encrypted
+from equifax_extras.models.has_id import HasId
+from equifax_extras.models.marshalled import marshalled
 
 
 class ApplicantAttribute(Base, HasId):
@@ -21,7 +21,7 @@ class ApplicantAttribute(Base, HasId):
     def value(self) -> str:
         return self.encrypted_value
 
-    applicant_id = Column(Integer, ForeignKey("dim_applicant.id"))
+    applicant_id = Column(Integer, ForeignKey("dim_kyc_applicant.id"))
 
     def __repr__(self) -> str:
         return f"{self.key}: {self.value}"

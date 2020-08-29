@@ -10,7 +10,7 @@ from airflow.hooks.S3_hook import S3Hook
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from equifax_extras.models import Loan
+from equifax_extras.models.core import Loan
 from equifax_extras.consumer import RequestFile
 import equifax_extras.utils.snowflake as snowflake
 
@@ -26,7 +26,8 @@ Path(output_dir).mkdir(exist_ok=True)
 def get_snowflake_engine() -> Engine:
     snowflake_kwargs = {
         "role": "ANALYST_ROLE",
-        "database": "ANALYTICS_PRODUCTION",
+        # "database": "ANALYTICS_PRODUCTION",
+        "database": "ANALYTICS_REVIEW-BVROO-MERC-6W3DLF",
         "schema": "DBT_ARIO",
     }
     environment = Variable.get("environment", "")
@@ -56,10 +57,10 @@ def generate_file(**context: Any) -> None:
     # For each Loan in state "repaying", write its associated Applicants to the request file
     repaying_loans = session.query(Loan).filter(Loan.state == "repaying").all()
     for repaying_loan in repaying_loans:
-        merchant = repaying_loan.merchant
-        applicants = merchant.applicants
+        merchant = repaying_loan.merchant.kyc_merchant
+        applicants = merchant.owners
         for applicant in applicants:
-            request_file.append(applicant)
+            request_file.append(applicant, repaying_loan)
 
     request_file.write_footer()
 
