@@ -2,10 +2,11 @@ from sqlalchemy.orm import relationship
 from sqlalchemy import event
 from sqlalchemy import and_
 
-from typing import Any, List, Optional, TYPE_CHECKING
-
 from .address import Address
 from .address_relationship import AddressRelationship
+
+from typing import Any, List, Optional, TYPE_CHECKING
+
 
 PHYSICAL_ADDRESS = "physical_address"
 LEGAL_BUSINESS_ADDRESS = "legal_business_address"

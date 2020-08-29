@@ -5,7 +5,6 @@ from sqlalchemy.orm import relationship
 from sqlalchemy_utils import generic_relationship
 
 from equifax_extras.models.base import Base
-
 from equifax_extras.models.has_guid import HasGuid
 from equifax_extras.models.has_id import HasId
 from equifax_extras.models.has_timestamps import HasTimestamps

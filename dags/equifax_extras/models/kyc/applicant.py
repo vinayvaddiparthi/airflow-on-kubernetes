@@ -7,10 +7,10 @@ from sqlalchemy.ext.declarative import declared_attr
 
 from equifax_extras.models.base import Base
 from equifax_extras.models.encrypted import encrypted
-from .has_addresses import HasAddresses
 from equifax_extras.models.has_guid import HasGuid
 from equifax_extras.models.has_id import HasId
 from .applicant_attribute import ApplicantAttribute
+from .has_addresses import HasAddresses
 
 from typing import Any
 

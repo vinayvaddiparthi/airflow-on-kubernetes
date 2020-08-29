@@ -3,7 +3,6 @@ from sqlalchemy import ForeignKey
 from sqlalchemy import Integer, String
 
 from equifax_extras.models.base import Base
-
 from equifax_extras.models.encrypted import encrypted
 from equifax_extras.models.has_id import HasId
 from equifax_extras.models.marshalled import marshalled

@@ -3,9 +3,9 @@ from sqlalchemy import String
 from sqlalchemy import event
 from sqlalchemy.orm import relationship
 
-from .has_addresses import HasAddresses
 from equifax_extras.models.base import Base
 from equifax_extras.models.has_id import HasId
+from .has_addresses import HasAddresses
 
 from typing import Any
 
