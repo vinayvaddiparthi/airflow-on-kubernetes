@@ -12,7 +12,7 @@ class StripNamespace(types.TypeDecorator):
     def strip(value: str) -> str:
         regex = "(?:.*)::(.*)$"
         match = re.match(regex, value)
-        return match[1]
+        return match[1] if match else value
 
     def process_literal_param(self, value: str, dialect: Any) -> str:
         ret = self.__class__.strip(value)
