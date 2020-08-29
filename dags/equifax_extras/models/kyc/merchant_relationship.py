@@ -1,5 +1,3 @@
-import re
-
 from sqlalchemy import Column
 from sqlalchemy import Integer, String
 from sqlalchemy import ForeignKey
