@@ -211,7 +211,9 @@ def create_dag() -> DAG:
                         "KubernetesAirflowProductionTalkdeskRole"
                     },
                 },
-                "resources": {"request_memory": "512Mi"},
+                "resources": {
+                    "requests": {"memory": "512Mi"},
+                },
             },
         )
 
