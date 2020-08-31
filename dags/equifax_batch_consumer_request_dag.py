@@ -55,12 +55,19 @@ def generate_file(**context: Any) -> None:
     request_file.write_header()
 
     # For each Loan in state "repaying", write its associated Applicants to the request file
-    repaying_loans = session.query(Loan).filter(Loan.state == "repaying").all()
-    for repaying_loan in repaying_loans:
+    repaying_loans_query = session.query(Loan).filter(Loan.state == "repaying")
+    num_repaying_loans = repaying_loans_query.count()
+    repaying_loans = repaying_loans_query.all()
+
+    print(f"Generating lines for {num_repaying_loans} repaying loans...")
+
+    for i, repaying_loan in enumerate(repaying_loans, start=1):
+        print(f"Generating line {i}...")
         merchant = repaying_loan.merchant.kyc_merchant
         applicants = merchant.owners
         for applicant in applicants:
             request_file.append(applicant, repaying_loan)
+        print(f"Line {i} complete.")
 
     request_file.write_footer()
 

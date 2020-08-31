@@ -52,7 +52,8 @@ class RequestFile(BaseRequestFile):
             province_code = ""
             postal_code = ""
 
-        account_number = loan.sfoi_account_id
+        sfoi_account_id = loan.sfoi_account_id
+        account_number = sfoi_account_id if sfoi_account_id else ""
 
         row = RequestFile.Row(
             reference_number=reference_number,
