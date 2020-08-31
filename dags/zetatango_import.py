@@ -312,7 +312,7 @@ decrypt_core_prod = PythonOperator(
                 "KubernetesAirflowProductionZetatangoPiiRole"
             }
         },
-        "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
+        "resources": {"requests": {"memory": "2Gi"}, "limits": {"memory": "2Gi"}},
     },
 )
 
@@ -355,7 +355,7 @@ decrypt_core_staging = PythonOperator(
                 "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                 "KubernetesAirflowNonProdZetatangoPiiRole"
             },
-            "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
+            "resources": {"requests": {"memory": "2Gi"}, "limits": {"memory": "2Gi"}},
         }
     },
 )
@@ -435,7 +435,7 @@ decrypt_kyc_prod = PythonOperator(
                 "KubernetesAirflowProductionZetatangoPiiRole"
             }
         },
-        "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
+        "resources": {"requests": {"memory": "2Gi"}, "limits": {"memory": "2Gi"}},
     },
 )
 
@@ -461,7 +461,7 @@ decrypt_kyc_staging = PythonOperator(
                 "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                 "KubernetesAirflowNonProdZetatangoPiiRole"
             },
-            "resources": {"request_memory": "2Gi", "limit_memory": "2Gi"},
+            "resources": {"requests": {"memory": "2Gi"}, "limits": {"memory": "2Gi"}},
         }
     },
 )
