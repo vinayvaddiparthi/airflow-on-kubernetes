@@ -1521,7 +1521,7 @@ def _convert_date_format(value: str) -> datetime:
             return dt
         except Exception as e:
             print(e)
-    return None
+    # return None
 
 
 def _get_s3() -> Any:
@@ -1551,7 +1551,7 @@ def _get_snowflake() -> Any:
         return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin()
 
 
-def _insert_snowflake(table: str, file_name: str, date_formatted: bool = False) -> None:
+def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
     d3 = {**result_dict_1, **result_dict_2}
     print(f"Size of dict: {len(d3)}")
 
