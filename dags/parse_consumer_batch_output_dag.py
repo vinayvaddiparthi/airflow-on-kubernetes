@@ -1506,7 +1506,7 @@ def _get_col_def(n: str, l: int) -> str:
     return f"{n} varchar({l})"
 
 
-def _convert_date_format(value: str) -> datetime:
+def _convert_date_format(value: str) -> Any:
     t = datetime.now()
     if value is not None and "-" not in value and not value.isspace():
         try:
@@ -1521,7 +1521,7 @@ def _convert_date_format(value: str) -> datetime:
             return dt
         except Exception as e:
             print(e)
-    # return None
+    return None
 
 
 def _get_s3() -> Any:
