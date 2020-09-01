@@ -3,7 +3,7 @@ from datetime import datetime
 import boto3
 import pandas as pd
 import tempfile
-from typing import Dict, TextIO, Any
+from typing import Dict, List, Set, Any
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -1495,7 +1495,7 @@ def _convert_line_csv(line: str) -> str:
     return ",".join(parts)
 
 
-def _gen_arr(start: int, dol: Dict):
+def _gen_arr(start: int, dol: Dict) -> List:
     result = [start]
     for l in dol:
         result.append(result[-1] + dol[l])
@@ -1517,11 +1517,11 @@ def _convert_date_format(value: str) -> str:
                 yy = f"20{y}"
             else:
                 yy = f"19{y}"
-            d = datetime.strptime(f"{yy}-{m}-{d}", "%Y-%m-%d")
-            return d
+            dt = datetime.strptime(f"{yy}-{m}-{d}", "%Y-%m-%d")
+            return dt
         except Exception as e:
             print(e)
-    return None
+    return ''
 
 
 def _get_s3() -> Any:
@@ -1551,7 +1551,7 @@ def _get_snowflake() -> Any:
         return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin()
 
 
-def _insert_snowflake(table: str, file_name: str, date_formatted: bool = False) -> None:
+def _insert_snowflake(table: Set[str], file_name: str, date_formatted: bool = False) -> None:
     d3 = {**result_dict_1, **result_dict_2}
     print(f"Size of dict: {len(d3)}")
 
