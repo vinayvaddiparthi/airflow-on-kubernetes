@@ -1721,6 +1721,7 @@ task_get_file >> task_convert_file >> task_insert_snowflake_raw >> task_fix_date
 
 if __name__ == "__main__":
     import os
+
     # from unittest.mock import MagicMock, patch
     # from sqlalchemy import create_engine
     # from snowflake.sqlalchemy import URL
