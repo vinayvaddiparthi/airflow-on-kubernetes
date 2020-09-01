@@ -3,7 +3,7 @@ from datetime import datetime
 import boto3
 import pandas as pd
 import tempfile
-from typing import Dict, List, Set, Any
+from typing import Dict, List, Any
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -1506,7 +1506,7 @@ def _get_col_def(n: str, l: int) -> str:
     return f"{n} varchar({l})"
 
 
-def _convert_date_format(value: str) -> str:
+def _convert_date_format(value: str) -> datetime:
     t = datetime.now()
     if value is not None and "-" not in value and not value.isspace():
         try:
@@ -1521,7 +1521,7 @@ def _convert_date_format(value: str) -> str:
             return dt
         except Exception as e:
             print(e)
-    return ""
+    return None
 
 
 def _get_s3() -> Any:
@@ -1551,9 +1551,7 @@ def _get_snowflake() -> Any:
         return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin()
 
 
-def _insert_snowflake(
-    table: Set[str], file_name: str, date_formatted: bool = False
-) -> None:
+def _insert_snowflake(table: str, file_name: str, date_formatted: bool = False) -> None:
     d3 = {**result_dict_1, **result_dict_2}
     print(f"Size of dict: {len(d3)}")
 
