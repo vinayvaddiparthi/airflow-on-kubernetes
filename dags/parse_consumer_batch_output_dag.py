@@ -3,7 +3,7 @@ from datetime import datetime
 import boto3
 import pandas as pd
 import tempfile
-from typing import Dict, TextIO
+from typing import Dict, TextIO, Any
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -1480,7 +1480,7 @@ dag = DAG(
     catchup=False,
 )
 
-snowflake_conn = "snowflake_equifax"  # ?
+snowflake_conn = "airflow_production"
 
 aws_hook = AwsHook(aws_conn_id="s3_datalake")
 aws_credentials = aws_hook.get_credentials()
@@ -1524,7 +1524,7 @@ def _convert_date_format(value: int):
     return None
 
 
-def _get_s3() -> S3.Client:
+def _get_s3() -> Any:
     return boto3.client(
         "s3",
         aws_access_key_id=aws_credentials.access_key,
@@ -1623,9 +1623,6 @@ def fix_date_format() -> None:
 
 def get_input(s3_conn: str) -> None:
     client = _get_s3()
-    objects = client.list_objects(
-        Bucket=bucket, Prefix=prefix_path + response_path + consumer_path, Delimiter="/"
-    )
     file = client.get_object(
         Bucket=bucket,
         Key=f"{full_response_path}/tc_consumer_batch_{Variable.get('t_stamp')}.out1",
@@ -1724,18 +1721,18 @@ task_get_file >> task_convert_file >> task_insert_snowflake_raw >> task_fix_date
 
 if __name__ == "__main__":
     import os
-    from unittest.mock import MagicMock, patch
-    from sqlalchemy import create_engine
-    from snowflake.sqlalchemy import URL
+    # from unittest.mock import MagicMock, patch
+    # from sqlalchemy import create_engine
+    # from snowflake.sqlalchemy import URL
 
     account = os.environ.get("SNOWFLAKE_ACCOUNT", "thinkingcapital.ca-central-1.aws")
     database = os.environ.get("SNOWFLAKE_DATABASE", "SANDBOX")
     role = os.environ.get("SNOWFLAKE_ROLE", "SYSADMIN")
 
-    url = (
-        URL(account=account, database=database, role=role)
-        if role
-        else URL(account=account, database=database)
-    )
+    # url = (
+    #     URL(account=account, database=database, role=role)
+    #     if role
+    #     else URL(account=account, database=database)
+    # )
 
     insert_snowflake()
