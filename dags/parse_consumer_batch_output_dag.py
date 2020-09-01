@@ -1486,7 +1486,7 @@ aws_hook = AwsHook(aws_conn_id="s3_datalake")
 aws_credentials = aws_hook.get_credentials()
 
 
-def _convert_line_csv(line: str):
+def _convert_line_csv(line: str) -> str:
     indices = _gen_arr(0, result_dict_1) + _gen_arr(94, result_dict_2)
     parts = [
         "{}".format(line[i:j].strip().replace(",", "\,"))
@@ -1502,11 +1502,11 @@ def _gen_arr(start: int, dol: Dict):
     return result[:-1]
 
 
-def _get_col_def(n: str, l: int):
+def _get_col_def(n: str, l: int) -> str:
     return f"{n} varchar({l})"
 
 
-def _convert_date_format(value: int):
+def _convert_date_format(value: str) -> str:
     t = datetime.now()
     if value is not None and "-" not in value and not value.isspace():
         try:
@@ -1542,7 +1542,7 @@ def _get_file() -> None:
     return None
 
 
-def _get_snowflake():
+def _get_snowflake() -> Any:
     snowflake_hook = BaseHook.get_connection(snowflake_conn)
     if snowflake_hook.password:
         return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine().begin()
@@ -1657,15 +1657,17 @@ def convert_file() -> None:
         )
 
 
-def upload_file_s3(file: TextIO, path: str) -> None:
+def upload_file_s3(file: Any, path: str) -> None:
     file.seek(0)
-    with open(file.name, mode="r", encoding="ISO-8859-1") as f:
+    try:
         client = _get_s3()
         client.upload_file(
             file.name,
             bucket,
             path,
         )
+    except:
+        print("Error when uploading file to s3")
 
 
 def insert_snowflake_raw() -> None:
