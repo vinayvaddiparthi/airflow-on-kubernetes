@@ -243,9 +243,11 @@ def calculate_balance_projection(
     lo_balances = []
     hi_balances = []
 
-    for i, opening_balance in enumerate(prediction_df["balance_prediction"]):
-        lo_balance = opening_balance - balance_spreads[i]
-        hi_balance = opening_balance + balance_spreads[i]
+    for opening_balance, balance_spread in zip(
+        prediction_df["balance_prediction"], balance_spreads
+    ):
+        lo_balance = opening_balance - balance_spread
+        hi_balance = opening_balance + balance_spread
 
         lo_balances.append(lo_balance)
         hi_balances.append(hi_balance)
@@ -261,12 +263,11 @@ def calculate_balance_spreads(
     f = 1.281552
     balance_spreads = []
 
-    for i in range(len(credits_confidence_intervals)):
-        lo_c80 = credits_confidence_intervals[i][0]
-        hi_c80 = credits_confidence_intervals[i][1]
-
-        lo_d80 = debits_confidence_intervals[i][0]
-        hi_d80 = debits_confidence_intervals[i][1]
+    for credits_interval, debits_interval in zip(
+        credits_confidence_intervals, debits_confidence_intervals
+    ):
+        lo_c80, hi_c80 = credits_interval
+        lo_d80, hi_d80 = debits_interval
 
         spread_credits = (hi_c80 - lo_c80) / 2 / f
         spread_debits = (hi_d80 - lo_d80) / 2 / f
