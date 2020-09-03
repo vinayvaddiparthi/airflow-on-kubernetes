@@ -504,7 +504,7 @@ def cash_flow_projection(
 
     with zetatango_engine.begin() as tx:
         projection_df.index = pd.to_datetime(projection_df.index).astype(str)
-        details["data"] = projection_df.to_dict()
+        details["data"] = projection_df.to_dict("index")
 
         select_query = select(
             columns=[
