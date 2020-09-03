@@ -16,6 +16,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from pmdarima.arima import auto_arima
 from hashlib import sha256
 from base64 import b64decode
+from math import sqrt
 
 from typing import Dict, Any, cast, List
 
@@ -228,7 +229,9 @@ def calculate_opening_balances(
     return opening_balances
 
 
-def calculate_balance_projection(df: pd.DataFrame, prediction_df: pd.DataFrame) -> None:
+def calculate_balance_projection(
+    df: pd.DataFrame, prediction_df: pd.DataFrame, balance_spreads: List[float]
+) -> None:
     opening_balance = (
         df["balance"].iloc[-1] + df["credits"].iloc[-1] - df["debits"].iloc[-1]
     )
@@ -236,6 +239,44 @@ def calculate_balance_projection(df: pd.DataFrame, prediction_df: pd.DataFrame) 
     prediction_df["balance_prediction"] = calculate_opening_balances(
         opening_balance, prediction_df, "credits_prediction", "debits_prediction"
     )
+
+    lo_balances = []
+    hi_balances = []
+
+    for opening_balance, balance_spread in zip(
+        prediction_df["balance_prediction"], balance_spreads
+    ):
+        lo_balance = opening_balance - balance_spread
+        hi_balance = opening_balance + balance_spread
+
+        lo_balances.append(lo_balance)
+        hi_balances.append(hi_balance)
+
+    prediction_df["lo_balance_prediction"] = lo_balances
+    prediction_df["hi_balance_prediction"] = hi_balances
+
+
+def calculate_balance_spreads(
+    credits_confidence_intervals: List[List[float]],
+    debits_confidence_intervals: List[List[float]],
+) -> List[float]:
+    f = 1.281552
+    balance_spreads = []
+
+    for credits_interval, debits_interval in zip(
+        credits_confidence_intervals, debits_confidence_intervals
+    ):
+        lo_c80, hi_c80 = credits_interval
+        lo_d80, hi_d80 = debits_interval
+
+        spread_credits = (hi_c80 - lo_c80) / 2 / f
+        spread_debits = (hi_d80 - lo_d80) / 2 / f
+
+        spread_balance = sqrt(spread_credits ** 2 + spread_debits ** 2) * f
+
+        balance_spreads.append(spread_balance)
+
+    return balance_spreads
 
 
 def calculate_projection(
@@ -258,13 +299,16 @@ def calculate_projection(
         prediction_start_date + timedelta(days=(days_to_project - 1)),
     )
 
+    credits_prediction, credits_confidence_intervals = arima_credits_model.predict(
+        **(attr.asdict(arima_projection_params))
+    )
+    debits_prediction, debits_confidence_intervals = arima_debits_model.predict(
+        **(attr.asdict(arima_projection_params))
+    )
+
     predictions = {
-        "credits_prediction": arima_credits_model.predict(
-            **(attr.asdict(arima_projection_params))
-        ),
-        "debits_prediction": arima_debits_model.predict(
-            **(attr.asdict(arima_projection_params))
-        ),
+        "credits_prediction": credits_prediction,
+        "debits_prediction": debits_prediction,
     }
 
     prediction_df = pd.DataFrame(predictions, index=prediction_index)
@@ -272,7 +316,13 @@ def calculate_projection(
     # We zero out any prediction that is negative before calculating balance
     prediction_df.clip(lower=0, inplace=True)
 
-    calculate_balance_projection(cash_flow_df, prediction_df)
+    calculate_balance_projection(
+        cash_flow_df,
+        prediction_df,
+        calculate_balance_spreads(
+            credits_confidence_intervals, debits_confidence_intervals
+        ),
+    )
 
     return prediction_df
 
@@ -454,7 +504,7 @@ def cash_flow_projection(
 
     with zetatango_engine.begin() as tx:
         projection_df.index = pd.to_datetime(projection_df.index).astype(str)
-        details["data"] = projection_df.to_dict()
+        details["data"] = projection_df.to_dict("index")
 
         select_query = select(
             columns=[
