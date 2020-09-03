@@ -29,6 +29,7 @@ from helpers.auto_arima_parameters import (
 from snowflake.sqlalchemy import VARIANT
 from sqlalchemy.sql import select, func, text, literal_column, literal
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, DateTime
 
 from pyporky.symmetric import SymmetricPorky
@@ -465,6 +466,10 @@ def cash_flow_projection(
     }
     parameters_to_hash["auto_arima_params"].pop("random_state", None)
 
+    logging.info(
+        f"Generating projections for {account_guid} for merchant {merchant_guid}"
+    )
+
     if skip_projection(
         merchant_guid,
         account_guid,
@@ -635,6 +640,11 @@ def generate_projections(
         projection_id: str = sha256(
             f"{task_instance_key_str}_{ts_nodash}".encode("utf-8")
         ).hexdigest()
+
+        try:
+            tx.execute(statement)
+        except SQLAlchemyError as e:
+            logging.error(str(e.__dict__["orig"]))
 
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             for row in tx.execute(statement).fetchall():
