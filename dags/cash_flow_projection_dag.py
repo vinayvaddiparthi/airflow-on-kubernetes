@@ -5,6 +5,7 @@ import pandas as pd
 import attr
 import boto3
 import sqlalchemy
+import sys
 
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -12,6 +13,7 @@ from airflow.operators.python_operator import PythonOperator
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
 from datetime import timedelta
+from concurrent.futures.thread import ThreadPoolExecutor
 from pmdarima.arima import auto_arima
 from hashlib import sha256
 from base64 import b64decode
@@ -197,13 +199,15 @@ def copy_transactions(
         )
     ]
 
-    for _index, row in to_download.iterrows():
-        store_flinks_response(
-            row["file_path"],
-            bucket_name,
-            snowflake_connection,
-            schema,
-        )
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        for _index, row in to_download.iterrows():
+            executor.submit(
+                store_flinks_response,
+                row["file_path"],
+                bucket_name,
+                snowflake_connection,
+                schema,
+            )
 
 
 def calculate_opening_balances(
@@ -429,7 +433,7 @@ def apply_post_projection_guardrails(
     return not (min_balance <= closing_predicted_balance <= max_balance)
 
 
-def cash_flow_projection(
+def do_projection(
     merchant_guid: str,
     account_guid: str,
     cash_flow_df: pd.DataFrame,
@@ -438,7 +442,7 @@ def cash_flow_projection(
     snowflake_zetatango_connection: str,
     zetatango_schema: str,
 ) -> None:
-    logging.info("cash_flow_projection")
+    logging.info("do_projection")
 
     metadata = MetaData()
     zetatango_engine = SnowflakeHook(
@@ -646,32 +650,38 @@ def generate_projections(
             f"{task_instance_key_str}_{ts_nodash}".encode("utf-8")
         ).hexdigest()
 
-        for row in tx.execute(statement).fetchall():
-            logging.info(f"Row: {row}")
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            for row in tx.execute(statement).fetchall():
+                logging.info(f"Row: {row}")
 
-            df = pd.DataFrame.from_dict(
-                json.loads(row["daily_cash_flow"]), orient="index"
-            )
+                df = pd.DataFrame.from_dict(
+                    json.loads(row["daily_cash_flow"]), orient="index"
+                )
 
-            df.index = pd.to_datetime(df.index)
+                df.index = pd.to_datetime(df.index)
 
-            full_index = pd.date_range(df.index.min(), df.index.max())
-            df = df.reindex(full_index, fill_value=0)
+                full_index = pd.date_range(df.index.min(), df.index.max())
+                df = df.reindex(full_index, fill_value=0)
 
-            df.index.rename(inplace=True, name="DateTime")
-            df.sort_index(inplace=True)
+                df.index.rename(inplace=True, name="DateTime")
+                df.sort_index(inplace=True)
 
-            logging.info("Executing cash_flow_projection")
+                logging.info("Executing do_projection")
 
-            cash_flow_projection(
-                row["merchant_guid"],
-                row["account_guid"],
-                df,
-                projection_id,
-                existing_projections_df,
-                snowflake_zetatango_connection,
-                zetatango_schema,
-            )
+                try:
+                    executor.submit(
+                        do_projection,
+                        row["merchant_guid"],
+                        row["account_guid"],
+                        df,
+                        projection_id,
+                        existing_projections_df,
+                        snowflake_zetatango_connection,
+                        zetatango_schema,
+                    )
+                except:
+                    e = sys.exc_info()[0]
+                    logging.error(f"Error: {e}")
 
 
 def create_dag() -> DAG:
