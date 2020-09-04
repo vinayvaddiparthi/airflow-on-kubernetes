@@ -441,10 +441,15 @@ def cash_flow_projection(
     snowflake_zetatango_connection: str,
     zetatango_schema: str,
 ) -> None:
+    logging.info("cash_flow_projection")
+
     metadata = MetaData()
     zetatango_engine = SnowflakeHook(
         snowflake_zetatango_connection
     ).get_sqlalchemy_engine()
+
+    logging.info("Generating parameters")
+
     auto_arima_parameters = AutoArimaParameters()
     arima_projection_parameters = ArimaProjectionParameters()
     cash_flow_projection_parameters = CashFlowProjectionParameters()
@@ -652,21 +657,15 @@ def generate_projections(
                     json.loads(row["daily_cash_flow"]), orient="index"
                 )
 
-                logging.info(f"df: {df}")
-
                 df.index = pd.to_datetime(df.index)
-
-                logging.info(f"df: {df}")
 
                 full_index = pd.date_range(df.index.min(), df.index.max())
                 df = df.reindex(full_index, fill_value=0)
 
-                logging.info(f"df: {df}")
-
                 df.index.rename(inplace=True, name="DateTime")
                 df.sort_index(inplace=True)
 
-                logging.info(f"df: {df}")
+                logging.info("Executing cash_flow_projection")
 
                 executor.submit(
                     cash_flow_projection,
