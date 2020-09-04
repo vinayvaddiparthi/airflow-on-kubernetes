@@ -29,7 +29,6 @@ from helpers.auto_arima_parameters import (
 from snowflake.sqlalchemy import VARIANT
 from sqlalchemy.sql import select, func, text, literal_column, literal
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, DateTime
 
 from pyporky.symmetric import SymmetricPorky
@@ -448,7 +447,11 @@ def cash_flow_projection(
     ).get_sqlalchemy_engine()
     auto_arima_parameters = AutoArimaParameters()
     arima_projection_parameters = ArimaProjectionParameters()
-    cash_flow_projection_parameters = CashFlowProjectionParameters
+    cash_flow_projection_parameters = CashFlowProjectionParameters()
+
+    logging.info(
+        f"Generating projections for {account_guid} for merchant {merchant_guid}"
+    )
 
     details = {
         "id": projection_id,
@@ -456,6 +459,8 @@ def cash_flow_projection(
         "auto_arima_params": attr.asdict(auto_arima_parameters),
         "arima_projection_params": attr.asdict(arima_projection_parameters),
     }
+
+    logging.info(f"Details: {details}")
 
     parameters_to_hash: Dict[str, Dict[str, Any]] = {
         "auto_arima_params": cast(Dict[str, Any], details["auto_arima_params"]),
@@ -466,9 +471,7 @@ def cash_flow_projection(
     }
     parameters_to_hash["auto_arima_params"].pop("random_state", None)
 
-    logging.info(
-        f"Generating projections for {account_guid} for merchant {merchant_guid}"
-    )
+    logging.info(f"Parameters: {parameters_to_hash}")
 
     if skip_projection(
         merchant_guid,
@@ -640,11 +643,6 @@ def generate_projections(
         projection_id: str = sha256(
             f"{task_instance_key_str}_{ts_nodash}".encode("utf-8")
         ).hexdigest()
-
-        try:
-            tx.execute(statement)
-        except SQLAlchemyError as e:
-            logging.error(str(e.__dict__["orig"]))
 
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             for row in tx.execute(statement).fetchall():
