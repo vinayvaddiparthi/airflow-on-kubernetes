@@ -5,6 +5,7 @@ import pandas as pd
 import attr
 import boto3
 import sqlalchemy
+import sys
 
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -667,16 +668,20 @@ def generate_projections(
 
                 logging.info("Executing cash_flow_projection")
 
-                executor.submit(
-                    cash_flow_projection,
-                    row["merchant_guid"],
-                    row["account_guid"],
-                    df,
-                    projection_id,
-                    existing_projections_df,
-                    snowflake_zetatango_connection,
-                    zetatango_schema,
-                )
+                try:
+                    executor.submit(
+                        cash_flow_projection,
+                        row["merchant_guid"],
+                        row["account_guid"],
+                        df,
+                        projection_id,
+                        existing_projections_df,
+                        snowflake_zetatango_connection,
+                        zetatango_schema,
+                    )
+                except:
+                    e = sys.exc_info()[0]
+                    logging.error(f"Error: {e}")
 
 
 def create_dag() -> DAG:
