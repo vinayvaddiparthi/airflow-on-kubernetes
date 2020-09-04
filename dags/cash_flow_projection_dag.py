@@ -646,17 +646,27 @@ def generate_projections(
 
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             for row in tx.execute(statement).fetchall():
+                logging.info(f"Row: {row}")
+
                 df = pd.DataFrame.from_dict(
                     json.loads(row["daily_cash_flow"]), orient="index"
                 )
 
+                logging.info(f"df: {df}")
+
                 df.index = pd.to_datetime(df.index)
+
+                logging.info(f"df: {df}")
 
                 full_index = pd.date_range(df.index.min(), df.index.max())
                 df = df.reindex(full_index, fill_value=0)
 
+                logging.info(f"df: {df}")
+
                 df.index.rename(inplace=True, name="DateTime")
                 df.sort_index(inplace=True)
+
+                logging.info(f"df: {df}")
 
                 executor.submit(
                     cash_flow_projection,
