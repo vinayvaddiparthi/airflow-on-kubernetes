@@ -44,7 +44,11 @@ def create_table_swap_dag(
     tables: List[Dict],
 ) -> DAG:
     with DAG(
-        dag_name, start_date=start_date, schedule_interval="0 9 * * *", catchup=False
+        dag_name,
+        start_date=start_date,
+        schedule_interval="0 9 * * *",
+        catchup=False,
+        description="",
     ) as dag:
         for table in tables:
             dag << PythonOperator(

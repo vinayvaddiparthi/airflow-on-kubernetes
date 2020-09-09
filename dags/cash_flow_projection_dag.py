@@ -147,67 +147,82 @@ def store_flinks_response(
 
 
 def copy_transactions(
-    snowflake_connection: str, schema: str, bucket_name: str, num_threads: int = 4
+    snowflake_connection: str,
+    schema: str,
+    bucket_name: str,
+    num_threads: int = 4,
+    **context: Dict[str, Any],
 ) -> None:
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     metadata = MetaData(bind=snowflake_engine)
 
-    merchant_documents = Table(
-        "merchant_documents",
-        metadata,
-        autoload=True,
-        schema=schema,
-    )
-
-    flinks_raw_responses = Table(
-        "flinks_raw_responses",
-        metadata,
-        autoload=True,
-        schema=schema,
-    )
-
-    merchant_documents_select = select(
-        columns=[
-            sqlalchemy.cast(
-                func.get(merchant_documents.c.fields, "cloud_file_path"), VARCHAR
-            ).label("file_path")
-        ],
-        from_obj=merchant_documents,
-    ).where(
-        sqlalchemy.cast(func.get(merchant_documents.c.fields, "doc_type"), VARCHAR)
-        == literal("'flinks_raw_response'")
-    )
-
-    flinks_raw_responses_select = select(
-        columns=[flinks_raw_responses.c.file_path], from_obj=flinks_raw_responses
-    )
-
-    # Get the set of all the raw flinks responses
-    all_flinks_responses = pd.read_sql_query(
-        merchant_documents_select, snowflake_engine
-    )
-
-    # Get the set of downloaded flinks responses
-    downloaded_flinks_responses = pd.read_sql_query(
-        flinks_raw_responses_select, snowflake_engine
-    )
-
-    # The set difference is what we need to download. file_paths are unique so this is a safe operation
-    to_download = all_flinks_responses[
-        ~all_flinks_responses["file_path"].isin(
-            downloaded_flinks_responses["file_path"]
+    if "dag_run" in context and "raw_files" in context["dag_run"].conf:  # type: ignore
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            for raw_file in context["dag_run"].conf["raw_files"]:  # type: ignore
+                executor.submit(
+                    store_flinks_response,
+                    raw_file,
+                    bucket_name,
+                    snowflake_connection,
+                    schema,
+                )
+    else:
+        merchant_documents = Table(
+            "merchant_documents",
+            metadata,
+            autoload=True,
+            schema=schema,
         )
-    ]
 
-    with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        for _index, row in to_download.iterrows():
-            executor.submit(
-                store_flinks_response,
-                row["file_path"],
-                bucket_name,
-                snowflake_connection,
-                schema,
+        flinks_raw_responses = Table(
+            "flinks_raw_responses",
+            metadata,
+            autoload=True,
+            schema=schema,
+        )
+
+        merchant_documents_select = select(
+            columns=[
+                sqlalchemy.cast(
+                    func.get(merchant_documents.c.fields, "cloud_file_path"), VARCHAR
+                ).label("file_path")
+            ],
+            from_obj=merchant_documents,
+        ).where(
+            sqlalchemy.cast(func.get(merchant_documents.c.fields, "doc_type"), VARCHAR)
+            == literal("'flinks_raw_response'")
+        )
+
+        flinks_raw_responses_select = select(
+            columns=[flinks_raw_responses.c.file_path], from_obj=flinks_raw_responses
+        )
+
+        # Get the set of all the raw flinks responses
+        all_flinks_responses = pd.read_sql_query(
+            merchant_documents_select, snowflake_engine
+        )
+
+        # Get the set of downloaded flinks responses
+        downloaded_flinks_responses = pd.read_sql_query(
+            flinks_raw_responses_select, snowflake_engine
+        )
+
+        # The set difference is what we need to download. file_paths are unique so this is a safe operation
+        to_download = all_flinks_responses[
+            ~all_flinks_responses["file_path"].isin(
+                downloaded_flinks_responses["file_path"]
             )
+        ]
+
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            for _index, row in to_download.iterrows():
+                executor.submit(
+                    store_flinks_response,
+                    row["file_path"],
+                    bucket_name,
+                    snowflake_connection,
+                    schema,
+                )
 
 
 def calculate_opening_balances(
@@ -692,6 +707,7 @@ def create_dag() -> DAG:
         start_date=pendulum.datetime(
             2020, 8, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
+        description="",
     ) as dag:
         dag << PythonOperator(
             task_id="create_tables",
@@ -703,6 +719,7 @@ def create_dag() -> DAG:
         ) >> PythonOperator(
             task_id="copy_transactions",
             python_callable=copy_transactions,
+            provide_context=True,
             op_kwargs={
                 "snowflake_connection": "snowflake_zetatango_production",
                 "schema": "CORE_PRODUCTION",

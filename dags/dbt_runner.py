@@ -24,5 +24,6 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 4, 21, tzinfo=pendulum.timezone("America/Toronto")
     ),
+    description="",
 ) as dag:
     dag << dbt_run >> dbt_snapshot
