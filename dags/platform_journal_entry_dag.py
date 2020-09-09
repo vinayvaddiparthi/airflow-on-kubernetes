@@ -222,6 +222,7 @@ with DAG(
         2020, 8, 29, tzinfo=pendulum.timezone("America/Toronto")
     ),
     default_args={"retries": 5, "retry_delay": timedelta(minutes=30)},
+    description="",
 ) as dag:
     dag << PythonOperator(
         task_id="get_transactions_by_created_date",

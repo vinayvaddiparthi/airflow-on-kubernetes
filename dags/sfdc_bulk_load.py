@@ -355,6 +355,7 @@ def create_dag(instances: List[str]) -> DAG:
         ),
         schedule_interval="0 0 * * *",
         catchup=False,
+        description="",
     ) as dag:
         for instance in instances:
             dag << PythonOperator(
