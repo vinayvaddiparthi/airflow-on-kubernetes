@@ -39,6 +39,7 @@ local airflowCfg = {
       dags_are_paused_at_creation:true,
       max_active_runs_per_dag:16,
       load_examples:false,
+      load_default_connections:false,
       plugins_folder:"/usr/local/airflow/plugins",
       fernet_key:"{FERNET_KEY}",
       donot_pickle:true,
