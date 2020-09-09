@@ -3,6 +3,7 @@ import logging
 from enum import Enum
 from typing import Optional, Dict, Any
 
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
 from airflow.operators.bash_operator import BashOperator
 from airflow.utils.decorators import apply_defaults
@@ -17,12 +18,6 @@ class DbtOperator(BashOperator):
     Hide credentials in the operator, leave nothing in runner dag
     """
 
-    dbt_hook = BaseHook.get_connection("dbt_refresh")
-    gitlab_user = dbt_hook.login
-    gitlab_token = dbt_hook.password
-
-    snowflake_hook = BaseHook.get_connection("airflow_production")
-
     @apply_defaults
     def __init__(
         self,
@@ -34,26 +29,30 @@ class DbtOperator(BashOperator):
         *args: Any,
         **kwargs: Any,
     ):
+        dbt_hook = BaseHook.get_connection("dbt_refresh")
+        gitlab_user = dbt_hook.login
+        gitlab_token = dbt_hook.password
+
+        snowflake_dbt_hook = BaseHook.get_connection("snowflake_dbt")
+
+        snowflake_hook = SnowflakeHook.get_connection("airflow_production")
+
         if not env:
             env = {
-                "SNOWFLAKE_ACCOUNT": self.__class__.snowflake_hook.host,
-                "SNOWFLAKE_USERNAME": self.__class__.snowflake_hook.login,
-                "SNOWFLAKE_PASSWORD": self.__class__.snowflake_hook.password,
-                "SNOWFLAKE_DATABASE": self.__class__.dbt_hook.extra_dejson.get(
+                "SNOWFLAKE_ACCOUNT": snowflake_hook.host,
+                "SNOWFLAKE_USERNAME": snowflake_hook.login,
+                "SNOWFLAKE_PASSWORD": snowflake_hook.password,
+                "SNOWFLAKE_DATABASE": snowflake_dbt_hook.extra_dejson.get(
                     "database", None
                 ),
-                "SNOWFLAKE_SCHEMA": self.__class__.dbt_hook.extra_dejson.get(
-                    "schema", None
-                ),
-                "SNOWFLAKE_ROLE": self.__class__.dbt_hook.extra_dejson.get(
-                    "role", None
-                ),
-                "SNOWFLAKE_WAREHOUSE": self.__class__.dbt_hook.extra_dejson.get(
+                "SNOWFLAKE_SCHEMA": snowflake_dbt_hook.extra_dejson.get("schema", None),
+                "SNOWFLAKE_ROLE": snowflake_dbt_hook.extra_dejson.get("role", None),
+                "SNOWFLAKE_WAREHOUSE": snowflake_dbt_hook.extra_dejson.get(
                     "warehouse", None
                 ),
                 "ZETATANGO_ENV": "PRODUCTION",
-                "GITLAB_USER": self.__class__.gitlab_user,
-                "GITLAB_TOKEN": self.__class__.gitlab_token,
+                "GITLAB_USER": gitlab_user,
+                "GITLAB_TOKEN": gitlab_token,
             }
 
         model_argument = f"--models {models}" if models else ""
