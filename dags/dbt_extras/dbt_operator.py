@@ -3,6 +3,7 @@ import logging
 from enum import Enum
 from typing import Optional, Dict, Any
 
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
 from airflow.operators.bash_operator import BashOperator
 from airflow.utils.decorators import apply_defaults
@@ -21,7 +22,9 @@ class DbtOperator(BashOperator):
     gitlab_user = dbt_hook.login
     gitlab_token = dbt_hook.password
 
-    snowflake_hook = BaseHook.get_connection("airflow_production")
+    snowflake_dbt_hook = BaseHook.get_connection("snowflake_dbt")
+
+    snowflake_hook = SnowflakeHook.get_connection("airflow_production")
 
     @apply_defaults
     def __init__(
@@ -39,16 +42,16 @@ class DbtOperator(BashOperator):
                 "SNOWFLAKE_ACCOUNT": self.__class__.snowflake_hook.host,
                 "SNOWFLAKE_USERNAME": self.__class__.snowflake_hook.login,
                 "SNOWFLAKE_PASSWORD": self.__class__.snowflake_hook.password,
-                "SNOWFLAKE_DATABASE": self.__class__.dbt_hook.extra_dejson.get(
+                "SNOWFLAKE_DATABASE": self.__class__.snowflake_dbt_hook.extra_dejson.get(
                     "database", None
                 ),
-                "SNOWFLAKE_SCHEMA": self.__class__.dbt_hook.extra_dejson.get(
+                "SNOWFLAKE_SCHEMA": self.__class__.snowflake_dbt_hook.extra_dejson.get(
                     "schema", None
                 ),
-                "SNOWFLAKE_ROLE": self.__class__.dbt_hook.extra_dejson.get(
+                "SNOWFLAKE_ROLE": self.__class__.snowflake_dbt_hook.extra_dejson.get(
                     "role", None
                 ),
-                "SNOWFLAKE_WAREHOUSE": self.__class__.dbt_hook.extra_dejson.get(
+                "SNOWFLAKE_WAREHOUSE": self.__class__.snowflake_dbt_hook.extra_dejson.get(
                     "warehouse", None
                 ),
                 "ZETATANGO_ENV": "PRODUCTION",
