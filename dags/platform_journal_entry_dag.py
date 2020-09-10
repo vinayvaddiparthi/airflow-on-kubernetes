@@ -217,6 +217,7 @@ def create_journal_entry_for_transaction(ds: datetime, **kwargs: Any) -> None:
 with DAG(
     "platform_journal_entry",
     max_active_runs=1,
+    catchup=True,
     schedule_interval="@daily",
     start_date=pendulum.datetime(
         2020, 8, 29, tzinfo=pendulum.timezone("America/Toronto")
