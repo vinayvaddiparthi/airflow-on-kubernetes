@@ -457,14 +457,10 @@ def do_projection(
     snowflake_zetatango_connection: str,
     zetatango_schema: str,
 ) -> None:
-    logging.info("do_projection")
-
     metadata = MetaData()
     zetatango_engine = SnowflakeHook(
         snowflake_zetatango_connection
     ).get_sqlalchemy_engine()
-
-    logging.info("Generating parameters")
 
     auto_arima_parameters = AutoArimaParameters()
     arima_projection_parameters = ArimaProjectionParameters()
@@ -481,8 +477,6 @@ def do_projection(
         "arima_projection_params": attr.asdict(arima_projection_parameters),
     }
 
-    logging.info(f"Details: {details}")
-
     parameters_to_hash: Dict[str, Dict[str, Any]] = {
         "auto_arima_params": cast(Dict[str, Any], details["auto_arima_params"]),
         "arima_projection_params": cast(
@@ -491,8 +485,6 @@ def do_projection(
         "cash_flow_projection_parameters": cast(Dict[str, Any], details["version"]),
     }
     parameters_to_hash["auto_arima_params"].pop("random_state", None)
-
-    logging.info(f"Parameters: {parameters_to_hash}")
 
     if skip_projection(
         merchant_guid,
@@ -667,8 +659,6 @@ def generate_projections(
 
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             for row in tx.execute(statement).fetchall():
-                logging.info(f"Row: {row}")
-
                 df = pd.DataFrame.from_dict(
                     json.loads(row["daily_cash_flow"]), orient="index"
                 )
@@ -680,8 +670,6 @@ def generate_projections(
 
                 df.index.rename(inplace=True, name="DateTime")
                 df.sort_index(inplace=True)
-
-                logging.info("Executing do_projection")
 
                 try:
                     executor.submit(
