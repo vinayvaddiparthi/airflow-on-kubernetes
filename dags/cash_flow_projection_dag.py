@@ -749,7 +749,7 @@ def create_dag() -> DAG:
             provide_context=True,
             op_kwargs={
                 "snowflake_zetatango_connection": "snowflake_zetatango_production",
-                "snowflake_analytics_connection": "snowflake_analytics_production",
+                "snowflake_analytics_connection": "airflow_production",
                 "num_threads": 10,
                 "analytics_schema": "DBT_ARIO",
                 "zetatango_schema": "CORE_PRODUCTION",
