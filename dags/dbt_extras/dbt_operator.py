@@ -25,7 +25,8 @@ class DbtOperator(BashOperator):
         profiles_args: str = ".",
         target_args: str = "prod",
         env: Optional[Dict] = None,
-        models: str = "",
+        models: Optional[str] = None,
+        snowflake_conn: Optional[str] = None,
         *args: Any,
         **kwargs: Any,
     ):
@@ -33,27 +34,24 @@ class DbtOperator(BashOperator):
         gitlab_user = dbt_hook.login
         gitlab_token = dbt_hook.password
 
-        snowflake_dbt_hook = BaseHook.get_connection("snowflake_dbt")
+        snowflake_hook = SnowflakeHook.get_connection(snowflake_conn or "snowflake_dbt")
 
-        snowflake_hook = SnowflakeHook.get_connection("airflow_production")
-
-        if not env:
-            env = {
-                "SNOWFLAKE_ACCOUNT": snowflake_hook.host,
+        env = (
+            {
                 "SNOWFLAKE_USERNAME": snowflake_hook.login,
                 "SNOWFLAKE_PASSWORD": snowflake_hook.password,
-                "SNOWFLAKE_DATABASE": snowflake_dbt_hook.extra_dejson.get(
-                    "database", None
-                ),
-                "SNOWFLAKE_SCHEMA": snowflake_dbt_hook.extra_dejson.get("schema", None),
-                "SNOWFLAKE_ROLE": snowflake_dbt_hook.extra_dejson.get("role", None),
-                "SNOWFLAKE_WAREHOUSE": snowflake_dbt_hook.extra_dejson.get(
-                    "warehouse", None
-                ),
+                "SNOWFLAKE_ACCOUNT": snowflake_hook.extra_dejson.get("account"),
+                "SNOWFLAKE_DATABASE": snowflake_hook.extra_dejson.get("database"),
+                "SNOWFLAKE_SCHEMA": snowflake_hook.extra_dejson.get("schema"),
+                "SNOWFLAKE_ROLE": snowflake_hook.extra_dejson.get("role"),
+                "SNOWFLAKE_WAREHOUSE": snowflake_hook.extra_dejson.get("warehouse"),
                 "ZETATANGO_ENV": "PRODUCTION",
                 "GITLAB_USER": gitlab_user,
                 "GITLAB_TOKEN": gitlab_token,
             }
+            if not env
+            else env
+        )
 
         model_argument = f"--models {models}" if models else ""
 
@@ -66,10 +64,10 @@ class DbtOperator(BashOperator):
 
         super(DbtOperator, self).__init__(
             bash_command="git clone https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab.com/tc-data/curated-data-warehouse.git"
-            "&& cd curated-data-warehouse"
-            "&& git pull origin master"
-            f"&& {deps}"
-            f"&& {command}",
+            " && cd curated-data-warehouse"
+            " && git pull origin master"
+            f" && {deps}"
+            f" && {command}",
             env=env,
             *args,
             **kwargs,
