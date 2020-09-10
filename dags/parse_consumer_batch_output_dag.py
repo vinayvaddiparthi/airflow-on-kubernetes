@@ -24,22 +24,36 @@ full_response_path = prefix_path + response_path + consumer_path
 full_output_path = prefix_path + output_path + consumer_path
 
 table_name_raw = (
-    # f"SANDBOX.JMASSON.CONSUMER_BATCH_RAW"
+    # "SANDBOX.JMASSON.CONSUMER_BATCH_RAW"
     "EQUIFAX.OUTPUT.CONSUMER_BATCH_RAW"
 )
 table_name_raw_history = (
     # f"SANDBOX.JMASSON.CONSUMER_BATCH_RAW_HISTORY_{Variable.get('t_stamp')}"
     f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_RAW_{Variable.get('t_stamp')}"
 )
-table_name = {
-    # f"SANDBOX.JMASSON.CONSUMER_BATCH"
+table_name = (
+    # "SANDBOX.JMASSON.CONSUMER_BATCH"
     "EQUIFAX.OUTPUT.CONSUMER_BATCH"
-}
+)
 table_name_history = (
     # f"SANDBOX.JMASSON.CONSUMER_BATCH_HISTORY_{Variable.get('t_stamp')}"
     f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_{Variable.get('t_stamp')}"
 )
+table_name_public = (
+    # "SANDBOX.JMASSON.CONSUMER_PUBLIC"
+    "EQUIFAX.PUBLIC.CONSUMER_BATCH"
+)
 
+personal_info = [37, 52, 62, 88, 94, 124, 144, 146, 152]
+# "last_name": 37,
+# "first_name": 52,
+# "middle_name": 62,
+# "sin": 88,
+# "dob_text": 94,
+# "address": 124,
+# "city": 144,
+# "province": 146,
+# "postal_code": 152,
 result_dict_1 = {
     "customer_reference_number": 12,
     "last_name": 25,
@@ -1488,10 +1502,13 @@ aws_credentials = aws_hook.get_credentials()
 
 def _convert_line_csv(line: str) -> str:
     indices = _gen_arr(0, result_dict_1) + _gen_arr(94, result_dict_2)
-    parts = [
-        "{}".format(line[i:j].strip().replace(",", "\,"))
-        for i, j in zip(indices, indices[1:] + [None])
-    ]
+    parts = []
+    x = zip(indices, indices[1:] + [None])
+    for i, j in x:
+        if j in personal_info:
+            parts.append("")
+        else:
+            parts.append(line[i:j].strip().replace(",", "\,"))
     return ",".join(parts)
 
 
@@ -1563,7 +1580,8 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
 
     with _get_snowflake() as sfh:
         if date_formatted:
-            if "HISTORY" in table.upper():
+            pass
+            if "HISTORY" in table:
                 sfh.execute(f"CREATE OR REPLACE TABLE {table} CLONE {table_name}")
 
             truncate = f"TRUNCATE TABLE {table}"
@@ -1611,7 +1629,6 @@ def fix_date_format() -> None:
             "INQCL009",
         ]:
             df[key] = df[key].apply(lambda x: _convert_date_format(x))
-        print(df)
         with tempfile.NamedTemporaryFile(mode="w") as file_in:
             df.to_csv(file_in.name, index=False, sep=",")
             with open(file_in.name, "rb") as file:
@@ -1621,7 +1638,7 @@ def fix_date_format() -> None:
                 )
 
 
-def get_input(s3_conn: str) -> None:
+def get_input() -> None:
     client = _get_s3()
     file = client.get_object(
         Bucket=bucket,
@@ -1670,6 +1687,20 @@ def upload_file_s3(file: Any, path: str) -> None:
         print("Error when uploading file to s3")
 
 
+def insert_snowflake_public() -> None:
+    sql = f"""
+            INSERT INTO {table_name_public}
+            SELECT '{Variable.get('t_stamp')}' as import_month,
+                    NULL as accountid,
+                    NULL as contractid,
+                    NULL as business_name,
+                    u.*
+            FROM {table_name} u
+            """
+    with _get_snowflake() as sfh:
+        sfh.execute(sql)
+
+
 def insert_snowflake_raw() -> None:
     _insert_snowflake(
         table_name_raw, f"tc_consumer_batch_raw_{Variable.get('t_stamp')}.csv"
@@ -1691,7 +1722,6 @@ def insert_snowflake() -> None:
 task_get_file = PythonOperator(
     task_id="get_input",
     python_callable=get_input,
-    op_kwargs={"s3_conn": "s3_datalake"},
     dag=dag,
 )
 
@@ -1705,12 +1735,6 @@ task_convert_file = PythonOperator(
     task_id="convert_file", python_callable=convert_file, dag=dag
 )
 
-# task_upload_s3 = PythonOperator(
-#     task_id = 'upload_file_s3',
-#     python_callable=upload_file_s3,
-#     dag=dag
-# )
-
 task_insert_snowflake_raw = PythonOperator(
     task_id="insert_snowflake_raw", python_callable=insert_snowflake_raw, dag=dag
 )
@@ -1719,7 +1743,11 @@ task_insert_snowflake = PythonOperator(
     task_id="insert_snowflake", python_callable=insert_snowflake, dag=dag
 )
 
-task_get_file >> task_convert_file >> task_insert_snowflake_raw >> task_fix_date >> task_insert_snowflake
+task_insert_snowflake_public = PythonOperator(
+    task_id="insert_snowflake_public", python_callable=insert_snowflake_public, dag=dag
+)
+
+task_get_file >> task_convert_file >> task_insert_snowflake_raw >> task_fix_date >> task_insert_snowflake >> task_insert_snowflake_public
 
 if __name__ == "__main__":
     import os
@@ -1738,4 +1766,9 @@ if __name__ == "__main__":
     #     else URL(account=account, database=database)
     # )
 
-    insert_snowflake()
+    # get_input()
+    # convert_file()
+    # insert_snowflake_raw()
+    # fix_date_format()
+    # insert_snowflake()
+    # insert_snowflake_public()
