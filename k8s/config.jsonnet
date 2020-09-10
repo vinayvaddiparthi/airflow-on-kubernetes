@@ -63,11 +63,12 @@ local airflowCfg = {
 
     },
     api:{ 
-      auth_backend:"airflow.contrib.auth.backends.password_auth",
-      authenticate:true,
+      auth_backend:"airflow.api.auth.backend.default",
+
     },
     lineage:{ 
       backend:null,
+
     },
     atlas:{ 
       sasl_enabled:false,
