@@ -159,4 +159,3 @@ transitions
 fs-s3fs
 retrying
 pmdarima
-flask_bcrypt==0.7.1
