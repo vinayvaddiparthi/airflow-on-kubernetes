@@ -50,14 +50,14 @@ local params = import "../params.libsonnet";
             readinessProbe: {
               periodSeconds: 10,
               httpGet: {
-                path: "/" + params.env + "/api/experimental/test",
+                path: "/" + params.env + "/health",
                 port: 8080,
               },
             },
             livenessProbe: {
               initialDelaySeconds: 60,
               httpGet: {
-                path: "/" + params.env + "/api/experimental/test",
+                path: "/" + params.env + "/health",
                 port: 8080,
               },
             },
