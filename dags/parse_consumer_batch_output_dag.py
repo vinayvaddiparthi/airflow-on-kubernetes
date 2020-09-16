@@ -8,14 +8,15 @@ from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
 from airflow.models import Variable
 
 # from pyporky.symmetric import SymmetricPorky
 
 Variable.set("t_stamp", datetime.now().strftime("%Y%m"))
-bucket = "tc-datalake"
-# bucket = "test-bucket-for-julien"
+base_file_name = f"tc_consumer_batch_{Variable.get('t_stamp')}"
+# bucket = "tc-datalake"
+bucket = "test-bucket-for-julien"
 prefix_path = "equifax_automated_batch"
 response_path = "/response"
 output_path = "/output"
@@ -1549,16 +1550,6 @@ def _get_s3() -> Any:
     )
 
 
-def _get_file() -> None:
-    objects = _get_s3().list_objects(
-        Bucket=bucket, Prefix=full_response_path, Delimiter="/"
-    )
-    for content in objects["Contents"]:
-        if content["Key"].endswith("out1"):
-            return content["Key"]
-    return None
-
-
 def _get_snowflake() -> Any:
     snowflake_hook = BaseHook.get_connection(snowflake_conn)
     if snowflake_hook.password:
@@ -1634,19 +1625,35 @@ def fix_date_format() -> None:
             with open(file_in.name, "rb") as file:
                 upload_file_s3(
                     file,
-                    f"{full_output_path}/tc_consumer_batch_{Variable.get('t_stamp')}.csv",
+                    f"{full_output_path}/{base_file_name}.csv",
                 )
 
 
-def get_input() -> None:
+def check_output(**kwargs: Dict) -> str:
     client = _get_s3()
-    file = client.get_object(
-        Bucket=bucket,
-        Key=f"{full_response_path}/tc_consumer_batch_{Variable.get('t_stamp')}.out1",
-    )
-    body = file["Body"].read()
-    content = body.decode("ISO-8859-1")
-    Variable.set("file_content", content)
+    try:
+        file = client.get_object(
+            Bucket=bucket,
+            Key=f"{full_output_path}/{base_file_name}.csv",
+        )
+        return "end"
+    except:
+        return "get_input"
+
+
+def get_input(**kwargs: Dict) -> str:
+    client = _get_s3()
+    try:
+        file = client.get_object(
+            Bucket=bucket,
+            Key=f"{full_response_path}/{base_file_name}.out1",
+        )
+        body = file["Body"].read()
+        content = body.decode("ISO-8859-1")
+        Variable.set("file_content", content)
+        return "convert_file"
+    except:
+        return "end"
 
 
 def convert_file() -> None:
@@ -1670,7 +1677,7 @@ def convert_file() -> None:
                 formatted.write("\n")
         upload_file_s3(
             formatted,
-            f"{full_output_path}/tc_consumer_batch_raw_{Variable.get('t_stamp')}.csv",
+            f"{full_output_path}/{base_file_name}.csv",
         )
 
 
@@ -1702,37 +1709,41 @@ def insert_snowflake_public() -> None:
 
 
 def insert_snowflake_raw() -> None:
-    _insert_snowflake(
-        table_name_raw, f"tc_consumer_batch_raw_{Variable.get('t_stamp')}.csv"
-    )
-    _insert_snowflake(
-        table_name_raw_history, f"tc_consumer_batch_raw_{Variable.get('t_stamp')}.csv"
-    )
+    _insert_snowflake(table_name_raw, f"{base_file_name}.csv")
+    _insert_snowflake(table_name_raw_history, f"{base_file_name}.csv")
 
 
 def insert_snowflake() -> None:
-    _insert_snowflake(
-        table_name, f"tc_consumer_batch_{Variable.get('t_stamp')}.csv", True
-    )
-    _insert_snowflake(
-        table_name_history, f"tc_consumer_batch_{Variable.get('t_stamp')}.csv", True
-    )
+    _insert_snowflake(table_name, f"{base_file_name}.csv", True)
+    _insert_snowflake(table_name_history, f"{base_file_name}.csv", True)
 
 
-task_get_file = PythonOperator(
+def end() -> None:
+    pass
+
+
+task_check_output = BranchPythonOperator(
+    task_id="check_output",
+    python_callable=check_output,
+    provide_context=True,
+    dag=dag,
+)
+
+task_get_file = BranchPythonOperator(
     task_id="get_input",
     python_callable=get_input,
+    provide_context=True,
     dag=dag,
+)
+
+task_convert_file = PythonOperator(
+    task_id="convert_file", python_callable=convert_file, dag=dag
 )
 
 task_fix_date = PythonOperator(
     task_id="fix_date_format",
     python_callable=fix_date_format,
     dag=dag,
-)
-
-task_convert_file = PythonOperator(
-    task_id="convert_file", python_callable=convert_file, dag=dag
 )
 
 task_insert_snowflake_raw = PythonOperator(
@@ -1747,7 +1758,11 @@ task_insert_snowflake_public = PythonOperator(
     task_id="insert_snowflake_public", python_callable=insert_snowflake_public, dag=dag
 )
 
-task_get_file >> task_convert_file >> task_insert_snowflake_raw >> task_fix_date >> task_insert_snowflake >> task_insert_snowflake_public
+task_end = PythonOperator(task_id="end", python_callable=end, dag=dag)
+
+task_check_output >> [task_get_file, task_end]
+task_get_file >> [task_convert_file, task_end]
+task_convert_file >> task_insert_snowflake_raw >> task_fix_date >> task_insert_snowflake >> task_insert_snowflake_public
 
 if __name__ == "__main__":
     import os
