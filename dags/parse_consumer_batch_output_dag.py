@@ -1636,6 +1636,7 @@ def check_output(**kwargs: Dict) -> str:
             Bucket=bucket,
             Key=f"{full_output_path}/{base_file_name}.csv",
         )
+        print(file)
         return "end"
     except:
         return "get_input"
