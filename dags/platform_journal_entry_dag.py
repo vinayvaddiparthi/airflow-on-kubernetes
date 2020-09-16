@@ -219,9 +219,10 @@ with DAG(
     max_active_runs=1,
     schedule_interval="@daily",
     start_date=pendulum.datetime(
-        2020, 4, 21, tzinfo=pendulum.timezone("America/Toronto")
+        2020, 8, 29, tzinfo=pendulum.timezone("America/Toronto")
     ),
     default_args={"retries": 5, "retry_delay": timedelta(minutes=30)},
+    description="",
 ) as dag:
     dag << PythonOperator(
         task_id="get_transactions_by_created_date",

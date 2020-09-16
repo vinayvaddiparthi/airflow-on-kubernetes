@@ -38,6 +38,7 @@ def create_dag() -> DAG:
         ),
         schedule_interval="0 9 * * *",
         catchup=False,
+        description="",
     ) as dag:
         for schema, table in [
             ("public", "assignment_history"),

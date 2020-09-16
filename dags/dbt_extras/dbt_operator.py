@@ -3,6 +3,7 @@ import logging
 from enum import Enum
 from typing import Optional, Dict, Any
 
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
 from airflow.operators.bash_operator import BashOperator
 from airflow.utils.decorators import apply_defaults
@@ -17,12 +18,6 @@ class DbtOperator(BashOperator):
     Hide credentials in the operator, leave nothing in runner dag
     """
 
-    dbt_hook = BaseHook.get_connection("dbt_refresh")
-    gitlab_user = dbt_hook.login
-    gitlab_token = dbt_hook.password
-
-    snowflake_hook = BaseHook.get_connection("airflow_production")
-
     @apply_defaults
     def __init__(
         self,
@@ -30,31 +25,33 @@ class DbtOperator(BashOperator):
         profiles_args: str = ".",
         target_args: str = "prod",
         env: Optional[Dict] = None,
-        models: str = "",
+        models: Optional[str] = None,
+        snowflake_conn: Optional[str] = None,
         *args: Any,
         **kwargs: Any,
     ):
-        if not env:
-            env = {
-                "SNOWFLAKE_ACCOUNT": self.__class__.snowflake_hook.host,
-                "SNOWFLAKE_USERNAME": self.__class__.snowflake_hook.login,
-                "SNOWFLAKE_PASSWORD": self.__class__.snowflake_hook.password,
-                "SNOWFLAKE_DATABASE": self.__class__.dbt_hook.extra_dejson.get(
-                    "database", None
-                ),
-                "SNOWFLAKE_SCHEMA": self.__class__.dbt_hook.extra_dejson.get(
-                    "schema", None
-                ),
-                "SNOWFLAKE_ROLE": self.__class__.dbt_hook.extra_dejson.get(
-                    "role", None
-                ),
-                "SNOWFLAKE_WAREHOUSE": self.__class__.dbt_hook.extra_dejson.get(
-                    "warehouse", None
-                ),
+        dbt_hook = BaseHook.get_connection("dbt_refresh")
+        gitlab_user = dbt_hook.login
+        gitlab_token = dbt_hook.password
+
+        snowflake_hook = SnowflakeHook.get_connection(snowflake_conn or "snowflake_dbt")
+
+        env = (
+            {
+                "SNOWFLAKE_USERNAME": snowflake_hook.login,
+                "SNOWFLAKE_PASSWORD": snowflake_hook.password,
+                "SNOWFLAKE_ACCOUNT": snowflake_hook.extra_dejson.get("account"),
+                "SNOWFLAKE_DATABASE": snowflake_hook.extra_dejson.get("database"),
+                "SNOWFLAKE_SCHEMA": snowflake_hook.extra_dejson.get("schema"),
+                "SNOWFLAKE_ROLE": snowflake_hook.extra_dejson.get("role"),
+                "SNOWFLAKE_WAREHOUSE": snowflake_hook.extra_dejson.get("warehouse"),
                 "ZETATANGO_ENV": "PRODUCTION",
-                "GITLAB_USER": self.__class__.gitlab_user,
-                "GITLAB_TOKEN": self.__class__.gitlab_token,
+                "GITLAB_USER": gitlab_user,
+                "GITLAB_TOKEN": gitlab_token,
             }
+            if not env
+            else env
+        )
 
         model_argument = f"--models {models}" if models else ""
 
@@ -67,10 +64,10 @@ class DbtOperator(BashOperator):
 
         super(DbtOperator, self).__init__(
             bash_command="git clone https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab.com/tc-data/curated-data-warehouse.git"
-            "&& cd curated-data-warehouse"
-            "&& git pull origin master"
-            f"&& {deps}"
-            f"&& {command}",
+            " && cd curated-data-warehouse"
+            " && git pull origin master"
+            f" && {deps}"
+            f" && {command}",
             env=env,
             *args,
             **kwargs,

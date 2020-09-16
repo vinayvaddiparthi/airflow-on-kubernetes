@@ -5,6 +5,7 @@ import pandas as pd
 import attr
 import boto3
 import sqlalchemy
+import sys
 
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -16,6 +17,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from pmdarima.arima import auto_arima
 from hashlib import sha256
 from base64 import b64decode
+from math import sqrt
 
 from typing import Dict, Any, cast, List
 
@@ -145,67 +147,82 @@ def store_flinks_response(
 
 
 def copy_transactions(
-    snowflake_connection: str, schema: str, bucket_name: str, num_threads: int = 4
+    snowflake_connection: str,
+    schema: str,
+    bucket_name: str,
+    num_threads: int = 4,
+    **context: Dict[str, Any],
 ) -> None:
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     metadata = MetaData(bind=snowflake_engine)
 
-    merchant_documents = Table(
-        "merchant_documents",
-        metadata,
-        autoload=True,
-        schema=schema,
-    )
-
-    flinks_raw_responses = Table(
-        "flinks_raw_responses",
-        metadata,
-        autoload=True,
-        schema=schema,
-    )
-
-    merchant_documents_select = select(
-        columns=[
-            sqlalchemy.cast(
-                func.get(merchant_documents.c.fields, "cloud_file_path"), VARCHAR
-            ).label("file_path")
-        ],
-        from_obj=merchant_documents,
-    ).where(
-        sqlalchemy.cast(func.get(merchant_documents.c.fields, "doc_type"), VARCHAR)
-        == literal("'flinks_raw_response'")
-    )
-
-    flinks_raw_responses_select = select(
-        columns=[flinks_raw_responses.c.file_path], from_obj=flinks_raw_responses
-    )
-
-    # Get the set of all the raw flinks responses
-    all_flinks_responses = pd.read_sql_query(
-        merchant_documents_select, snowflake_engine
-    )
-
-    # Get the set of downloaded flinks responses
-    downloaded_flinks_responses = pd.read_sql_query(
-        flinks_raw_responses_select, snowflake_engine
-    )
-
-    # The set difference is what we need to download. file_paths are unique so this is a safe operation
-    to_download = all_flinks_responses[
-        ~all_flinks_responses["file_path"].isin(
-            downloaded_flinks_responses["file_path"]
+    if "dag_run" in context and "raw_files" in context["dag_run"].conf:  # type: ignore
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            for raw_file in context["dag_run"].conf["raw_files"]:  # type: ignore
+                executor.submit(
+                    store_flinks_response,
+                    raw_file,
+                    bucket_name,
+                    snowflake_connection,
+                    schema,
+                )
+    else:
+        merchant_documents = Table(
+            "merchant_documents",
+            metadata,
+            autoload=True,
+            schema=schema,
         )
-    ]
 
-    with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        for _index, row in to_download.iterrows():
-            executor.submit(
-                store_flinks_response,
-                row["file_path"],
-                bucket_name,
-                snowflake_connection,
-                schema,
+        flinks_raw_responses = Table(
+            "flinks_raw_responses",
+            metadata,
+            autoload=True,
+            schema=schema,
+        )
+
+        merchant_documents_select = select(
+            columns=[
+                sqlalchemy.cast(
+                    func.get(merchant_documents.c.fields, "cloud_file_path"), VARCHAR
+                ).label("file_path")
+            ],
+            from_obj=merchant_documents,
+        ).where(
+            sqlalchemy.cast(func.get(merchant_documents.c.fields, "doc_type"), VARCHAR)
+            == literal("'flinks_raw_response'")
+        )
+
+        flinks_raw_responses_select = select(
+            columns=[flinks_raw_responses.c.file_path], from_obj=flinks_raw_responses
+        )
+
+        # Get the set of all the raw flinks responses
+        all_flinks_responses = pd.read_sql_query(
+            merchant_documents_select, snowflake_engine
+        )
+
+        # Get the set of downloaded flinks responses
+        downloaded_flinks_responses = pd.read_sql_query(
+            flinks_raw_responses_select, snowflake_engine
+        )
+
+        # The set difference is what we need to download. file_paths are unique so this is a safe operation
+        to_download = all_flinks_responses[
+            ~all_flinks_responses["file_path"].isin(
+                downloaded_flinks_responses["file_path"]
             )
+        ]
+
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            for _index, row in to_download.iterrows():
+                executor.submit(
+                    store_flinks_response,
+                    row["file_path"],
+                    bucket_name,
+                    snowflake_connection,
+                    schema,
+                )
 
 
 def calculate_opening_balances(
@@ -228,7 +245,9 @@ def calculate_opening_balances(
     return opening_balances
 
 
-def calculate_balance_projection(df: pd.DataFrame, prediction_df: pd.DataFrame) -> None:
+def calculate_balance_projection(
+    df: pd.DataFrame, prediction_df: pd.DataFrame, balance_spreads: List[float]
+) -> None:
     opening_balance = (
         df["balance"].iloc[-1] + df["credits"].iloc[-1] - df["debits"].iloc[-1]
     )
@@ -236,6 +255,44 @@ def calculate_balance_projection(df: pd.DataFrame, prediction_df: pd.DataFrame) 
     prediction_df["balance_prediction"] = calculate_opening_balances(
         opening_balance, prediction_df, "credits_prediction", "debits_prediction"
     )
+
+    lo_balances = []
+    hi_balances = []
+
+    for opening_balance, balance_spread in zip(
+        prediction_df["balance_prediction"], balance_spreads
+    ):
+        lo_balance = opening_balance - balance_spread
+        hi_balance = opening_balance + balance_spread
+
+        lo_balances.append(lo_balance)
+        hi_balances.append(hi_balance)
+
+    prediction_df["lo_balance_prediction"] = lo_balances
+    prediction_df["hi_balance_prediction"] = hi_balances
+
+
+def calculate_balance_spreads(
+    credits_confidence_intervals: List[List[float]],
+    debits_confidence_intervals: List[List[float]],
+) -> List[float]:
+    f = 1.281552
+    balance_spreads = []
+
+    for credits_interval, debits_interval in zip(
+        credits_confidence_intervals, debits_confidence_intervals
+    ):
+        lo_c80, hi_c80 = credits_interval
+        lo_d80, hi_d80 = debits_interval
+
+        spread_credits = (hi_c80 - lo_c80) / 2 / f
+        spread_debits = (hi_d80 - lo_d80) / 2 / f
+
+        spread_balance = sqrt(spread_credits ** 2 + spread_debits ** 2) * f
+
+        balance_spreads.append(spread_balance)
+
+    return balance_spreads
 
 
 def calculate_projection(
@@ -258,13 +315,16 @@ def calculate_projection(
         prediction_start_date + timedelta(days=(days_to_project - 1)),
     )
 
+    credits_prediction, credits_confidence_intervals = arima_credits_model.predict(
+        **(attr.asdict(arima_projection_params))
+    )
+    debits_prediction, debits_confidence_intervals = arima_debits_model.predict(
+        **(attr.asdict(arima_projection_params))
+    )
+
     predictions = {
-        "credits_prediction": arima_credits_model.predict(
-            **(attr.asdict(arima_projection_params))
-        ),
-        "debits_prediction": arima_debits_model.predict(
-            **(attr.asdict(arima_projection_params))
-        ),
+        "credits_prediction": credits_prediction,
+        "debits_prediction": debits_prediction,
     }
 
     prediction_df = pd.DataFrame(predictions, index=prediction_index)
@@ -272,7 +332,13 @@ def calculate_projection(
     # We zero out any prediction that is negative before calculating balance
     prediction_df.clip(lower=0, inplace=True)
 
-    calculate_balance_projection(cash_flow_df, prediction_df)
+    calculate_balance_projection(
+        cash_flow_df,
+        prediction_df,
+        calculate_balance_spreads(
+            credits_confidence_intervals, debits_confidence_intervals
+        ),
+    )
 
     return prediction_df
 
@@ -382,7 +448,7 @@ def apply_post_projection_guardrails(
     return not (min_balance <= closing_predicted_balance <= max_balance)
 
 
-def cash_flow_projection(
+def do_projection(
     merchant_guid: str,
     account_guid: str,
     cash_flow_df: pd.DataFrame,
@@ -391,13 +457,22 @@ def cash_flow_projection(
     snowflake_zetatango_connection: str,
     zetatango_schema: str,
 ) -> None:
+    logging.info("do_projection")
+
     metadata = MetaData()
     zetatango_engine = SnowflakeHook(
         snowflake_zetatango_connection
     ).get_sqlalchemy_engine()
+
+    logging.info("Generating parameters")
+
     auto_arima_parameters = AutoArimaParameters()
     arima_projection_parameters = ArimaProjectionParameters()
-    cash_flow_projection_parameters = CashFlowProjectionParameters
+    cash_flow_projection_parameters = CashFlowProjectionParameters()
+
+    logging.info(
+        f"Generating projections for {account_guid} for merchant {merchant_guid}"
+    )
 
     details = {
         "id": projection_id,
@@ -405,6 +480,8 @@ def cash_flow_projection(
         "auto_arima_params": attr.asdict(auto_arima_parameters),
         "arima_projection_params": attr.asdict(arima_projection_parameters),
     }
+
+    logging.info(f"Details: {details}")
 
     parameters_to_hash: Dict[str, Dict[str, Any]] = {
         "auto_arima_params": cast(Dict[str, Any], details["auto_arima_params"]),
@@ -414,6 +491,8 @@ def cash_flow_projection(
         "cash_flow_projection_parameters": cast(Dict[str, Any], details["version"]),
     }
     parameters_to_hash["auto_arima_params"].pop("random_state", None)
+
+    logging.info(f"Parameters: {parameters_to_hash}")
 
     if skip_projection(
         merchant_guid,
@@ -454,7 +533,7 @@ def cash_flow_projection(
 
     with zetatango_engine.begin() as tx:
         projection_df.index = pd.to_datetime(projection_df.index).astype(str)
-        details["data"] = projection_df.to_dict()
+        details["data"] = projection_df.to_dict("index")
 
         select_query = select(
             columns=[
@@ -588,6 +667,8 @@ def generate_projections(
 
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             for row in tx.execute(statement).fetchall():
+                logging.info(f"Row: {row}")
+
                 df = pd.DataFrame.from_dict(
                     json.loads(row["daily_cash_flow"]), orient="index"
                 )
@@ -600,16 +681,22 @@ def generate_projections(
                 df.index.rename(inplace=True, name="DateTime")
                 df.sort_index(inplace=True)
 
-                executor.submit(
-                    cash_flow_projection,
-                    row["merchant_guid"],
-                    row["account_guid"],
-                    df,
-                    projection_id,
-                    existing_projections_df,
-                    snowflake_zetatango_connection,
-                    zetatango_schema,
-                )
+                logging.info("Executing do_projection")
+
+                try:
+                    executor.submit(
+                        do_projection,
+                        row["merchant_guid"],
+                        row["account_guid"],
+                        df,
+                        projection_id,
+                        existing_projections_df,
+                        snowflake_zetatango_connection,
+                        zetatango_schema,
+                    )
+                except:
+                    e = sys.exc_info()[0]
+                    logging.error(f"Error: {e}")
 
 
 def create_dag() -> DAG:
@@ -620,6 +707,7 @@ def create_dag() -> DAG:
         start_date=pendulum.datetime(
             2020, 8, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
+        description="",
     ) as dag:
         dag << PythonOperator(
             task_id="create_tables",
@@ -631,6 +719,7 @@ def create_dag() -> DAG:
         ) >> PythonOperator(
             task_id="copy_transactions",
             python_callable=copy_transactions,
+            provide_context=True,
             op_kwargs={
                 "snowflake_connection": "snowflake_zetatango_production",
                 "schema": "CORE_PRODUCTION",
@@ -649,14 +738,18 @@ def create_dag() -> DAG:
             task_id="dbt_run_process_transactions",
             execution_timeout=timedelta(hours=1),
             action=DbtAction.run,
-            models="fct_bank_account_transaction fct_daily_bank_account_balance",
+            models=(
+                "fct_bank_account_transaction fct_daily_bank_account_balance "
+                "fct_weekly_bank_account_balance fct_monthly_bank_account_balance "
+                "fct_bank_account_balance_week_over_week fct_bank_account_balance_month_over_month"
+            ),
         ) >> PythonOperator(
             task_id="generate_projections",
             python_callable=generate_projections,
             provide_context=True,
             op_kwargs={
                 "snowflake_zetatango_connection": "snowflake_zetatango_production",
-                "snowflake_analytics_connection": "snowflake_analytics_production",
+                "snowflake_analytics_connection": "airflow_production",
                 "num_threads": 10,
                 "analytics_schema": "DBT_ARIO",
                 "zetatango_schema": "CORE_PRODUCTION",
@@ -665,7 +758,10 @@ def create_dag() -> DAG:
             task_id="dbt_run_generate_projections",
             execution_timeout=timedelta(hours=1),
             action=DbtAction.run,
-            models="fct_daily_bank_account_projection",
+            models=(
+                "fct_daily_bank_account_projection fct_weekly_bank_account_projection "
+                "fct_monthly_bank_account_projection"
+            ),
         )
 
         return dag

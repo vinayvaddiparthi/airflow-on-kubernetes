@@ -190,6 +190,7 @@ def create_dag() -> DAG:
         schedule_interval=datetime.timedelta(weeks=4),
         catchup=True,
         max_active_runs=4,
+        description="",
     ) as dag:
         dag << PythonOperator(
             task_id="talkdesk_import",

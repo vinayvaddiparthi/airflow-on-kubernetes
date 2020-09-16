@@ -487,6 +487,8 @@ def create_dag() -> DAG:
         ),
         schedule_interval="30 0,9-21/4 * * *",
         default_args={"retries": 3, "retry_delay": timedelta(minutes=5)},
+        catchup=False,
+        description="",
     ) as dag:
         dag << import_core_prod >> decrypt_core_prod
         dag << import_idp_prod
