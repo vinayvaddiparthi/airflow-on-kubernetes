@@ -15,8 +15,8 @@ from airflow.models import Variable
 
 Variable.set("t_stamp", datetime.now().strftime("%Y%m"))
 base_file_name = f"tc_consumer_batch_{Variable.get('t_stamp')}"
-# bucket = "tc-datalake"
-bucket = "test-bucket-for-julien"
+bucket = "tc-datalake"
+# bucket = "test-bucket-for-julien"
 prefix_path = "equifax_automated_batch"
 response_path = "/response"
 output_path = "/output"
