@@ -1484,13 +1484,13 @@ result_dict_2 = {
 default_args = {
     "owner": "tc",
     "depends_on_past": False,
-    "start_date": datetime(2019, 10, 1, 7),
+    "start_date": datetime(2020, 9, 17, 2),
     "retries": 0,
 }
 
 dag = DAG(
     "equifax_consumer_batch_output_dag",
-    schedule_interval=None,
+    schedule_interval="@daily",
     default_args=default_args,
     catchup=False,
 )
