@@ -10,7 +10,7 @@ local webserver = [
 local scheduler = [import "scheduler.jsonnet"];
 local postgres = [
   import "postgres/postgres.jsonnet",
-//  import "postgres/networkpolicy.jsonnet"
+  import "postgres/networkpolicy.jsonnet"
 ];
 local secret = [import "secret.jsonnet"];
 local config = [import "config.jsonnet"];
