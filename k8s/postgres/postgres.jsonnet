@@ -4,7 +4,7 @@ local params = import "../params.libsonnet";
   apiVersion: "kubedb.com/v1alpha1",
   kind: "Postgres",
   metadata: {
-    name: params.app + "-" + params.env + "-" + "postgres",
+    name: params.app + "-" + params.env + "-" + $.metadata.labels.component,
     namespace: params.namespace,
     labels: {
       app: params.app,
@@ -24,6 +24,13 @@ local params = import "../params.libsonnet";
         requests: { storage: "20Gi" },
       },
     } else null,
+    backupSchedule: {
+      cronExpression: "@every 1h",
+      storageSecretName: params.app + "-" + params.env + "-" + $.metadata.labels.component + "-" + "bk-auth",
+      s3: {
+        bucket: params.postgres.backups.bucket,
+      },
+    },
     podTemplate: {
       spec: {
         resources: {
