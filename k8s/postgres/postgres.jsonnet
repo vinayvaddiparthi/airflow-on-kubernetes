@@ -24,12 +24,11 @@ local params = import "../params.libsonnet";
         requests: { storage: "20Gi" },
       },
     } else null,
-    archiver: {
-      storage: {
-        storageSecretName: params.app + "-" + params.env + "-" + $.metadata.labels.component + "-" + "bk-auth",
-        s3: {
-          bucket: params.postgres.backups.bucket,
-        },
+    backupSchedule: {
+      cronExpression: "@every 1h",
+      storageSecretName: params.app + "-" + params.env + "-" + $.metadata.labels.component + "-" + "bk-auth",
+      s3: {
+        bucket: params.postgres.backups.bucket,
       },
     },
     podTemplate: {
