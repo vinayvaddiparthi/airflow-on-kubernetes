@@ -112,6 +112,8 @@ deploy_production:
         -V AWS_SES_PASSWORD \
         -V OIDC_CLIENT_ID \
         -V OIDC_CLIENT_SECRET \
+        -V BACKUPS_AWS_ACCESS_KEY_ID \
+        -V BACKUPS_AWS_SECRET_ACCESS_KEY \
         -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
   environment:
     name: production
@@ -139,6 +141,8 @@ deploy_review:
         -V AWS_SES_PASSWORD \
         -V OIDC_CLIENT_ID \
         -V OIDC_CLIENT_SECRET \
+        -V BACKUPS_AWS_ACCESS_KEY_ID \
+        -V BACKUPS_AWS_SECRET_ACCESS_KEY \
         -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
   environment:
     name: review/$CI_COMMIT_REF_NAME

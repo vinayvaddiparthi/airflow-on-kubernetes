@@ -2,9 +2,18 @@
     app: std.extVar("APP_NAME"),
     env: std.extVar("CI_ENVIRONMENT_SLUG"),
     namespace: std.extVar("KUBE_NAMESPACE"),
+
     image: {
         repo: std.extVar("DOCKER_REPOSITORY"),
         tag: std.extVar("DOCKER_IMAGE_TAG"),
+    },
+
+    postgres: {
+      backups: {
+        bucket: "tc-data-kubedb-backups",
+        awsAccessKeyId: std.extVar("BACKUPS_AWS_ACCESS_KEY_ID"),
+        awsSecretAccessKey: std.extVar("BACKUPS_AWS_SECRET_ACCESS_KEY"),
+      },
     },
 
     webserver: {
