@@ -1,3 +1,4 @@
+import os
 import logging
 import json
 import pendulum
@@ -6,6 +7,7 @@ import attr
 import boto3
 import sqlalchemy
 import sys
+import pika
 
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -146,6 +148,42 @@ def store_flinks_response(
     logging.info(f"✔️ Successfully stored {file_path}")
 
 
+def notify_subscribers(
+    rabbit_url: str,
+    exchange_label: str,
+    topic: str,
+    **context: Dict[str, Any],
+) -> None:
+    if "dag_run" in context and "merchant_guid" in context["dag_run"].conf:  # type: ignore
+        merchant_guid = context["dag_run"].conf["merchant_guid"]  # type: ignore
+
+        logging.info(
+            f"Notifying subscribers cash flow projection is complete for {merchant_guid}"
+        )
+
+        params = pika.URLParameters(rabbit_url)
+
+        connection = pika.BlockingConnection(params)
+        channel = connection.channel()
+
+        channel.exchange_declare(
+            exchange=exchange_label, exchange_type="topic", durable=True
+        )
+        channel.basic_publish(
+            exchange=exchange_label,
+            routing_key=topic,
+            body=merchant_guid,
+            mandatory=True,
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # make message persistent
+            ),
+        )
+
+        logging.info(f"✔️ MQ sent {topic}: {merchant_guid}")
+    else:
+        logging.info("No subscribers notified, DAG was run without context.")
+
+
 def copy_transactions(
     snowflake_connection: str,
     schema: str,
@@ -158,7 +196,15 @@ def copy_transactions(
 
     if "dag_run" in context and "raw_files" in context["dag_run"].conf:  # type: ignore
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            for raw_file in context["dag_run"].conf["raw_files"]:  # type: ignore
+            merchant_guid = context["dag_run"].conf["merchant_guid"]  # type: ignore
+            raw_files = context["dag_run"].conf["raw_files"]  # type: ignore
+
+            logging.info(
+                f"Executing cash flow projections for merchant {merchant_guid}"
+            )
+            logging.info(f"Processing transactions: {raw_files}")
+
+            for raw_file in raw_files:
                 executor.submit(
                     store_flinks_response,
                     raw_file,
@@ -750,6 +796,15 @@ def create_dag() -> DAG:
                 "fct_daily_bank_account_projection fct_weekly_bank_account_projection "
                 "fct_monthly_bank_account_projection"
             ),
+        ) >> PythonOperator(
+            task_id="notify_subscribers",
+            python_callable=notify_subscribers,
+            provide_context=True,
+            op_kwargs={
+                "rabbit_url": os.environ["CLOUDAMQP_URL"],
+                "exchange_label": os.environ["CLOUDAMQP_EXCHANGE"],
+                "topic": "merchant.cash_flow_projection_calculated",
+            },
         )
 
         return dag
