@@ -293,7 +293,7 @@ decrypt_core_prod = PythonOperator(
             DecryptionSpec(
                 schema="CORE_PRODUCTION",
                 table="LENDING_ADJUDICATIONS",
-                columns=["offer_results"],
+                columns=["offer_results", "adjudication_results"],
                 format="yaml",
             ),
             DecryptionSpec(
@@ -337,7 +337,7 @@ decrypt_core_staging = PythonOperator(
             DecryptionSpec(
                 schema="CORE_STAGING",
                 table="LENDING_ADJUDICATIONS",
-                columns=["offer_results"],
+                columns=["offer_results", "adjudication_results"],
                 format="yaml",
             ),
             DecryptionSpec(
