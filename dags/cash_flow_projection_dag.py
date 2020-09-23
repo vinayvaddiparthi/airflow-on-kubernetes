@@ -1,4 +1,3 @@
-import os
 import logging
 import json
 import pendulum
@@ -12,6 +11,7 @@ import pika
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
+from airflow.models import Variable
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
 from datetime import timedelta
@@ -166,13 +166,15 @@ def notify_subscribers(
         connection = pika.BlockingConnection(params)
         channel = connection.channel()
 
+        message = {"merchant_guid": merchant_guid}
+
         channel.exchange_declare(
             exchange=exchange_label, exchange_type="topic", durable=True
         )
         channel.basic_publish(
             exchange=exchange_label,
             routing_key=topic,
-            body=merchant_guid,
+            body=json.dumps(message),
             mandatory=True,
             properties=pika.BasicProperties(
                 delivery_mode=2,  # make message persistent
@@ -181,7 +183,7 @@ def notify_subscribers(
 
         logging.info(f"✔️ MQ sent {topic}: {merchant_guid}")
     else:
-        logging.info("No subscribers notified, DAG was run without context.")
+        logging.warning("No subscribers notified, DAG was run without context.")
 
 
 def copy_transactions(
@@ -801,9 +803,9 @@ def create_dag() -> DAG:
             python_callable=notify_subscribers,
             provide_context=True,
             op_kwargs={
-                "rabbit_url": os.environ["CLOUDAMQP_URL"],
-                "exchange_label": os.environ["CLOUDAMQP_EXCHANGE"],
-                "topic": "merchant.cash_flow_projection_calculated",
+                "rabbit_url": Variable.get("CLOUDAMQP_URL"),
+                "exchange_label": Variable.get("CLOUDAMQP_EXCHANGE"),
+                "topic": Variable.get("CLOUDAMQP_TOPIC"),
             },
         )
 
