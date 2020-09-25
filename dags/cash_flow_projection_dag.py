@@ -146,11 +146,7 @@ def store_flinks_response(
     )
 
     # Some Flinks files are now stored as arrays of transaction files
-    account_data = []
-    if type(json_data) is list:
-        account_data = json_data
-    else:
-        account_data.append(json_data)
+    account_data = json_data if type(json_data) is list else [json_data]
 
     logging.info(
         f"Processing {len(account_data)} Flinks files in {file_path}, bucket={bucket_name}"
