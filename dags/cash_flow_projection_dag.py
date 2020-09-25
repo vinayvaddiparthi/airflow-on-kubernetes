@@ -30,7 +30,7 @@ from helpers.auto_arima_parameters import (
 )
 
 from snowflake.sqlalchemy import VARIANT
-from sqlalchemy.sql import select, func, text, literal_column, literal
+from sqlalchemy.sql import select, func, text, literal_column, literal, join
 from sqlalchemy.engine import Engine
 from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, DateTime
 
@@ -66,6 +66,7 @@ def create_flinks_raw_responses(
     flinks_raw_responses = Table(
         "flinks_raw_responses",
         metadata,
+        Column("merchant_guid", VARCHAR, nullable=False),
         Column("batch_timestamp", DateTime, nullable=False),
         Column("file_path", VARCHAR, nullable=False),
         Column("raw_response", VARIANT, nullable=False),
@@ -73,6 +74,25 @@ def create_flinks_raw_responses(
     )
 
     flinks_raw_responses.create(snowflake_engine, checkfirst=True)
+
+
+def grant_permissions(
+    snowflake_connection: str,
+    schema: str,
+) -> None:
+    snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+
+    tables = [f"{schema}.CASH_FLOW_PROJECTIONS", f"{schema}.FLINKS_RAW_RESPONSES"]
+    roles = ["DBT_DEVELOPMENT", "DBT_PRODUCTION"]
+
+    with snowflake_engine.begin() as tx:
+        for table in tables:
+            for role in roles:
+                grant = f"GRANT SELECT ON {table} TO ROLE {role}"
+
+                tx.execute(grant)
+
+                logging.info(f"✔️ Successfully set grant for {role} on {table}")
 
 
 def create_tables(
@@ -85,8 +105,11 @@ def create_tables(
     create_cash_flow_projection_table(metadata, snowflake_engine, schema)
     create_flinks_raw_responses(metadata, snowflake_engine, schema)
 
+    grant_permissions(snowflake_connection, schema)
+
 
 def store_flinks_response(
+    merchant_guid: str,
     file_path: str,
     bucket_name: str,
     snowflake_connection: str,
@@ -95,6 +118,8 @@ def store_flinks_response(
     hack_clear_aws_keys()
     metadata = MetaData()
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+
+    logging.info(f"Processing Flinks response for {merchant_guid} in {file_path}")
 
     s3 = boto3.client("s3")
     response = s3.get_object(Bucket=bucket_name, Key=file_path)
@@ -114,6 +139,18 @@ def store_flinks_response(
     # Need to convert from a ruby hash to JSON
     data = data.replace("=>", ": ")
     data = data.replace("nil", "null")
+    json_data = json.loads(data)
+
+    logging.info(
+        f"Decrypted Flinks response in {file_path}, bucket={bucket_name} ({type(json_data)})"
+    )
+
+    # Some Flinks files are now stored as arrays of transaction files
+    account_data = json_data if type(json_data) is list else [json_data]
+
+    logging.info(
+        f"Processing {len(account_data)} Flinks files in {file_path}, bucket={bucket_name}"
+    )
 
     flinks_raw_responses = Table(
         "flinks_raw_responses",
@@ -124,28 +161,33 @@ def store_flinks_response(
     )
 
     with snowflake_engine.begin() as tx:
-        select_query = select(
-            columns=[
-                literal_column(f"'{response['LastModified']}'").label(
-                    "batch_timestamp"
-                ),
-                literal_column(f"'{file_path}'").label("file_path"),
-                func.parse_json(data).label("raw_response"),
-            ]
-        )
+        for i, data in enumerate(account_data, start=1):
+            select_query = select(
+                columns=[
+                    literal_column(f"'{merchant_guid}'").label("merchant_guid"),
+                    literal_column(f"'{response['LastModified']}'").label(
+                        "batch_timestamp"
+                    ),
+                    literal_column(f"'{file_path}'").label("file_path"),
+                    func.parse_json(json.dumps(data)).label("raw_response"),
+                ]
+            )
 
-        insert_query = flinks_raw_responses.insert().from_select(
-            [
-                "batch_timestamp",
-                "file_path",
-                "raw_response",
-            ],
-            select_query,
-        )
+            insert_query = flinks_raw_responses.insert().from_select(
+                [
+                    "merchant_guid",
+                    "batch_timestamp",
+                    "file_path",
+                    "raw_response",
+                ],
+                select_query,
+            )
 
-        tx.execute(insert_query)
+            tx.execute(insert_query)
 
-    logging.info(f"✔️ Successfully stored {file_path}")
+            logging.info(
+                f"✔️ Successfully stored {file_path} for {merchant_guid} ({i})"
+            )
 
 
 def notify_subscribers(
@@ -209,12 +251,20 @@ def copy_transactions(
             for raw_file in raw_files:
                 executor.submit(
                     store_flinks_response,
+                    merchant_guid,
                     raw_file,
                     bucket_name,
                     snowflake_connection,
                     schema,
                 )
     else:
+        merchants = Table(
+            "merchants",
+            metadata,
+            autoload=True,
+            schema=schema,
+        )
+
         merchant_documents = Table(
             "merchant_documents",
             metadata,
@@ -229,48 +279,97 @@ def copy_transactions(
             schema=schema,
         )
 
-        merchant_documents_select = select(
-            columns=[
+        merchants_merchant_documents_join = join(
+            merchant_documents,
+            merchants,
+            func.get(merchants.c.fields, "id")
+            == func.get(merchant_documents.c.fields, "merchant_id"),
+        )
+        merchant_documents_select = (
+            select(
+                columns=[
+                    sqlalchemy.cast(
+                        func.get(merchants.c.fields, "guid"), VARCHAR
+                    ).label("merchant_guid"),
+                    sqlalchemy.cast(
+                        func.get(merchant_documents.c.fields, "cloud_file_path"),
+                        VARCHAR,
+                    ).label("file_path"),
+                    text("1"),
+                ],
+                from_obj=merchant_documents,
+            )
+            .where(
                 sqlalchemy.cast(
-                    func.get(merchant_documents.c.fields, "cloud_file_path"), VARCHAR
-                ).label("file_path")
-            ],
-            from_obj=merchant_documents,
-        ).where(
-            sqlalchemy.cast(func.get(merchant_documents.c.fields, "doc_type"), VARCHAR)
-            == literal("'flinks_raw_response'")
+                    func.get(merchant_documents.c.fields, "doc_type"), VARCHAR
+                )
+                == literal("flinks_raw_response")
+            )
+            .select_from(merchants_merchant_documents_join)
+        )
+
+        logging.info(
+            merchant_documents_select.compile(compile_kwargs={"literal_binds": True})
         )
 
         flinks_raw_responses_select = select(
-            columns=[flinks_raw_responses.c.file_path], from_obj=flinks_raw_responses
+            columns=[
+                flinks_raw_responses.c.merchant_guid,
+                flinks_raw_responses.c.file_path,
+                text("1"),
+            ],
+            from_obj=flinks_raw_responses,
+        )
+
+        logging.info(
+            flinks_raw_responses_select.compile(compile_kwargs={"literal_binds": True})
         )
 
         # Get the set of all the raw flinks responses
         all_flinks_responses = pd.read_sql_query(
-            merchant_documents_select, snowflake_engine
+            merchant_documents_select,
+            snowflake_engine,
+            index_col=[
+                "merchant_guid",
+                "file_path",
+            ],
         )
 
         # Get the set of downloaded flinks responses
         downloaded_flinks_responses = pd.read_sql_query(
-            flinks_raw_responses_select, snowflake_engine
+            flinks_raw_responses_select,
+            snowflake_engine,
+            index_col=[
+                "merchant_guid",
+                "file_path",
+            ],
         )
 
-        # The set difference is what we need to download. file_paths are unique so this is a safe operation
-        to_download = all_flinks_responses[
-            ~all_flinks_responses["file_path"].isin(
-                downloaded_flinks_responses["file_path"]
-            )
-        ]
-
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            for _index, row in to_download.iterrows():
-                executor.submit(
-                    store_flinks_response,
-                    row["file_path"],
-                    bucket_name,
-                    snowflake_connection,
-                    schema,
-                )
+            for _index, row in all_flinks_responses.iterrows():
+                try:
+                    # See if we already have it
+                    downloaded_flinks_responses.loc[
+                        (
+                            row.name[0],
+                            row.name[1],
+                        )
+                    ]
+
+                    # We already have it
+                    logging.info(
+                        f"⏩️️ Skipping generating projections for {row.name[0]} - {row.name[1]}"
+                    )
+                except KeyError:
+                    # We don't have it
+                    executor.submit(
+                        store_flinks_response,
+                        row.name[0],
+                        row.name[1],
+                        bucket_name,
+                        snowflake_connection,
+                        schema,
+                    )
 
 
 def calculate_opening_balances(
