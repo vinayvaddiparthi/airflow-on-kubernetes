@@ -912,7 +912,7 @@ def create_dag() -> DAG:
 
 
 if __name__ == "__main__":
-    from tests.helpers.snowflake_hook import test_get_sqlalchemy_engine
+    from helpers.snowflake_hook import test_get_sqlalchemy_engine
 
     # Monkeypatch the get engine function to return the right engine depending on the connection string
     SnowflakeHook.get_sqlalchemy_engine = test_get_sqlalchemy_engine
