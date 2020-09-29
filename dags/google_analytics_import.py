@@ -233,7 +233,7 @@ with DAG(
                     f"create or replace table {dest_db}.{dest_schema}.{table} as "  # nosec
                     f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
                 ).fetchall()
-            grant = f"GRANT SELECT ON ALL TABLES IN {dest_db}.{dest_schema} TO ROLE DBT_DEVELOPMENT"
+            grant = f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_DEVELOPMENT"
             tx.execute(grant)
             print(f"✔️ Successfully grant access to tables in {dest_db}.{dest_schema}")
             print(f"✔️ Successfully loaded table {table} for {ds}")
