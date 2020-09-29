@@ -102,7 +102,9 @@ def initialize_analytics_reporting() -> Any:
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(
         key, scopes=["https://www.googleapis.com/auth/analytics.readonly"]
     )
-    analytics = AnalyticsBuild("analyticsreporting", "v4", credentials=credentials)
+    analytics = AnalyticsBuild(
+        "analyticsreporting", "v4", credentials=credentials, cache_discovery=False
+    )
     return analytics
 
 
