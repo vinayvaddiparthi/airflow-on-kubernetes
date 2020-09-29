@@ -48,7 +48,8 @@ Flask-WTF==0.14.3
 funcsigs==1.0.2
 future==0.18.2
 google-auth==1.17.0
-google-auth-httplib2==0.0.4
+google_auth_httplib2==0.0.4
+google-api-python-client==1.10.0
 graphviz==0.14
 gunicorn==19.10.0
 heroku3==4.2.1
