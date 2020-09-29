@@ -156,6 +156,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
 with DAG(
     "google_analytics_import",
     schedule_interval="@daily",
+    catchup=True,
     start_date=pendulum.datetime(
         2020, 8, 24, tzinfo=pendulum.timezone("America/Toronto")
     ),
@@ -185,14 +186,12 @@ with DAG(
                 response = get_report(analytics, table, ds, page_token)
                 if response:
                     res_json = transform_raw_json(response, ds)
-                    print(res_json)
                     token = next_page_token(response)
                     with tempfile.TemporaryDirectory() as tempdir:
                         for i in range(len(res_json)):
                             json_filepath = Path(tempdir, f"{table}{i}").with_suffix(
                                 ".json"
                             )
-                            print(f"json_filepath: {json_filepath}")
                             with open(json_filepath, "w") as outfile:
                                 outfile.writelines(json.dumps(res_json[i]))
                             tx.execute(
