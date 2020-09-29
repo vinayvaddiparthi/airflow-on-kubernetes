@@ -227,12 +227,17 @@ with DAG(
                     f"insert into {dest_db}.{dest_schema}.{table} select * from {dest_db}.{dest_schema}.{table}_stage"
                 ).fetchall()
                 tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
+                tx.commit()
             else:
                 # create table for new report
                 result = tx.execute(
                     f"create or replace table {dest_db}.{dest_schema}.{table} as "  # nosec
                     f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
                 ).fetchall()
+                tx.commit()
+            grant = f"GRANT SELECT ON ALL TABLES IN {dest_db}.{dest_schema} TO ROLE DBT_DEVELOPMENT"
+            tx.execute(grant)
+            print(f"✔️ Successfully grant access to tables in {dest_db}.{dest_schema}")
             print(f"✔️ Successfully loaded table {table} for {ds}")
 
     for report in reports:
