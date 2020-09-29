@@ -242,7 +242,7 @@ with DAG(
             python_callable=process,
             op_kwargs={
                 "conn": "airflow_production",
-                "table": {report},
+                "table": report,
             },
             provide_context=True,
             on_failure_callback=slack_on_fail,
