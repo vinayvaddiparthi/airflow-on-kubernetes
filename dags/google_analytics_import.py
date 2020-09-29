@@ -110,7 +110,7 @@ def initialize_analytics_reporting() -> Any:
 
 def get_report(analytics: Any, table: str, ds: str, page_token: Any) -> Any:
     print(f"Current page_token: {page_token}")
-    payload: Dict = reports[table]
+    payload: Dict[str, Any] = reports[table]
     payload["reportRequests"][0]["dateRanges"][0]["startDate"] = ds
     payload["reportRequests"][0]["dateRanges"][0]["endDate"] = ds
     if page_token:
