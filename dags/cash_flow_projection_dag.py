@@ -595,6 +595,63 @@ def apply_post_projection_guardrails(
     return not (min_balance <= closing_predicted_balance <= max_balance)
 
 
+def store_projection(
+    merchant_guid: str,
+    account_guid: str,
+    cash_flow_df: pd.DataFrame,
+    parameters_to_hash: Dict[str, Dict[str, Any]],
+    details: Dict[str, Any],
+    snowflake_zetatango_connection: str,
+    zetatango_schema: str,
+) -> None:
+    metadata = MetaData()
+    zetatango_engine = SnowflakeHook(
+        snowflake_zetatango_connection
+    ).get_sqlalchemy_engine()
+
+    cash_flow_projections = Table(
+        "cash_flow_projections",
+        metadata,
+        autoload=True,
+        autoload_with=zetatango_engine,
+        schema=zetatango_schema,
+    )
+
+    with zetatango_engine.begin() as tx:
+        select_query = select(
+            columns=[
+                literal_column(f"'{merchant_guid}'").label("merchant_guid"),
+                literal_column(f"'{account_guid}'").label("account_guid"),
+                literal_column(f"'{cash_flow_df.index.max().date()}'").label(
+                    "last_cash_flow_date"
+                ),
+                literal_column(
+                    f"'{sha256(json.dumps(parameters_to_hash).encode('utf-8')).hexdigest()}'"
+                ).label("parameters_hash"),
+                func.parse_json(json.dumps(details)).label("projections"),
+                func.current_timestamp().label("generated_at"),
+            ]
+        )
+
+        insert_query = cash_flow_projections.insert().from_select(
+            [
+                "merchant_guid",
+                "account_guid",
+                "last_cash_flow_date",
+                "parameters_hash",
+                "projections",
+                "generated_at",
+            ],
+            select_query,
+        )
+
+        tx.execute(insert_query)
+
+    logging.info(
+        f"✔️ Successfully stored projections for {merchant_guid} - {account_guid}"
+    )
+
+
 def do_projection(
     merchant_guid: str,
     account_guid: str,
@@ -604,11 +661,6 @@ def do_projection(
     snowflake_zetatango_connection: str,
     zetatango_schema: str,
 ) -> None:
-    metadata = MetaData()
-    zetatango_engine = SnowflakeHook(
-        snowflake_zetatango_connection
-    ).get_sqlalchemy_engine()
-
     auto_arima_parameters = AutoArimaParameters()
     arima_projection_parameters = ArimaProjectionParameters()
     cash_flow_projection_parameters = CashFlowProjectionParameters()
@@ -647,6 +699,16 @@ def do_projection(
             f"❌ Pre projection guardrail for {merchant_guid} - {account_guid} applied"
         )
 
+        store_projection(
+            merchant_guid,
+            account_guid,
+            cash_flow_df,
+            parameters_to_hash,
+            details,
+            snowflake_zetatango_connection,
+            zetatango_schema,
+        )
+
         return
 
     projection_df = calculate_projection(
@@ -660,51 +722,29 @@ def do_projection(
             f"❌ Post projection guardrail for {merchant_guid} - {account_guid} applied"
         )
 
+        store_projection(
+            merchant_guid,
+            account_guid,
+            cash_flow_df,
+            parameters_to_hash,
+            details,
+            snowflake_zetatango_connection,
+            zetatango_schema,
+        )
+
         return
 
-    cash_flow_projections = Table(
-        "cash_flow_projections",
-        metadata,
-        autoload=True,
-        autoload_with=zetatango_engine,
-        schema=zetatango_schema,
-    )
+    projection_df.index = pd.to_datetime(projection_df.index).astype(str)
+    details["data"] = projection_df.to_dict("index")
 
-    with zetatango_engine.begin() as tx:
-        projection_df.index = pd.to_datetime(projection_df.index).astype(str)
-        details["data"] = projection_df.to_dict("index")
-
-        select_query = select(
-            columns=[
-                literal_column(f"'{merchant_guid}'").label("merchant_guid"),
-                literal_column(f"'{account_guid}'").label("account_guid"),
-                literal_column(f"'{cash_flow_df.index.max().date()}'").label(
-                    "last_cash_flow_date"
-                ),
-                literal_column(
-                    f"'{sha256(json.dumps(parameters_to_hash).encode('utf-8')).hexdigest()}'"
-                ).label("parameters_hash"),
-                func.parse_json(json.dumps(details)).label("projections"),
-                func.CURRENT_TIMESTAMP().label("generated_at"),
-            ]
-        )
-
-        insert_query = cash_flow_projections.insert().from_select(
-            [
-                "merchant_guid",
-                "account_guid",
-                "last_cash_flow_date",
-                "parameters_hash",
-                "projections",
-                "generated_at",
-            ],
-            select_query,
-        )
-
-        tx.execute(insert_query)
-
-    logging.info(
-        f"✔️ Successfully stored projections for {merchant_guid} - {account_guid}"
+    store_projection(
+        merchant_guid,
+        account_guid,
+        cash_flow_df,
+        parameters_to_hash,
+        details,
+        snowflake_zetatango_connection,
+        zetatango_schema,
     )
 
 
@@ -920,18 +960,18 @@ if __name__ == "__main__":
     # Monkeypatch the AWS hack so we can set AWS creds in the environment
     hack_clear_aws_keys = lambda: None  # noqa
 
-#     create_tables("snowflake_zetatango_production", "CORE_STAGING")
-#     copy_transactions(
-#         "snowflake_zetatango_production", "CORE_STAGING", "ario-documents-staging", 1
-#     )
-#     generate_projections(
-#         "snowflake_zetatango_production",
-#         "snowflake_analytics_connection",
-#         1,
-#         "task_id",
-#         "task_ts",
-#         "DBT_ARIO",
-#         "CORE_STAGING",
-#     )
+    #     create_tables("snowflake_zetatango_production", "CORE_STAGING")
+    #     copy_transactions(
+    #         "snowflake_zetatango_production", "CORE_STAGING", "ario-documents-staging", 1
+    #     )
+    #     generate_projections(
+    #         "snowflake_zetatango_production",
+    #         "snowflake_analytics_connection",
+    #         1,
+    #         "task_id",
+    #         "task_ts",
+    #         "DBT_ARIO",
+    #         "CORE_STAGING",
+    #     )
 else:
     globals()["cash_flow_projection"] = create_dag()
