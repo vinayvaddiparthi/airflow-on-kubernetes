@@ -629,7 +629,7 @@ def store_projection(
                     f"'{sha256(json.dumps(parameters_to_hash).encode('utf-8')).hexdigest()}'"
                 ).label("parameters_hash"),
                 func.parse_json(json.dumps(details)).label("projections"),
-                func.CURRENT_TIMESTAMP().label("generated_at"),
+                func.current_timestamp().label("generated_at"),
             ]
         )
 
