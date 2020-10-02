@@ -517,7 +517,4 @@ def create_dag() -> DAG:
     return dag
 
 
-if __name__ == "__main__":
-    pass
-else:
-    globals()["ztimportdag"] = create_dag()
+globals()["ztimportdag"] = create_dag()
