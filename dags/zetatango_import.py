@@ -251,234 +251,6 @@ def decrypt_pii_columns(
             logging.info(f"🔓 Successfully decrypted {spec}")
 
 
-import_core_prod = PythonOperator(
-    task_id="zt-production-elt-core__import",
-    python_callable=export_to_snowflake,
-    op_kwargs={
-        "heroku_app": "zt-production-elt-core",
-        "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
-        "snowflake_connection": "snowflake_zetatango_production",
-        "snowflake_schema": "CORE_PRODUCTION",
-    },
-)
-
-import_core_staging = PythonOperator(
-    task_id="zt-staging-elt-core__import",
-    python_callable=export_to_snowflake,
-    op_kwargs={
-        "heroku_app": "zt-staging-elt-core",
-        "snowflake_connection": "snowflake_zetatango_staging",
-        "snowflake_schema": "CORE_STAGING",
-    },
-)
-
-decrypt_core_prod = PythonOperator(
-    task_id="zt-production-elt-core__pii_decryption",
-    python_callable=decrypt_pii_columns,
-    op_kwargs={
-        "snowflake_connection": "snowflake_zetatango_production",
-        "decryption_specs": [
-            DecryptionSpec(
-                schema="CORE_PRODUCTION",
-                table="MERCHANT_ATTRIBUTES",
-                columns=["value"],
-                whereclause=literal_column("$1:key").in_(
-                    [
-                        "industry",
-                        "bank_connection_required",
-                        "selected_bank_account",
-                    ]
-                ),
-            ),
-            DecryptionSpec(
-                schema="CORE_PRODUCTION",
-                table="LENDING_ADJUDICATIONS",
-                columns=["offer_results", "adjudication_results"],
-                format="yaml",
-            ),
-            DecryptionSpec(
-                schema="CORE_PRODUCTION",
-                table="LENDING_LOAN_ATTRIBUTES",
-                columns=["value"],
-                whereclause=literal_column("$1:key").in_(["external_id"]),
-            ),
-        ],
-        "target_schema": "PII_PRODUCTION",
-    },
-    executor_config={
-        "KubernetesExecutor": {
-            "annotations": {
-                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                "KubernetesAirflowProductionZetatangoPiiRole"
-            }
-        },
-        "resources": {"requests": {"memory": "2Gi"}, "limits": {"memory": "2Gi"}},
-    },
-)
-
-decrypt_core_staging = PythonOperator(
-    task_id="zt-staging-elt-core__pii_decryption",
-    python_callable=decrypt_pii_columns,
-    op_kwargs={
-        "snowflake_connection": "snowflake_zetatango_staging",
-        "decryption_specs": [
-            DecryptionSpec(
-                schema="CORE_STAGING",
-                table="MERCHANT_ATTRIBUTES",
-                columns=["value"],
-                whereclause=literal_column("$1:key").in_(
-                    [
-                        "industry",
-                        "bank_connection_required",
-                        "selected_bank_account",
-                    ]
-                ),
-            ),
-            DecryptionSpec(
-                schema="CORE_STAGING",
-                table="LENDING_ADJUDICATIONS",
-                columns=["offer_results", "adjudication_results"],
-                format="yaml",
-            ),
-            DecryptionSpec(
-                schema="CORE_STAGING",
-                table="LENDING_LOAN_ATTRIBUTES",
-                columns=["value"],
-                whereclause=literal_column("$1:key").in_(["external_id"]),
-            ),
-        ],
-        "target_schema": "PII_STAGING",
-    },
-    executor_config={
-        "KubernetesExecutor": {
-            "annotations": {
-                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                "KubernetesAirflowNonProdZetatangoPiiRole"
-            },
-            "resources": {"requests": {"memory": "2Gi"}, "limits": {"memory": "2Gi"}},
-        }
-    },
-)
-
-import_idp_prod = PythonOperator(
-    task_id="zt-production-elt-idp__import",
-    python_callable=export_to_snowflake,
-    op_kwargs={
-        "heroku_app": "zt-production-elt-idp",
-        "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0DB594617CE5BEC42_URL",
-        "snowflake_connection": "snowflake_zetatango_production",
-        "snowflake_schema": "IDP_PRODUCTION",
-    },
-)
-
-import_idp_staging = PythonOperator(
-    task_id="zt-staging-elt-idp__import",
-    python_callable=export_to_snowflake,
-    op_kwargs={
-        "heroku_app": "zt-staging-elt-idp",
-        "snowflake_connection": "snowflake_zetatango_staging",
-        "snowflake_schema": "IDP_STAGING",
-    },
-)
-
-import_kyc_prod = PythonOperator(
-    task_id="zt-production-elt-kyc__import",
-    python_callable=export_to_snowflake,
-    op_kwargs={
-        "heroku_app": "zt-production-elt-kyc",
-        "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0467EC30D24A2723A_URL",
-        "snowflake_connection": "snowflake_zetatango_production",
-        "snowflake_schema": "KYC_PRODUCTION",
-    },
-)
-
-import_kyc_staging = PythonOperator(
-    task_id="zt-staging-elt-kyc__import",
-    python_callable=export_to_snowflake,
-    op_kwargs={
-        "heroku_app": "zt-staging-elt-kyc",
-        "snowflake_connection": "snowflake_zetatango_staging",
-        "snowflake_schema": "KYC_STAGING",
-    },
-)
-
-decrypt_kyc_prod = PythonOperator(
-    task_id="zt-production-elt-kyc__pii_decryption",
-    python_callable=decrypt_pii_columns,
-    op_kwargs={
-        "snowflake_connection": "snowflake_zetatango_production",
-        "decryption_specs": [
-            DecryptionSpec(
-                schema="KYC_PRODUCTION",
-                table="INDIVIDUALS_APPLICANTS",
-                columns=[
-                    "date_of_birth",
-                    "first_name",
-                    "last_name",
-                    "middle_name",
-                ],
-            ),
-            DecryptionSpec(
-                schema="KYC_PRODUCTION",
-                table="INDIVIDUAL_ATTRIBUTES",
-                columns=["value"],
-                format="marshal",
-                whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
-            ),
-        ],
-        "target_schema": "PII_PRODUCTION",
-    },
-    executor_config={
-        "KubernetesExecutor": {
-            "annotations": {
-                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                "KubernetesAirflowProductionZetatangoPiiRole"
-            }
-        },
-        "resources": {"requests": {"memory": "2Gi"}, "limits": {"memory": "2Gi"}},
-    },
-)
-
-decrypt_kyc_staging = PythonOperator(
-    task_id="zt-staging-elt-kyc__pii_decryption",
-    python_callable=decrypt_pii_columns,
-    op_kwargs={
-        "snowflake_connection": "snowflake_zetatango_staging",
-        "decryption_specs": [
-            DecryptionSpec(
-                schema="KYC_STAGING",
-                table="INDIVIDUAL_ATTRIBUTES",
-                columns=["value"],
-                format="marshal",
-                whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
-            )
-        ],
-        "target_schema": "PII_STAGING",
-    },
-    executor_config={
-        "KubernetesExecutor": {
-            "annotations": {
-                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                "KubernetesAirflowNonProdZetatangoPiiRole"
-            },
-            "resources": {"requests": {"memory": "2Gi"}, "limits": {"memory": "2Gi"}},
-        }
-    },
-)
-
-dbt_run = DbtOperator(
-    task_id="dbt_run",
-    execution_timeout=timedelta(hours=1),
-    action=DbtAction.run,
-)
-
-dbt_snapshot = DbtOperator(
-    task_id="dbt_snapshot",
-    execution_timeout=timedelta(hours=1),
-    action=DbtAction.snapshot,
-)
-
-
 def create_dag() -> DAG:
     with DAG(
         dag_id="zetatango_import",
@@ -490,6 +262,249 @@ def create_dag() -> DAG:
         catchup=False,
         description="",
     ) as dag:
+        import_core_prod = PythonOperator(
+            task_id="zt-production-elt-core__import",
+            python_callable=export_to_snowflake,
+            op_kwargs={
+                "heroku_app": "zt-production-elt-core",
+                "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
+                "snowflake_connection": "snowflake_zetatango_production",
+                "snowflake_schema": "CORE_PRODUCTION",
+            },
+        )
+
+        import_core_staging = PythonOperator(
+            task_id="zt-staging-elt-core__import",
+            python_callable=export_to_snowflake,
+            op_kwargs={
+                "heroku_app": "zt-staging-elt-core",
+                "snowflake_connection": "snowflake_zetatango_staging",
+                "snowflake_schema": "CORE_STAGING",
+            },
+        )
+
+        decrypt_core_prod = PythonOperator(
+            task_id="zt-production-elt-core__pii_decryption",
+            python_callable=decrypt_pii_columns,
+            op_kwargs={
+                "snowflake_connection": "snowflake_zetatango_production",
+                "decryption_specs": [
+                    DecryptionSpec(
+                        schema="CORE_PRODUCTION",
+                        table="MERCHANT_ATTRIBUTES",
+                        columns=["value"],
+                        whereclause=literal_column("$1:key").in_(
+                            [
+                                "industry",
+                                "bank_connection_required",
+                                "selected_bank_account",
+                            ]
+                        ),
+                    ),
+                    DecryptionSpec(
+                        schema="CORE_PRODUCTION",
+                        table="LENDING_ADJUDICATIONS",
+                        columns=["offer_results", "adjudication_results"],
+                        format="yaml",
+                    ),
+                    DecryptionSpec(
+                        schema="CORE_PRODUCTION",
+                        table="LENDING_LOAN_ATTRIBUTES",
+                        columns=["value"],
+                        whereclause=literal_column("$1:key").in_(["external_id"]),
+                    ),
+                ],
+                "target_schema": "PII_PRODUCTION",
+            },
+            executor_config={
+                "KubernetesExecutor": {
+                    "annotations": {
+                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                        "KubernetesAirflowProductionZetatangoPiiRole"
+                    }
+                },
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
+            },
+        )
+
+        decrypt_core_staging = PythonOperator(
+            task_id="zt-staging-elt-core__pii_decryption",
+            python_callable=decrypt_pii_columns,
+            op_kwargs={
+                "snowflake_connection": "snowflake_zetatango_staging",
+                "decryption_specs": [
+                    DecryptionSpec(
+                        schema="CORE_STAGING",
+                        table="MERCHANT_ATTRIBUTES",
+                        columns=["value"],
+                        whereclause=literal_column("$1:key").in_(
+                            [
+                                "industry",
+                                "bank_connection_required",
+                                "selected_bank_account",
+                            ]
+                        ),
+                    ),
+                    DecryptionSpec(
+                        schema="CORE_STAGING",
+                        table="LENDING_ADJUDICATIONS",
+                        columns=["offer_results", "adjudication_results"],
+                        format="yaml",
+                    ),
+                    DecryptionSpec(
+                        schema="CORE_STAGING",
+                        table="LENDING_LOAN_ATTRIBUTES",
+                        columns=["value"],
+                        whereclause=literal_column("$1:key").in_(["external_id"]),
+                    ),
+                ],
+                "target_schema": "PII_STAGING",
+            },
+            executor_config={
+                "KubernetesExecutor": {
+                    "annotations": {
+                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                        "KubernetesAirflowNonProdZetatangoPiiRole"
+                    },
+                    "resources": {
+                        "requests": {"memory": "2Gi"},
+                        "limits": {"memory": "2Gi"},
+                    },
+                }
+            },
+        )
+
+        import_idp_prod = PythonOperator(
+            task_id="zt-production-elt-idp__import",
+            python_callable=export_to_snowflake,
+            op_kwargs={
+                "heroku_app": "zt-production-elt-idp",
+                "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0DB594617CE5BEC42_URL",
+                "snowflake_connection": "snowflake_zetatango_production",
+                "snowflake_schema": "IDP_PRODUCTION",
+            },
+        )
+
+        import_idp_staging = PythonOperator(
+            task_id="zt-staging-elt-idp__import",
+            python_callable=export_to_snowflake,
+            op_kwargs={
+                "heroku_app": "zt-staging-elt-idp",
+                "snowflake_connection": "snowflake_zetatango_staging",
+                "snowflake_schema": "IDP_STAGING",
+            },
+        )
+
+        import_kyc_prod = PythonOperator(
+            task_id="zt-production-elt-kyc__import",
+            python_callable=export_to_snowflake,
+            op_kwargs={
+                "heroku_app": "zt-production-elt-kyc",
+                "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0467EC30D24A2723A_URL",
+                "snowflake_connection": "snowflake_zetatango_production",
+                "snowflake_schema": "KYC_PRODUCTION",
+            },
+        )
+
+        import_kyc_staging = PythonOperator(
+            task_id="zt-staging-elt-kyc__import",
+            python_callable=export_to_snowflake,
+            op_kwargs={
+                "heroku_app": "zt-staging-elt-kyc",
+                "snowflake_connection": "snowflake_zetatango_staging",
+                "snowflake_schema": "KYC_STAGING",
+            },
+        )
+
+        decrypt_kyc_prod = PythonOperator(
+            task_id="zt-production-elt-kyc__pii_decryption",
+            python_callable=decrypt_pii_columns,
+            op_kwargs={
+                "snowflake_connection": "snowflake_zetatango_production",
+                "decryption_specs": [
+                    DecryptionSpec(
+                        schema="KYC_PRODUCTION",
+                        table="INDIVIDUALS_APPLICANTS",
+                        columns=[
+                            "date_of_birth",
+                            "first_name",
+                            "last_name",
+                            "middle_name",
+                        ],
+                    ),
+                    DecryptionSpec(
+                        schema="KYC_PRODUCTION",
+                        table="INDIVIDUAL_ATTRIBUTES",
+                        columns=["value"],
+                        format="marshal",
+                        whereclause=literal_column("$1:key").in_(
+                            ["default_beacon_score"]
+                        ),
+                    ),
+                ],
+                "target_schema": "PII_PRODUCTION",
+            },
+            executor_config={
+                "KubernetesExecutor": {
+                    "annotations": {
+                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                        "KubernetesAirflowProductionZetatangoPiiRole"
+                    }
+                },
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
+            },
+        )
+
+        decrypt_kyc_staging = PythonOperator(
+            task_id="zt-staging-elt-kyc__pii_decryption",
+            python_callable=decrypt_pii_columns,
+            op_kwargs={
+                "snowflake_connection": "snowflake_zetatango_staging",
+                "decryption_specs": [
+                    DecryptionSpec(
+                        schema="KYC_STAGING",
+                        table="INDIVIDUAL_ATTRIBUTES",
+                        columns=["value"],
+                        format="marshal",
+                        whereclause=literal_column("$1:key").in_(
+                            ["default_beacon_score"]
+                        ),
+                    )
+                ],
+                "target_schema": "PII_STAGING",
+            },
+            executor_config={
+                "KubernetesExecutor": {
+                    "annotations": {
+                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                        "KubernetesAirflowNonProdZetatangoPiiRole"
+                    },
+                    "resources": {
+                        "requests": {"memory": "2Gi"},
+                        "limits": {"memory": "2Gi"},
+                    },
+                }
+            },
+        )
+
+        dbt_run = DbtOperator(
+            task_id="dbt_run",
+            execution_timeout=timedelta(hours=1),
+            action=DbtAction.run,
+        )
+
+        dbt_snapshot = DbtOperator(
+            task_id="dbt_snapshot",
+            execution_timeout=timedelta(hours=1),
+            action=DbtAction.snapshot,
+        )
+
         dag << import_core_prod >> decrypt_core_prod
         dag << import_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
