@@ -1644,16 +1644,19 @@ def check_output(**kwargs: Dict) -> str:
 
 def get_input(**kwargs: Dict) -> str:
     client = _get_s3()
+    key = f"{full_response_path}/{base_file_name}.out1"
     try:
+        print(f"Getting object {key} from {bucket}")
         file = client.get_object(
             Bucket=bucket,
-            Key=f"{full_response_path}/{base_file_name}.out1",
+            Key=key,
         )
         body = file["Body"].read()
         content = body.decode("ISO-8859-1")
         Variable.set("file_content", content)
         return "convert_file"
-    except:
+    except Exception as e:
+        print(f"Unable to get object {key} from {bucket}: {e}")
         return "end"
 
 
