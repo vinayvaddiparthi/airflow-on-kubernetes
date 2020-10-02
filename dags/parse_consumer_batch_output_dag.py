@@ -1,6 +1,8 @@
 from datetime import datetime
 import logging
 
+from helpers.aws_hack import hack_clear_aws_keys
+
 import boto3
 import pandas as pd
 import tempfile
@@ -1544,6 +1546,7 @@ def _convert_date_format(value: str) -> Any:
 
 
 def _get_s3() -> Any:
+    hack_clear_aws_keys()
     return boto3.client(
         "s3",
         aws_access_key_id=aws_credentials.access_key,
