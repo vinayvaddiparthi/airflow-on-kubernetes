@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 
 import boto3
 import pandas as pd
@@ -1538,7 +1539,7 @@ def _convert_date_format(value: str) -> Any:
             dt = datetime.strptime(f"{yy}-{m}-{d}", "%Y-%m-%d")
             return dt
         except Exception as e:
-            print(e)
+            logging.error(e)
     return None
 
 
@@ -1561,7 +1562,7 @@ def _get_snowflake() -> Any:
 
 def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
     d3 = {**result_dict_1, **result_dict_2}
-    print(f"Size of dict: {len(d3)}")
+    logging.info(f"Size of dict: {len(d3)}")
 
     cols = []
     value_cols = []
@@ -1636,7 +1637,7 @@ def check_output(**kwargs: Dict) -> str:
             Bucket=bucket,
             Key=f"{full_output_path}/{base_file_name}.csv",
         )
-        print(file)
+        logging.info(file)
         return "end"
     except:
         return "get_input"
@@ -1646,7 +1647,7 @@ def get_input(**kwargs: Dict) -> str:
     client = _get_s3()
     key = f"{full_response_path}/{base_file_name}.out1"
     try:
-        print(f"Getting object {key} from {bucket}")
+        logging.info(f"Getting object {key} from {bucket}")
         file = client.get_object(
             Bucket=bucket,
             Key=key,
@@ -1656,7 +1657,7 @@ def get_input(**kwargs: Dict) -> str:
         Variable.set("file_content", content)
         return "convert_file"
     except Exception as e:
-        print(f"Unable to get object {key} from {bucket}: {e}")
+        logging.warning(f"Unable to get object {key} from {bucket}: {e}")
         return "end"
 
 
@@ -1695,7 +1696,7 @@ def upload_file_s3(file: Any, path: str) -> None:
             path,
         )
     except:
-        print("Error when uploading file to s3")
+        logging.error("Error when uploading file to s3")
 
 
 def insert_snowflake_public() -> None:
