@@ -190,7 +190,7 @@ def decrypt_pii_columns(
 
     def _decrypt(row: pd.Series, format: Optional[str] = None) -> List[Any]:
         list_: List[Optional[bytes]] = []
-        for field in row[1:]:
+        for field in row[3:]:
             if not field:
                 list_.append(None)
                 continue
@@ -204,28 +204,40 @@ def decrypt_pii_columns(
                 )
             )
 
-        return [row[0]] + (postprocessors[format](list_) if format else list_)
+        return [row[0:3]] + (postprocessors[format](list_) if format else list_)
 
     engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     for spec in decryption_specs:
         dst_stage = random_identifier()
-        stmt = Select(
-            columns=[literal_column(f"{spec.table}.$1:id").label("id")]
-            + [
-                func.base64_decode_string(
-                    literal_column(f"{spec.table}.$1:encrypted_{col}")
-                ).label(col)
-                for col in spec.columns
-            ],
-            from_obj=text(f"{spec.schema}.{spec.table}"),
-            whereclause=spec.whereclause,
-        )
+        dst_table = f"{target_schema}.{spec.schema}${spec.table}"
 
         with engine.begin() as tx:
             tx.execute(
-                f"CREATE OR REPLACE TEMPORARY STAGE {target_schema}.{dst_stage} "  # nosec
-                f"FILE_FORMAT=(TYPE=PARQUET)"  # nosec
+                f"create or replace temporary stage {target_schema}.{dst_stage} "  # nosec
+                f"file_format=(type=parquet)"  # nosec
             ).fetchall()
+
+            unknown_hashes_whereclause: ClauseElement = literal_column("_hash").notin_(
+                Select([literal_column("$1:_hash::varchar")], from_obj=text(dst_table))
+            )
+
+            stmt = Select(
+                columns=[
+                    literal_column(f"{spec.table}.$1:id::integer").label("id"),
+                    literal_column(f"{spec.table}.$1:updated_at::datetime").label(
+                        "updated_at"
+                    ),
+                    func.sha256(literal_column("$1")).label("_hash"),
+                ]
+                + [
+                    func.base64_decode_string(
+                        literal_column(f"{spec.table}.$1:encrypted_{col}")
+                    ).label(col)
+                    for col in spec.columns
+                ],
+                from_obj=text(f"{spec.schema}.{spec.table}"),
+                whereclause=spec.whereclause,
+            )
 
             dfs = pd.read_sql(stmt, con=tx, chunksize=500)
             for df in dfs:
@@ -243,9 +255,13 @@ def decrypt_pii_columns(
                         f"PUT file://{tempfile_.name} @{target_schema}.{dst_stage}"  # nosec
                     ).fetchall()
 
+            stmt = Select(
+                [literal_column("$1").label("fields")],
+                from_obj=text(f"@{target_schema}.{dst_stage}"),
+            )
+
             tx.execute(
-                f"CREATE OR REPLACE TRANSIENT TABLE {target_schema}.{spec.schema}${spec.table} AS "  # nosec
-                f"SELECT $1 AS FIELDS FROM @{target_schema}.{dst_stage}"  # nosec
+                f"create or replace transient table {dst_table} as {stmt}"  # nosec
             ).fetchall()
 
             logging.info(f"🔓 Successfully decrypted {spec}")
