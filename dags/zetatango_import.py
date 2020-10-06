@@ -204,7 +204,7 @@ def decrypt_pii_columns(
                 )
             )
 
-        return [row[0:3]] + (postprocessors[format](list_) if format else list_)
+        return row[0:3].tolist() + (postprocessors[format](list_) if format else list_)
 
     engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     for spec in decryption_specs:
