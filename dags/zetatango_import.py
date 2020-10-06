@@ -283,6 +283,12 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_zetatango_production",
                 "snowflake_schema": "CORE_PRODUCTION",
             },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
+            },
         )
 
         import_core_staging = PythonOperator(
@@ -292,6 +298,12 @@ def create_dag() -> DAG:
                 "heroku_app": "zt-staging-elt-core",
                 "snowflake_connection": "snowflake_zetatango_staging",
                 "snowflake_schema": "CORE_STAGING",
+            },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
             },
         )
 
@@ -398,6 +410,12 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_zetatango_production",
                 "snowflake_schema": "IDP_PRODUCTION",
             },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
+            },
         )
 
         import_idp_staging = PythonOperator(
@@ -407,6 +425,12 @@ def create_dag() -> DAG:
                 "heroku_app": "zt-staging-elt-idp",
                 "snowflake_connection": "snowflake_zetatango_staging",
                 "snowflake_schema": "IDP_STAGING",
+            },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
             },
         )
 
@@ -419,6 +443,12 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_zetatango_production",
                 "snowflake_schema": "KYC_PRODUCTION",
             },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
+            },
         )
 
         import_kyc_staging = PythonOperator(
@@ -428,6 +458,12 @@ def create_dag() -> DAG:
                 "heroku_app": "zt-staging-elt-kyc",
                 "snowflake_connection": "snowflake_zetatango_staging",
                 "snowflake_schema": "KYC_STAGING",
+            },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
             },
         )
 
