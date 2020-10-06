@@ -223,7 +223,7 @@ def decrypt_pii_columns(
                     literal_column(f"{spec.table}.$1:updated_at::datetime").label(
                         "updated_at"
                     ),
-                    func.sha256(literal_column("$1")).label("_hash"),
+                    func.sha2(literal_column("$1")).label("_hash"),
                 ]
                 + [
                     func.base64_decode_string(
