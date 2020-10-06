@@ -70,19 +70,6 @@ test:
       cobertura: cov.xml
   coverage: /^TOTAL.+?(\d+\%)$/
 
-build_image:
-  stage: build
-  tags:
-    - docker
-  services:
-    - docker:stable-dind
-  image: docker:stable
-  script:
-    - apk add -U python3 && python3 -m ensurepip && pip3 install awscli
-    - $(aws ecr get-login --no-include-email --region ca-central-1)
-    - docker build --build-arg GIT_USERNAME=gitlab-ci-token --build-arg GIT_PASSWORD=${CI_JOB_TOKEN} -t ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG} .
-    - docker push ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG}
-
 sast:
   stage: test
   tags:
@@ -106,6 +93,21 @@ check_dependencies:
   script:
     - pip install safety
     - safety check -r requirements.txt
+
+build_image:
+  stage: build
+  tags:
+    - docker
+  services:
+    - docker:stable-dind
+  image: docker:stable
+  script:
+    - apk add -U python3 && python3 -m ensurepip && pip3 install awscli
+    - $(aws ecr get-login --no-include-email --region ca-central-1)
+    - docker build --build-arg GIT_USERNAME=gitlab-ci-token --build-arg GIT_PASSWORD=${CI_JOB_TOKEN} -t ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG} .
+    - docker push ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG}
+  only:
+    - master
 
 deploy_production:
   stage: deploy
@@ -136,57 +138,57 @@ deploy_production:
   only:
     - master
 
-deploy_review:
-  stage: deploy
-  tags:
-    - k8s
-  image:
-    name: pgag/kubectl-jsonnet
-    entrypoint: [""]
-  script:
-    - |
-      jsonnet -J /ksonnet-lib k8s/app.jsonnet \
-        -V APP_NAME \
-        -V KUBE_NAMESPACE \
-        -V DOCKER_REPOSITORY \
-        -V DOCKER_IMAGE_TAG \
-        -V FERNET_KEY \
-        -V WEBSERVER_SECRET_KEY \
-        -V AWS_SES_USERNAME \
-        -V AWS_SES_PASSWORD \
-        -V OIDC_CLIENT_ID \
-        -V OIDC_CLIENT_SECRET \
-        -V BACKUPS_AWS_ACCESS_KEY_ID \
-        -V BACKUPS_AWS_SECRET_ACCESS_KEY \
-        -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
-  environment:
-    name: review/$CI_COMMIT_REF_NAME
-    url: https://airflow.tcdata.co/${CI_ENVIRONMENT_SLUG}
-    on_stop: stop_review
-  only:
-    - branches
-  except:
-    - master
-
-stop_review:
-  stage: cleanup
-  tags:
-    - k8s
-  variables:
-    GIT_STRATEGY: none
-  image:
-    name: pgag/kubectl-jsonnet
-    entrypoint: [""]
-  script:
-    - |
-      kubectl --token=${KUBE_TOKEN} -n ${KUBE_NAMESPACE} \
-      delete deploy,service,ingress,secret,postgres,serviceinstance,servicebinding \
-      -l app=${APP_NAME},env=${CI_ENVIRONMENT_SLUG}
-  environment:
-    name: review/$CI_COMMIT_REF_NAME
-    action: stop
-  when: manual
-  only:
-    - branches
-  except:
-    - master
+#deploy_review:
+#  stage: deploy
+#  tags:
+#    - k8s
+#  image:
+#    name: pgag/kubectl-jsonnet
+#    entrypoint: [""]
+#  script:
+#    - |
+#      jsonnet -J /ksonnet-lib k8s/app.jsonnet \
+#        -V APP_NAME \
+#        -V KUBE_NAMESPACE \
+#        -V DOCKER_REPOSITORY \
+#        -V DOCKER_IMAGE_TAG \
+#        -V FERNET_KEY \
+#        -V WEBSERVER_SECRET_KEY \
+#        -V AWS_SES_USERNAME \
+#        -V AWS_SES_PASSWORD \
+#        -V OIDC_CLIENT_ID \
+#        -V OIDC_CLIENT_SECRET \
+#        -V BACKUPS_AWS_ACCESS_KEY_ID \
+#        -V BACKUPS_AWS_SECRET_ACCESS_KEY \
+#        -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
+#  environment:
+#    name: review/$CI_COMMIT_REF_NAME
+#    url: https://airflow.tcdata.co/${CI_ENVIRONMENT_SLUG}
+#    on_stop: stop_review
+#  only:
+#    - branches
+#  except:
+#    - master
+#
+#stop_review:
+#  stage: cleanup
+#  tags:
+#    - k8s
+#  variables:
+#    GIT_STRATEGY: none
+#  image:
+#    name: pgag/kubectl-jsonnet
+#    entrypoint: [""]
+#  script:
+#    - |
+#      kubectl --token=${KUBE_TOKEN} -n ${KUBE_NAMESPACE} \
+#      delete deploy,service,ingress,secret,postgres,serviceinstance,servicebinding \
+#      -l app=${APP_NAME},env=${CI_ENVIRONMENT_SLUG}
+#  environment:
+#    name: review/$CI_COMMIT_REF_NAME
+#    action: stop
+#  when: manual
+#  only:
+#    - branches
+#  except:
+#    - master
