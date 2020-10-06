@@ -21,7 +21,16 @@ import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
 
-from sqlalchemy import text, func, create_engine, column, literal_column, literal, and_
+from sqlalchemy import (
+    text,
+    func,
+    create_engine,
+    column,
+    literal_column,
+    literal,
+    and_,
+    union_all,
+)
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
 
@@ -236,7 +245,7 @@ def decrypt_pii_columns(
                     for col in spec.columns
                 ],
                 from_obj=text(f"{spec.schema}.{spec.table}"),
-                whereclause=spec.whereclause,
+                whereclause=(unknown_hashes_whereclause & spec.whereclause),
             )
 
             dfs = pd.read_sql(stmt, con=tx, chunksize=500)
@@ -256,12 +265,23 @@ def decrypt_pii_columns(
                     ).fetchall()
 
             stmt = Select(
-                [literal_column("$1").label("fields")],
-                from_obj=text(f"@{target_schema}.{dst_stage}"),
+                [literal_column("*")],
+                from_obj=union_all(
+                    Select(
+                        [literal_column("$1").label("fields")],
+                        from_obj=text(f"@{target_schema}.{dst_stage}"),
+                    ),
+                    Select(
+                        [literal_column("$1").label("fields")],
+                        from_obj=text(dst_table),
+                    ),
+                ),
             )
 
             tx.execute(
-                f"create or replace transient table {dst_table} as {stmt}"  # nosec
+                f"create or replace table {dst_table} as {stmt} "  # nosec
+                f"qualify row_number() "
+                f"over (partition by fields:id::integer order by fields:updated_at::datetime) = 1"
             ).fetchall()
 
             logging.info(f"🔓 Successfully decrypted {spec}")
