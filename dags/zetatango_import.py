@@ -1,5 +1,4 @@
 import logging
-import os
 import tempfile
 from datetime import timedelta
 from pathlib import Path
@@ -162,8 +161,10 @@ def stage_table_in_snowflake(
             ).fetchall()
 
         tx.execute(
-            f"create or replace transient table {destination_schema}.{table} as "  # nosec
-            f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
+            text(
+                f"create or replace transient table {destination_schema}.{table} as "
+                f"select $1 as fields from @{destination_schema}.{stage_guid}"
+            )
         ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
@@ -221,8 +222,8 @@ def decrypt_pii_columns(
         with engine.begin() as tx:
             tx.execute(
                 text(
-                    f"create or replace temporary stage {target_schema}.{dst_stage} "  # nosec
-                    f"file_format=(type=parquet)"  # nosec
+                    f"create or replace temporary stage {target_schema}.{dst_stage} "
+                    f"file_format=(type=parquet)"
                 )
             ).fetchall()
 
@@ -262,7 +263,9 @@ def decrypt_pii_columns(
                             tempfile_.name, engine="fastparquet", compression="gzip"
                         )
                         tx.execute(
-                            f"PUT file://{tempfile_.name} @{target_schema}.{dst_stage}"  # nosec
+                            text(
+                                f"PUT file://{tempfile_.name} @{target_schema}.{dst_stage}"
+                            )
                         ).fetchall()
 
             union_stmt = Select(
