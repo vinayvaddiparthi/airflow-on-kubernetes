@@ -2,7 +2,7 @@ import logging
 import tempfile
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Optional, Any
+from typing import List, Optional, Any, cast
 
 import attr
 import heroku3
@@ -21,7 +21,6 @@ from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
 
 from sqlalchemy import (
-    cast,
     text,
     func,
     create_engine,
