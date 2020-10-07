@@ -21,7 +21,16 @@ import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
 
-from sqlalchemy import text, func, create_engine, column, literal_column, literal, and_
+from sqlalchemy import (
+    text,
+    func,
+    create_engine,
+    column,
+    literal_column,
+    literal,
+    and_,
+    union_all,
+)
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
 
@@ -217,6 +226,10 @@ def decrypt_pii_columns(
                 f"file_format=(type=parquet)"  # nosec
             ).fetchall()
 
+            unknown_hashes_whereclause: ClauseElement = literal_column("_hash").notin_(
+                Select([literal_column("$1:_hash::varchar")], from_obj=text(dst_table))
+            )
+
             stmt = Select(
                 columns=[
                     literal_column(f"{spec.table}.$1:id::integer").label("id"),
@@ -232,7 +245,7 @@ def decrypt_pii_columns(
                     for col in spec.columns
                 ],
                 from_obj=text(f"{spec.schema}.{spec.table}"),
-                whereclause=spec.whereclause,
+                whereclause=(unknown_hashes_whereclause & spec.whereclause),
             )
 
             dfs = pd.read_sql(stmt, con=tx, chunksize=500)
@@ -252,12 +265,23 @@ def decrypt_pii_columns(
                     ).fetchall()
 
             stmt = Select(
-                [literal_column("$1").label("fields")],
-                from_obj=text(f"@{target_schema}.{dst_stage}"),
+                [literal_column("*")],
+                from_obj=union_all(
+                    Select(
+                        [literal_column("$1").label("fields")],
+                        from_obj=text(f"@{target_schema}.{dst_stage}"),
+                    ),
+                    Select(
+                        [literal_column("$1").label("fields")],
+                        from_obj=text(dst_table),
+                    ),
+                ),
             )
 
             tx.execute(
-                f"create or replace transient table {dst_table} as {stmt}"  # nosec
+                f"create or replace table {dst_table} as {stmt} "  # nosec
+                f"qualify row_number() "
+                f"over (partition by fields:id::integer order by fields:updated_at::datetime) = 1"
             ).fetchall()
 
             logging.info(f"🔓 Successfully decrypted {spec}")
@@ -283,6 +307,12 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_zetatango_production",
                 "snowflake_schema": "CORE_PRODUCTION",
             },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
+            },
         )
 
         import_core_staging = PythonOperator(
@@ -292,6 +322,12 @@ def create_dag() -> DAG:
                 "heroku_app": "zt-staging-elt-core",
                 "snowflake_connection": "snowflake_zetatango_staging",
                 "snowflake_schema": "CORE_STAGING",
+            },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
             },
         )
 
@@ -398,6 +434,12 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_zetatango_production",
                 "snowflake_schema": "IDP_PRODUCTION",
             },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
+            },
         )
 
         import_idp_staging = PythonOperator(
@@ -407,6 +449,12 @@ def create_dag() -> DAG:
                 "heroku_app": "zt-staging-elt-idp",
                 "snowflake_connection": "snowflake_zetatango_staging",
                 "snowflake_schema": "IDP_STAGING",
+            },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
             },
         )
 
@@ -419,6 +467,12 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_zetatango_production",
                 "snowflake_schema": "KYC_PRODUCTION",
             },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
+            },
         )
 
         import_kyc_staging = PythonOperator(
@@ -428,6 +482,12 @@ def create_dag() -> DAG:
                 "heroku_app": "zt-staging-elt-kyc",
                 "snowflake_connection": "snowflake_zetatango_staging",
                 "snowflake_schema": "KYC_STAGING",
+            },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "2Gi"},
+                },
             },
         )
 
