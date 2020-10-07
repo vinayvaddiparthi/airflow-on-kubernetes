@@ -19,7 +19,6 @@ from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
 import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
-from snowflake.sqlalchemy import dialect as snowflake_dialect
 
 from sqlalchemy import (
     text,
@@ -297,8 +296,8 @@ def decrypt_pii_columns(
             tx.execute(
                 text(
                     f"create or replace transient table {dst_table} as "
-                    f"{union_stmt.compile(dialect=snowflake_dialect())} "
-                    f"qualify {qualify_stmt.compile(dialect=snowflake_dialect())}"
+                    f"{union_stmt.compile(engine)} "
+                    f"qualify {qualify_stmt.compile(engine)}"
                 )
             ).fetchall()
 
