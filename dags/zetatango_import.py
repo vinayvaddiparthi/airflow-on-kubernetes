@@ -20,6 +20,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
 import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
+from snowflake.sqlalchemy import dialect as snowflake_dialect
 
 from sqlalchemy import (
     text,
@@ -30,6 +31,8 @@ from sqlalchemy import (
     literal,
     and_,
     union_all,
+    INTEGER,
+    DATETIME,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
@@ -222,8 +225,10 @@ def decrypt_pii_columns(
 
         with engine.begin() as tx:
             tx.execute(
-                f"create or replace temporary stage {target_schema}.{dst_stage} "  # nosec
-                f"file_format=(type=parquet)"  # nosec
+                text(
+                    f"create or replace temporary stage {target_schema}.{dst_stage} "  # nosec
+                    f"file_format=(type=parquet)"  # nosec
+                )
             ).fetchall()
 
             unknown_hashes_whereclause: ClauseElement = literal_column("_hash").notin_(
@@ -264,7 +269,7 @@ def decrypt_pii_columns(
                         f"PUT file://{tempfile_.name} @{target_schema}.{dst_stage}"  # nosec
                     ).fetchall()
 
-            stmt = Select(
+            union_stmt = Select(
                 [literal_column("*")],
                 from_obj=union_all(
                     Select(
@@ -278,10 +283,24 @@ def decrypt_pii_columns(
                 ),
             )
 
+            qualify_stmt = (
+                func.row_number().over(
+                    partition_by=cast(
+                        INTEGER, func.get(literal_column("fields"), "id")
+                    ),
+                    order_by=cast(
+                        DATETIME, func.get(literal_column("fields"), "updated_at")
+                    ),
+                )
+                == 1
+            )
+
             tx.execute(
-                f"create or replace table {dst_table} as {stmt} "  # nosec
-                f"qualify row_number() "
-                f"over (partition by fields:id::integer order by fields:updated_at::datetime) = 1"
+                text(
+                    f"create or replace transient table {dst_table} as "
+                    f"{union_stmt.compile(dialect=snowflake_dialect())} "
+                    f"qualify {qualify_stmt.compile(dialect=snowflake_dialect())}"
+                )
             ).fetchall()
 
             logging.info(f"🔓 Successfully decrypted {spec}")
