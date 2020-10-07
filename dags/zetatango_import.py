@@ -1,4 +1,5 @@
 import logging
+import os
 import tempfile
 from datetime import timedelta
 from pathlib import Path
@@ -29,9 +30,6 @@ from sqlalchemy import (
     literal_column,
     literal,
     and_,
-    union_all,
-    INTEGER,
-    DATETIME,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
@@ -161,10 +159,8 @@ def stage_table_in_snowflake(
             ).fetchall()
 
         tx.execute(
-            text(
-                f"create or replace transient table {destination_schema}.{table} as "
-                f"select $1 as fields from @{destination_schema}.{stage_guid}"
-            )
+            f"create or replace transient table {destination_schema}.{table} as "  # nosec
+            f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
         ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
@@ -196,6 +192,12 @@ def decrypt_pii_columns(
 
     postprocessors = {"marshal": _postprocess_marshal, "yaml": _postprocess_yaml}
 
+    try:
+        del os.environ["AWS_ACCESS_KEY_ID"]
+        del os.environ["AWS_SECRET_ACCESS_KEY"]
+    except KeyError:
+        pass
+
     def _decrypt(row: pd.Series, format: Optional[str] = None) -> List[Any]:
         list_: List[Optional[bytes]] = []
         for field in row[3:]:
@@ -221,10 +223,9 @@ def decrypt_pii_columns(
 
         with engine.begin() as tx:
             tx.execute(
-                text(
-                    f"create or replace temporary stage {target_schema}.{dst_stage} "
-                    f"file_format=(type=parquet)"
-                )
+                f"create or replace temporary stage "
+                f"{target_schema}.{dst_stage} "  # nosec
+                f"file_format=(type=parquet)"  # nosec
             ).fetchall()
 
             unknown_hashes_whereclause: ClauseElement = literal_column("_hash").notin_(
@@ -268,38 +269,10 @@ def decrypt_pii_columns(
                             )
                         ).fetchall()
 
-            union_stmt = Select(
-                [literal_column("*")],
-                from_obj=union_all(
-                    Select(
-                        [literal_column("$1").label("fields")],
-                        from_obj=text(f"@{target_schema}.{dst_stage}"),
-                    ),
-                    Select(
-                        [literal_column("$1").label("fields")],
-                        from_obj=text(dst_table),
-                    ),
-                ),
-            )
-
-            qualify_stmt = (
-                func.row_number().over(
-                    partition_by=cast(
-                        func.get(literal_column("fields"), "id"), INTEGER
-                    ),
-                    order_by=cast(
-                        func.get(literal_column("fields"), "updated_at"), DATETIME
-                    ),
-                )
-                == 1
-            )
-
             tx.execute(
-                text(
-                    f"create or replace transient table {dst_table} as "
-                    f"{union_stmt.compile(engine)} "
-                    f"qualify {qualify_stmt.compile(engine)}"
-                )
+                f"create or replace transient table {dst_table} as {stmt} "  # nosec
+                f"qualify row_number() "
+                f"over (partition by fields:id::integer order by fields:updated_at::datetime) = 1"
             ).fetchall()
 
             logging.info(f"🔓 Successfully decrypted {spec}")
