@@ -598,7 +598,11 @@ def create_dag() -> DAG:
         dag << import_core_prod >> decrypt_core_prod
         dag << import_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
-        [decrypt_core_prod, decrypt_kyc_prod] >> dbt_run >> dbt_snapshot
+        [
+            decrypt_core_prod,
+            decrypt_kyc_prod,
+            import_idp_prod,
+        ] >> dbt_run >> dbt_snapshot
 
         dag << import_core_staging >> decrypt_core_staging
         dag << import_idp_staging
