@@ -2,7 +2,7 @@ import logging
 import tempfile
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Optional, cast, Any
+from typing import List, Optional, Any
 
 import attr
 import heroku3
@@ -19,9 +19,9 @@ from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
 import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
-from snowflake.sqlalchemy import dialect as snowflake_dialect
 
 from sqlalchemy import (
+    cast,
     text,
     func,
     create_engine,
@@ -264,7 +264,7 @@ def decrypt_pii_columns(
                         )
                         tx.execute(
                             text(
-                                f"PUT file://{tempfile_.name} @{target_schema}.{dst_stage}"
+                                f"put file://{tempfile_.name} @{target_schema}.{dst_stage}"
                             )
                         ).fetchall()
 
@@ -285,10 +285,10 @@ def decrypt_pii_columns(
             qualify_stmt = (
                 func.row_number().over(
                     partition_by=cast(
-                        INTEGER, func.get(literal_column("fields"), "id")
+                        func.get(literal_column("fields"), "id"), INTEGER
                     ),
                     order_by=cast(
-                        DATETIME, func.get(literal_column("fields"), "updated_at")
+                        func.get(literal_column("fields"), "updated_at"), DATETIME
                     ),
                 )
                 == 1
@@ -297,8 +297,8 @@ def decrypt_pii_columns(
             tx.execute(
                 text(
                     f"create or replace transient table {dst_table} as "
-                    f"{union_stmt.compile(dialect=snowflake_dialect())} "
-                    f"qualify {qualify_stmt.compile(dialect=snowflake_dialect())}"
+                    f"{union_stmt.compile(engine)} "
+                    f"qualify {qualify_stmt.compile(engine)}"
                 )
             ).fetchall()
 
