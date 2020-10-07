@@ -1,5 +1,4 @@
 import logging
-import os
 import tempfile
 from datetime import timedelta
 from pathlib import Path
@@ -20,6 +19,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
 import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
+from snowflake.sqlalchemy import dialect as snowflake_dialect
 
 from sqlalchemy import (
     text,
@@ -30,10 +30,13 @@ from sqlalchemy import (
     literal,
     and_,
     union_all,
+    INTEGER,
+    DATETIME,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
 
+from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils import random_identifier
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
@@ -158,8 +161,10 @@ def stage_table_in_snowflake(
             ).fetchall()
 
         tx.execute(
-            f"create or replace transient table {destination_schema}.{table} as "  # nosec
-            f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
+            text(
+                f"create or replace transient table {destination_schema}.{table} as "
+                f"select $1 as fields from @{destination_schema}.{stage_guid}"
+            )
         ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
@@ -191,12 +196,6 @@ def decrypt_pii_columns(
 
     postprocessors = {"marshal": _postprocess_marshal, "yaml": _postprocess_yaml}
 
-    try:
-        del os.environ["AWS_ACCESS_KEY_ID"]
-        del os.environ["AWS_SECRET_ACCESS_KEY"]
-    except KeyError:
-        pass
-
     def _decrypt(row: pd.Series, format: Optional[str] = None) -> List[Any]:
         list_: List[Optional[bytes]] = []
         for field in row[3:]:
@@ -222,8 +221,10 @@ def decrypt_pii_columns(
 
         with engine.begin() as tx:
             tx.execute(
-                f"create or replace temporary stage {target_schema}.{dst_stage} "  # nosec
-                f"file_format=(type=parquet)"  # nosec
+                text(
+                    f"create or replace temporary stage {target_schema}.{dst_stage} "
+                    f"file_format=(type=parquet)"
+                )
             ).fetchall()
 
             unknown_hashes_whereclause: ClauseElement = literal_column("_hash").notin_(
@@ -249,22 +250,25 @@ def decrypt_pii_columns(
             )
 
             dfs = pd.read_sql(stmt, con=tx, chunksize=500)
-            for df in dfs:
-                with tempfile.NamedTemporaryFile() as tempfile_:
-                    df = df.apply(
-                        axis=1,
-                        func=_decrypt,
-                        result_type="broadcast",
-                        args=(spec.format,),
-                    )
-                    df.to_parquet(
-                        tempfile_.name, engine="fastparquet", compression="gzip"
-                    )
-                    tx.execute(
-                        f"PUT file://{tempfile_.name} @{target_schema}.{dst_stage}"  # nosec
-                    ).fetchall()
+            with SuspendAwsEnvVar():
+                for df in dfs:
+                    with tempfile.NamedTemporaryFile() as tempfile_:
+                        df = df.apply(
+                            axis=1,
+                            func=_decrypt,
+                            result_type="broadcast",
+                            args=(spec.format,),
+                        )
+                        df.to_parquet(
+                            tempfile_.name, engine="fastparquet", compression="gzip"
+                        )
+                        tx.execute(
+                            text(
+                                f"PUT file://{tempfile_.name} @{target_schema}.{dst_stage}"
+                            )
+                        ).fetchall()
 
-            stmt = Select(
+            union_stmt = Select(
                 [literal_column("*")],
                 from_obj=union_all(
                     Select(
@@ -278,10 +282,24 @@ def decrypt_pii_columns(
                 ),
             )
 
+            qualify_stmt = (
+                func.row_number().over(
+                    partition_by=cast(
+                        INTEGER, func.get(literal_column("fields"), "id")
+                    ),
+                    order_by=cast(
+                        DATETIME, func.get(literal_column("fields"), "updated_at")
+                    ),
+                )
+                == 1
+            )
+
             tx.execute(
-                f"create or replace table {dst_table} as {stmt} "  # nosec
-                f"qualify row_number() "
-                f"over (partition by fields:id::integer order by fields:updated_at::datetime) = 1"
+                text(
+                    f"create or replace transient table {dst_table} as "
+                    f"{union_stmt.compile(dialect=snowflake_dialect())} "
+                    f"qualify {qualify_stmt.compile(dialect=snowflake_dialect())}"
+                )
             ).fetchall()
 
             logging.info(f"🔓 Successfully decrypted {spec}")
