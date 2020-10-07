@@ -1,5 +1,4 @@
 import logging
-import os
 import tempfile
 from datetime import timedelta
 from pathlib import Path
@@ -30,6 +29,7 @@ from sqlalchemy import (
     literal_column,
     literal,
     and_,
+    union_all,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
@@ -192,12 +192,6 @@ def decrypt_pii_columns(
 
     postprocessors = {"marshal": _postprocess_marshal, "yaml": _postprocess_yaml}
 
-    try:
-        del os.environ["AWS_ACCESS_KEY_ID"]
-        del os.environ["AWS_SECRET_ACCESS_KEY"]
-    except KeyError:
-        pass
-
     def _decrypt(row: pd.Series, format: Optional[str] = None) -> List[Any]:
         list_: List[Optional[bytes]] = []
         for field in row[3:]:
@@ -268,6 +262,20 @@ def decrypt_pii_columns(
                                 f"put file://{tempfile_.name} @{target_schema}.{dst_stage}"
                             )
                         ).fetchall()
+
+            stmt = Select(
+                [literal_column("*")],
+                from_obj=union_all(
+                    Select(
+                        [literal_column("$1").label("fields")],
+                        from_obj=text(f"@{target_schema}.{dst_stage}"),
+                    ),
+                    Select(
+                        [literal_column("$1").label("fields")],
+                        from_obj=text(dst_table),
+                    ),
+                ),
+            )
 
             tx.execute(
                 f"create or replace transient table {dst_table} as {stmt} "  # nosec
