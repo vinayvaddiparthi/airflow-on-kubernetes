@@ -37,6 +37,7 @@ from sqlalchemy import (
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select, ClauseElement
 
+from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils import random_identifier
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
@@ -194,12 +195,6 @@ def decrypt_pii_columns(
 
     postprocessors = {"marshal": _postprocess_marshal, "yaml": _postprocess_yaml}
 
-    try:
-        del os.environ["AWS_ACCESS_KEY_ID"]
-        del os.environ["AWS_SECRET_ACCESS_KEY"]
-    except KeyError:
-        pass
-
     def _decrypt(row: pd.Series, format: Optional[str] = None) -> List[Any]:
         list_: List[Optional[bytes]] = []
         for field in row[3:]:
@@ -254,20 +249,21 @@ def decrypt_pii_columns(
             )
 
             dfs = pd.read_sql(stmt, con=tx, chunksize=500)
-            for df in dfs:
-                with tempfile.NamedTemporaryFile() as tempfile_:
-                    df = df.apply(
-                        axis=1,
-                        func=_decrypt,
-                        result_type="broadcast",
-                        args=(spec.format,),
-                    )
-                    df.to_parquet(
-                        tempfile_.name, engine="fastparquet", compression="gzip"
-                    )
-                    tx.execute(
-                        f"PUT file://{tempfile_.name} @{target_schema}.{dst_stage}"  # nosec
-                    ).fetchall()
+            with SuspendAwsEnvVar():
+                for df in dfs:
+                    with tempfile.NamedTemporaryFile() as tempfile_:
+                        df = df.apply(
+                            axis=1,
+                            func=_decrypt,
+                            result_type="broadcast",
+                            args=(spec.format,),
+                        )
+                        df.to_parquet(
+                            tempfile_.name, engine="fastparquet", compression="gzip"
+                        )
+                        tx.execute(
+                            f"PUT file://{tempfile_.name} @{target_schema}.{dst_stage}"  # nosec
+                        ).fetchall()
 
             union_stmt = Select(
                 [literal_column("*")],
