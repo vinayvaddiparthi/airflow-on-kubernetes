@@ -12,7 +12,7 @@ from googleapiclient.discovery import build as AnalyticsBuild
 from oauth2client.service_account import ServiceAccountCredentials
 
 from utils import random_identifier
-from utils.failure_callbacks import slack_on_fail
+from utils.failure_callbacks import slack_ti
 
 # view_id from GA: Overall - IP and spam filtered
 VIEW_ID = "102376443"
@@ -247,5 +247,5 @@ with DAG(
                 "table": report,
             },
             provide_context=True,
-            on_failure_callback=slack_on_fail,
+            on_failure_callback=slack_ti("tc_failure_conn"),
         )
