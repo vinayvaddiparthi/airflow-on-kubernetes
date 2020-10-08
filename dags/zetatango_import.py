@@ -37,6 +37,7 @@ from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils import random_identifier
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
+from utils.failure_callbacks import slack_dag
 
 
 @attr.s
@@ -292,7 +293,7 @@ def create_dag() -> DAG:
         schedule_interval="0 */2 * * *",
         default_args={"retries": 10, "retry_delay": timedelta(minutes=5)},
         catchup=False,
-        description="",
+        on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
         import_core_prod = PythonOperator(
             task_id="zt-production-elt-core__import",
