@@ -36,6 +36,7 @@ from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, DateTime
 
 from pyporky.symmetric import SymmetricPorky
 from helpers.aws_hack import hack_clear_aws_keys
+from utils.failure_callbacks import slack_dag
 
 
 def create_cash_flow_projection_table(
@@ -882,7 +883,7 @@ def create_dag() -> DAG:
         start_date=pendulum.datetime(
             2020, 8, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
-        description="",
+        on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
         dag << PythonOperator(
             task_id="create_tables",
