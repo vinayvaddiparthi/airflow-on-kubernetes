@@ -77,8 +77,6 @@ def export_to_snowflake(
         )
     )
 
-    snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-
     with source_engine.begin() as tx:
         tables = (
             x[0]
@@ -100,7 +98,7 @@ def export_to_snowflake(
         output = [
             stage_table_in_snowflake(
                 source_raw_conn,
-                snowflake_engine,
+                SnowflakeHook(snowflake_connection).get_sqlalchemy_engine(),
                 source_schema,
                 snowflake_schema,
                 table,
@@ -120,42 +118,42 @@ def stage_table_in_snowflake(
     table: str,
 ) -> str:
     stage_guid = random_identifier()
-    with snowflake_engine.begin() as tx:
+    with snowflake_engine.begin() as tx, cast(
+        psycopg2.extensions.cursor, source_raw_conn.cursor()
+    ) as cursor, tempfile.TemporaryDirectory() as tempdir:
+
         tx.execute(
             f"create or replace temporary stage {destination_schema}.{stage_guid} "
             f"file_format=(type=parquet)"
         ).fetchall()
 
-        with cast(
-            psycopg2.extensions.cursor, source_raw_conn.cursor()
-        ) as cursor, tempfile.TemporaryDirectory() as tempdir:
-            csv_filepath = Path(tempdir, table).with_suffix(".csv")
-            pq_filepath = Path(tempdir, table).with_suffix(".pq")
+        csv_filepath = Path(tempdir, table).with_suffix(".csv")
+        pq_filepath = Path(tempdir, table).with_suffix(".pq")
 
-            with csv_filepath.open("w+b") as csv_filedesc:
-                cursor.copy_expert(
-                    f"copy {source_schema}.{table} to stdout "
-                    f"with csv header delimiter ',' quote '\"'",
-                    csv_filedesc,
-                )
+        with csv_filepath.open("w+b") as csv_filedesc:
+            cursor.copy_expert(
+                f"copy {source_schema}.{table} to stdout "
+                f"with csv header delimiter ',' quote '\"'",
+                csv_filedesc,
+            )
 
-            try:
-                table_ = pv.read_csv(
-                    f"{csv_filepath}",
-                    read_options=ReadOptions(block_size=8388608),
-                    parse_options=ParseOptions(newlines_in_values=True),
-                )
-            except ArrowInvalid as exc:
-                return f"❌ Failed to read table {table}: {exc}"
+        try:
+            table_ = pv.read_csv(
+                f"{csv_filepath}",
+                read_options=ReadOptions(block_size=8388608),
+                parse_options=ParseOptions(newlines_in_values=True),
+            )
+        except ArrowInvalid as exc:
+            return f"❌ Failed to read table {table}: {exc}"
 
-            if table_.num_rows == 0:
-                return f"📝️ Skipping empty table {table}"
+        if table_.num_rows == 0:
+            return f"📝️ Skipping empty table {table}"
 
-            pq.write_table(table_, f"{pq_filepath}")
+        pq.write_table(table_, f"{pq_filepath}")
 
-            tx.execute(
-                f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
-            ).fetchall()
+        tx.execute(
+            f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
+        ).fetchall()
 
         tx.execute(
             f"create or replace transient table {destination_schema}.{table} as "  # nosec
@@ -291,8 +289,8 @@ def create_dag() -> DAG:
         start_date=pendulum.datetime(
             2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
-        schedule_interval="30 0,9-21/4 * * *",
-        default_args={"retries": 3, "retry_delay": timedelta(minutes=5)},
+        schedule_interval="0 */2 * * *",
+        default_args={"retries": 10, "retry_delay": timedelta(minutes=5)},
         catchup=False,
         description="",
     ) as dag:
