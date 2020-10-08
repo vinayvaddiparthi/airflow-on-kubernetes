@@ -63,7 +63,7 @@ def create_dag() -> DAG:
                     "schema": schema,
                     "table": table,
                 },
-                # on_failure_callback=slack_on_fail,
+                # on_failure_callback=slack_ti,
             ) >> PythonOperator(
                 task_id=f"swap__{schema}__{table}",
                 python_callable=swap,
@@ -73,7 +73,7 @@ def create_dag() -> DAG:
                     "schema": schema,
                     "table": table,
                 },
-                # on_failure_callback=slack_on_fail,
+                # on_failure_callback=slack_ti,
             )
 
         return dag
