@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from helpers.aws_hack import hack_clear_aws_keys
@@ -16,7 +16,12 @@ from airflow.models import Variable
 
 # from pyporky.symmetric import SymmetricPorky
 
-Variable.set("t_stamp", datetime.now().strftime("%Y%m"))
+today = datetime.now().today()
+first = today.replace(day=1)
+last_month = first - timedelta(days=1)
+
+Variable.set("t_stamp", last_month.strftime("%Y%m"))
+
 base_file_name = f"tc_consumer_batch_{Variable.get('t_stamp')}"
 bucket = "tc-datalake"
 # bucket = "test-bucket-for-julien"
