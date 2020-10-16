@@ -1,4 +1,3 @@
-from functools import lru_cache
 from typing import Dict, Optional, Tuple
 
 import boto3
@@ -76,7 +75,6 @@ class SymmetricPorky:
         )
         return resp["Plaintext"], resp["CiphertextBlob"]
 
-    @lru_cache(maxsize=4096)
     def _decrypt_data_encryption_key(
         self, ciphertext_key: bytes, encryption_context: Optional[Dict] = None
     ) -> bytes:
