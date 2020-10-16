@@ -21,7 +21,6 @@ first = today.replace(day=1)
 last_month = first - timedelta(days=1)
 
 Variable.set("t_stamp", last_month.strftime("%Y%m"))
-
 base_file_name = f"tc_consumer_batch_{Variable.get('t_stamp')}"
 bucket = "tc-datalake"
 # bucket = "test-bucket-for-julien"
