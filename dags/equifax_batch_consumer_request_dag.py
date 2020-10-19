@@ -216,7 +216,7 @@ def create_dag() -> DAG:
             task_id="generate_file",
             python_callable=generate_file,
             op_kwargs={
-                "snowflake_connection": "snowflake_analytics_production",
+                "snowflake_connection": "snowflake_zetatango_production",
                 "s3_connection": "s3_datalake",
                 "bucket": "tc-datalake",
                 "folder": "equifax_automated_batch/request/consumer",
@@ -247,7 +247,7 @@ if __name__ == "__main__":
     mock_context = {"dag_run": MockDagRun(time_tag)}
 
     generate_file(
-        snowflake_connection="snowflake_analytics_production",
+        snowflake_connection="snowflake_zetatango_production",
         s3_connection="s3_datalake",
         bucket="tc-datalake",
         folder="equifax_automated_batch/request/consumer",
