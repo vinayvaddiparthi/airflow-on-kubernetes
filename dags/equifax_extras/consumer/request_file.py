@@ -75,4 +75,4 @@ class RequestFile(BaseRequestFile):
             account_number=account_number,
             applicant_guid=applicant.guid,
         )
-        self.write(row)
+        self.write(str(row))
