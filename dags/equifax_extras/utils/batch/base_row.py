@@ -47,6 +47,13 @@ class BaseRow(metaclass=BaseRowMeta):
         }
         return columns
 
+    @property
+    def column_data(self) -> Dict:
+        data = {
+            column_name: str(column) for column_name, column in self.columns.items()
+        }
+        return data
+
     def __str__(self) -> str:
         values = (str(column) for column in self.columns.values())
         value = f"{self.__class__.separator.join(values)}\n"

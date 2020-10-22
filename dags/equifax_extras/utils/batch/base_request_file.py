@@ -2,8 +2,6 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-from .base_row import BaseRow
-
 
 class BaseRequestFile:
     def __init__(self, path: Path):
@@ -22,8 +20,8 @@ class BaseRequestFile:
     def write_footer(self) -> None:
         pass
 
-    def write(self, row: BaseRow) -> None:
+    def write(self, row: str) -> None:
         with open(self.path, "a+", encoding=self.encoding) as file:
-            file.write(str(row))
+            file.write(row)
 
         self.rows = self.rows + 1
