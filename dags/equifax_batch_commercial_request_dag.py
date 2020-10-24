@@ -30,6 +30,29 @@ with
       from "ZETATANGO"."KYC_PRODUCTION"."ENTITIES_MERCHANTS"
     ),
     
+    eligible_loan as (
+      select
+        merchant_guid,
+        outstanding_balance,
+        to_date(fully_repaid_at) as repaid_date,
+        datediff(day, repaid_date, current_date()) as days_since_repaid
+      from "ANALYTICS_PRODUCTION"."DBT_ARIO"."DIM_LOAN"
+      where
+        days_since_repaid <= 365
+        or
+        outstanding_balance <> 0.0
+    ),
+    
+    eligible_merchant as (
+      select distinct
+        merchant.name,
+        merchant.merchant_id,
+        merchant.merchant_guid
+      from merchant
+      inner join eligible_loan on
+        merchant.merchant_guid = eligible_loan.merchant_guid
+    ),
+    
     address_relationship as (
       select
         fields:address_id::integer as address_id,
@@ -57,11 +80,11 @@ with
     ),
     merchant_with_address as (
       select
-        merchant.merchant_guid,
+        eligible_merchant.merchant_guid,
         address.*
-      from merchant
+      from eligible_merchant
       left join address_relationship on
-        merchant.merchant_id = address_relationship.merchant_id
+        eligible_merchant.merchant_id = address_relationship.merchant_id
       left join address on
         address_relationship.address_id = address.address_id
     ),
@@ -86,33 +109,18 @@ with
     ),
     merchant_with_phone_number as (
       select
-        merchant.merchant_guid,
+        eligible_merchant.merchant_guid,
         phone_number.*
-      from merchant
+      from eligible_merchant
       left join phone_number_relationship on
-        merchant.merchant_id = phone_number_relationship.merchant_id
+        eligible_merchant.merchant_id = phone_number_relationship.merchant_id
       left join phone_number on
         phone_number_relationship.phone_number_id = phone_number.phone_number_id
     ),
     
-    loan as (
-      select
-        merchant_guid
-      from "ANALYTICS_PRODUCTION"."DBT_ARIO"."DIM_LOAN"
-      where
-        state='repaying'
-    ),
-    repaying_merchant as (
-      select distinct
-        merchant.name,
-        merchant.merchant_guid
-      from merchant inner join loan on
-        merchant.merchant_guid = loan.merchant_guid
-    ),
-    
     final as (
       select distinct
-        repaying_merchant.merchant_guid,
+        eligible_merchant.merchant_guid,
         name,
         area_code,
         country_code,
@@ -127,11 +135,11 @@ with
         sub_premise_number,
         sub_premise_type,
         thoroughfare
-      from repaying_merchant
+      from eligible_merchant
       left join merchant_with_address on
-        repaying_merchant.merchant_guid = merchant_with_address.merchant_guid
+        eligible_merchant.merchant_guid = merchant_with_address.merchant_guid
       left join merchant_with_phone_number on
-        repaying_merchant.merchant_guid = merchant_with_phone_number.merchant_guid
+        eligible_merchant.merchant_guid = merchant_with_phone_number.merchant_guid
     )
 select
     row_number() over (order by merchant_guid) as id,
