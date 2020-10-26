@@ -10,6 +10,8 @@ class BaseRequestFile:
         self.encoding = "utf-8"
         self.rows = 0
 
+        self.path.parents[0].mkdir(exist_ok=True, parents=True)
+
         logging.info(f"Creating file {self.path}")
         with open(self.path, "w+", encoding=self.encoding):
             pass
