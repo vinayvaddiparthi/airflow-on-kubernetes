@@ -884,6 +884,7 @@ def create_dag() -> DAG:
             2020, 8, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
         on_failure_callback=slack_dag("slack_data_alerts"),
+        default_args={"retries": 5, "retry_delay": timedelta(minutes=2)},
     ) as dag:
         dag << PythonOperator(
             task_id="create_tables",
