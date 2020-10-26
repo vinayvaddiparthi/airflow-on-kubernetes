@@ -165,7 +165,7 @@ def generate_file(
     ).from_statement(statement)
     results = query.all()
 
-    local_dir = Path(tempfile.gettempdir()) / "equifax_batch"
+    local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "commercial"
     local_dir.mkdir(exist_ok=True)
     file_name = f"equifax_batch_commercial_request_{context['dag_run'].run_id}.csv"
     request_file = RequestFile(local_dir / file_name)
@@ -195,7 +195,7 @@ def generate_file(
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
 
 
-def create_dag() -> DAG:
+def create_dag(bucket: str, folder: str) -> DAG:
     default_args = {
         "owner": "airflow",
         "start_date": datetime(2020, 1, 1, 00, 00, 00),
@@ -213,10 +213,10 @@ def create_dag() -> DAG:
             task_id="generate_file",
             python_callable=generate_file,
             op_kwargs={
-                "snowflake_connection": "snowflake_analytics_production",
+                "snowflake_connection": "airflow_production",
                 "s3_connection": "s3_datalake",
-                "bucket": "tc-datalake",
-                "folder": "equifax_automated_batch/request/commercial",
+                "bucket": bucket,
+                "folder": folder,
             },
             execution_timeout=timedelta(hours=3),
             provide_context=True,
@@ -234,6 +234,11 @@ if environment == "development":
     )
 
     SnowflakeHook.get_sqlalchemy_engine = local_get_sqlalchemy_engine
+    output_bucket = "tc-datalake"
+    output_folder = "equifax_automated_batch/request/commercial/test"
+else:
+    output_bucket = "tc-datalake"
+    output_folder = "equifax_automated_batch/request/commercial"
 
 if __name__ == "__main__":
     from collections import namedtuple
@@ -246,9 +251,11 @@ if __name__ == "__main__":
     generate_file(
         snowflake_connection="airflow_production",
         s3_connection="s3_datalake",
-        bucket="tc-datalake",
-        folder="equifax_automated_batch/request/commercial",
+        bucket=output_bucket,
+        folder=output_folder,
         **mock_context,
     )
 else:
-    globals()["equifax_batch_commercial_request"] = create_dag()
+    globals()["equifax_batch_commercial_request"] = create_dag(
+        output_bucket, output_folder
+    )
