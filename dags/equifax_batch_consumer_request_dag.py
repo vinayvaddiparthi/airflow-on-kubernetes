@@ -67,7 +67,9 @@ with
         fields:party_id::integer as applicant_id
       from "ZETATANGO"."KYC_PRODUCTION"."ADDRESS_RELATIONSHIPS"
       where
-        fields:party_type::string = 'Individuals::Applicant'
+        fields:party_type::string = 'Individuals::Applicant' and
+        fields:active::string = 't' and
+        fields:category::string = 'physical_address'
     ),
     address as (
       select
@@ -95,39 +97,38 @@ with
         address_relationship.address_id = address.address_id
     ),
     
-    loan as (
+    eligible_loan as (
       select
-        state,
-        merchant_guid
+        merchant_guid,
+        outstanding_balance,
+        to_date(fully_repaid_at) as repaid_date,
+        datediff(day, repaid_date, current_date()) as days_since_repaid
       from "ANALYTICS_PRODUCTION"."DBT_ARIO"."DIM_LOAN"
       where
-        state='repaying'
+        days_since_repaid <= 365
+        or
+        outstanding_balance <> 0.0
     ),
-    merchant as (
-      select
-        name,
-        guid as merchant_guid,
-        primary_applicant_guid
-      from "ANALYTICS_PRODUCTION"."DBT_ARIO"."DIM_MERCHANT"
-    ),
-    repaying_merchant as (
+    eligible_merchant as (
       select distinct
         merchant.name,
-        merchant.merchant_guid,
+        merchant.guid as merchant_guid,
         merchant.primary_applicant_guid
-      from merchant inner join loan on
-        merchant.merchant_guid = loan.merchant_guid
+      from "ANALYTICS_PRODUCTION"."DBT_ARIO"."DIM_MERCHANT" as merchant
+      inner join eligible_loan on
+        merchant.guid = eligible_loan.merchant_guid
     ),
-    repaying_applicant as (
+    eligible_applicant as (
       select
         applicant.*
-      from repaying_merchant inner join applicant on
-        repaying_merchant.primary_applicant_guid = applicant.applicant_guid
+      from applicant
+      inner join eligible_merchant on
+        eligible_merchant.primary_applicant_guid = applicant.applicant_guid
     ),
     
     final as (
       select distinct
-        repaying_applicant.applicant_guid,
+        eligible_applicant.applicant_guid,
         encrypted_date_of_birth,
         encrypted_first_name,
         encrypted_last_name,
@@ -144,17 +145,16 @@ with
         sub_premise_number,
         sub_premise_type,
         thoroughfare
-      from repaying_applicant
+      from eligible_applicant
       left join applicant_with_attributes on
-        repaying_applicant.applicant_guid = applicant_with_attributes.applicant_guid
+        eligible_applicant.applicant_guid = applicant_with_attributes.applicant_guid
       left join applicant_with_address on
-        repaying_applicant.applicant_guid = applicant_with_address.applicant_guid
+        eligible_applicant.applicant_guid = applicant_with_address.applicant_guid
     )
 select
     row_number() over (order by applicant_guid) as id,
     *
-from final
-"""
+from final"""
 )
 
 
@@ -172,13 +172,16 @@ def generate_file(
     query = session.query(models.Applicant, models.Address).from_statement(statement)
     results = query.all()
 
-    local_dir = Path(tempfile.gettempdir()) / "equifax_batch"
+    local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "consumer"
     local_dir.mkdir(exist_ok=True)
     file_name = f"equifax_batch_consumer_request_{context['dag_run'].run_id}.txt"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
-    logging.info(f"Generating lines for {len(results)} applicants...")
+    applicant_guids = set([result.Applicant.guid for result in results])
+    logging.info(
+        f"Generating {len(results)} lines for {len(applicant_guids)} applicants..."
+    )
     for result in results:
         applicant = result.Applicant
         address = result.Address
@@ -198,7 +201,7 @@ def generate_file(
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
 
 
-def create_dag() -> DAG:
+def create_dag(bucket: str, folder: str) -> DAG:
     default_args = {
         "owner": "airflow",
         "start_date": datetime(2020, 1, 1, 00, 00, 00),
@@ -216,10 +219,10 @@ def create_dag() -> DAG:
             task_id="generate_file",
             python_callable=generate_file,
             op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_production",
+                "snowflake_connection": "airflow_production",
                 "s3_connection": "s3_datalake",
-                "bucket": "tc-datalake",
-                "folder": "equifax_automated_batch/request/consumer",
+                "bucket": bucket,
+                "folder": folder,
             },
             execution_timeout=timedelta(hours=3),
             provide_context=True,
@@ -237,6 +240,11 @@ if environment == "development":
     )
 
     SnowflakeHook.get_sqlalchemy_engine = local_get_sqlalchemy_engine
+    output_bucket = "tc-datalake"
+    output_folder = "equifax_automated_batch/request/consumer/test"
+else:
+    output_bucket = "tc-datalake"
+    output_folder = "equifax_automated_batch/request/consumer"
 
 if __name__ == "__main__":
     from collections import namedtuple
@@ -247,11 +255,13 @@ if __name__ == "__main__":
     mock_context = {"dag_run": MockDagRun(time_tag)}
 
     generate_file(
-        snowflake_connection="snowflake_zetatango_production",
+        snowflake_connection="airflow_production",
         s3_connection="s3_datalake",
-        bucket="tc-datalake",
-        folder="equifax_automated_batch/request/consumer",
+        bucket=output_bucket,
+        folder=output_folder,
         **mock_context,
     )
 else:
-    globals()["equifax_batch_consumer_request"] = create_dag()
+    globals()["equifax_batch_consumer_request"] = create_dag(
+        output_bucket, output_folder
+    )
