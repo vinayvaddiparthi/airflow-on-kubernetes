@@ -166,7 +166,6 @@ def generate_file(
     results = query.all()
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "commercial"
-    local_dir.mkdir(exist_ok=True)
     file_name = f"equifax_batch_commercial_request_{context['dag_run'].run_id}.csv"
     request_file = RequestFile(local_dir / file_name)
 
