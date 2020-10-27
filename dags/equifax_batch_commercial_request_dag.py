@@ -217,6 +217,12 @@ def create_dag(bucket: str, folder: str) -> DAG:
                 "bucket": bucket,
                 "folder": folder,
             },
+            executor_config={
+                "resources": {
+                    "requests": {"memory": "512Mi"},
+                    "limits": {"memory": "1Gi"},
+                },
+            },
             execution_timeout=timedelta(hours=3),
             provide_context=True,
         )
