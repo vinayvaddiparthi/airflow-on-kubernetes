@@ -10,7 +10,7 @@ from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.S3_hook import S3Hook
 
-from dags.helpers.suspend_aws_env import SuspendAwsEnvVar
+from helpers.suspend_aws_env import SuspendAwsEnvVar
 
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
