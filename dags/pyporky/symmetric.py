@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Dict, Optional, Tuple
 
 import boto3
@@ -29,7 +30,7 @@ class SymmetricPorky:
         nonce: bytes,
         encryption_context: Optional[Dict[str, str]] = None,
     ) -> bytes:
-        key = self._decrypt_data_encryption_key(enciphered_dek, encryption_context)
+        key = self._decrypt_data_encryption_key(enciphered_dek, encryption_context)  # type: ignore
         secret_box = SecretBox(key)
         return secret_box.decrypt(enciphered_data, nonce)
 
@@ -42,7 +43,7 @@ class SymmetricPorky:
     ) -> Tuple[bytes, bytes, bytes]:
         if enciphered_dek and not cmk_key_id:
             plaintext_key = self._decrypt_data_encryption_key(
-                enciphered_dek, encryption_context
+                enciphered_dek, encryption_context  # type: ignore
             )
             enciphered_key: bytes = enciphered_dek
         elif cmk_key_id and not enciphered_dek:
@@ -75,6 +76,7 @@ class SymmetricPorky:
         )
         return resp["Plaintext"], resp["CiphertextBlob"]
 
+    @lru_cache(maxsize=4096)
     def _decrypt_data_encryption_key(
         self, ciphertext_key: bytes, encryption_context: Optional[Dict] = None
     ) -> bytes:

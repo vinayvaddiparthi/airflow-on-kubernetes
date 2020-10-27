@@ -4,8 +4,6 @@ from pyporky.symmetric import SymmetricPorky
 
 from typing import Any, Callable
 
-porky = SymmetricPorky(aws_region="ca-central-1")
-
 
 def encrypted(func: Callable) -> Callable:
     def decrypt(*args: Any) -> bytes:
@@ -22,6 +20,7 @@ def encrypted(func: Callable) -> Callable:
         data = b64decode(ciphertext_info["data"])
         nonce = b64decode(ciphertext_info["nonce"])
 
+        porky = SymmetricPorky(aws_region="ca-central-1")
         data = porky.decrypt(enciphered_dek=key, enciphered_data=data, nonce=nonce)
         return data
 
