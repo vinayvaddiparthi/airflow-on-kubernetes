@@ -10,8 +10,6 @@ from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.S3_hook import S3Hook
 
-from helpers.suspend_aws_env import SuspendAwsEnvVar
-
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
@@ -183,11 +181,10 @@ def generate_file(
     logging.info(
         f"Generating {len(results)} lines for {len(applicant_guids)} applicants..."
     )
-    with SuspendAwsEnvVar():
-        for result in results:
-            applicant = result.Applicant
-            address = result.Address
-            request_file.append(applicant, address)
+    for result in results:
+        applicant = result.Applicant
+        address = result.Address
+        request_file.append(applicant, address)
     request_file.write_footer()
     logging.info(f"File {file_name} generated successfully.")
 
@@ -225,6 +222,18 @@ def create_dag(bucket: str, folder: str) -> DAG:
                 "s3_connection": "s3_datalake",
                 "bucket": bucket,
                 "folder": folder,
+            },
+            executor_config={
+                "KubernetesExecutor": {
+                    "annotations": {
+                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                        "KubernetesAirflowProductionZetatangoPiiRole"
+                    }
+                },
+                "resources": {
+                    "requests": {"memory": "512Mi"},
+                    "limits": {"memory": "1Gi"},
+                },
             },
             execution_timeout=timedelta(hours=3),
             provide_context=True,
