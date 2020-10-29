@@ -14,13 +14,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from equifax_extras.data import models
-from equifax_extras.consumer import RequestFile
+from equifax_extras.consumer import validation
+from equifax_extras.consumer.request_file import RequestFile
 
 from typing import Any
+from jinja2 import Template
 
-
-statement = text(
-    """
+statement_template = """
 with
     applicant as (
       select
@@ -32,7 +32,6 @@ with
         fields:encrypted_middle_name::string as encrypted_middle_name
       from "ZETATANGO"."KYC_PRODUCTION"."INDIVIDUALS_APPLICANTS"
     ),
-    
     applicant_sin as (
       select
         fields:individuals_applicant_id::integer as applicant_id,
@@ -60,7 +59,6 @@ with
       left join applicant_suffix on
         applicant.applicant_id = applicant_suffix.applicant_id
     ),
-    
     address_relationship as (
       select
         fields:address_id::integer as address_id,
@@ -96,7 +94,6 @@ with
       left join address on
         address_relationship.address_id = address.address_id
     ),
-    
     eligible_loan as (
       select
         merchant_guid,
@@ -124,8 +121,8 @@ with
       from applicant
       inner join eligible_merchant on
         eligible_merchant.primary_applicant_guid = applicant.applicant_guid
+      {{manual_process}}
     ),
-    
     final as (
       select distinct
         eligible_applicant.applicant_guid,
@@ -156,7 +153,6 @@ select
     *
 from final
 """
-)
 
 
 def generate_file(
@@ -165,7 +161,21 @@ def generate_file(
     bucket: str,
     folder: str,
     **context: Any,
-) -> None:
+) -> str:
+    manual_process = ""
+    conf = context["dag_run"].conf
+    if conf and "applicant_guids" in conf:
+        manual_list = conf["applicant_guids"]
+        if manual_list:
+            sub_query = """
+            union
+            select applicant.* 
+            from applicant where applicant.applicant_guid in {{applicant_guids}}
+            """
+            manual_process = Template(sub_query).render(
+                applicant_guids=tuple(manual_list)
+            )
+    statement = text(Template(statement_template).render(manual_process=manual_process))
     engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
     session = session_maker()
@@ -199,6 +209,35 @@ def generate_file(
 
     logging.info(f"Uploading {file_name} to {bucket}/{folder}.")
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
+    return file_name
+
+
+def validate_file(
+    s3_connection: str,
+    bucket: str,
+    folder: str,
+    **context: Any,
+) -> None:
+    """
+    1. split file into header, footer, content lines
+    2. check header: [len = 42, starts_with: BHDR-EQUIFAX, ends_with: ADVITFINSCOREDA2]
+    3. check footer: [len = 48, starts_with: BTRL-EQUIFAX, ends_with: ADVITFINSCOREDA2, right padded: 8 digits of content lines count]
+    4. check each content line: [len = 221]
+    5. check content: [
+        I: SIN: all numeric, or all empty space
+        II: Date of Birth: all numeric, month between 1~12, day between 1~31
+        III: City/Province: all alphabet
+        IV: Postal code: alphanumeric, regex match [a-zA-Z]\\d[a-zA-Z]\\d[a-zA-Z]\\d
+    ]
+    """
+    filename = context["task_instance"].xcom_pull(task_ids="pushing_task")
+    s3 = S3Hook(aws_conn_id=s3_connection)
+    credentials = s3.get_credentials()
+    dest_fs = open_fs(
+        f"s3://{credentials.access_key}:{credentials.secret_key}@{bucket}/{folder}"
+    )
+    with dest_fs.open(filename, mode="r", encoding="windows-1252") as file:
+        validation.validate(file)
 
 
 def create_dag(bucket: str, folder: str) -> DAG:
@@ -240,7 +279,18 @@ def create_dag(bucket: str, folder: str) -> DAG:
             provide_context=True,
         )
 
-        dag << op_generate_file
+        op_validate_file = PythonOperator(
+            task_id="validate_file",
+            python_callable=validate_file,
+            op_kwargs={
+                "s3_connection": "s3_datalake",
+                "bucket": bucket,
+                "folder": folder,
+            },
+            execution_timeout=timedelta(hours=3),
+            provide_context=True,
+        )
+        dag << op_generate_file >> op_validate_file
 
         return dag
 
