@@ -38,7 +38,7 @@ with
         datediff(day, repaid_date, current_date()) as days_since_repaid
       from "ANALYTICS_PRODUCTION"."DBT_ARIO"."DIM_LOAN"
       where
-        days_since_repaid <= 365
+        (days_since_repaid <= 365 and state = 'closed')
         or
         outstanding_balance <> 0.0
     ),

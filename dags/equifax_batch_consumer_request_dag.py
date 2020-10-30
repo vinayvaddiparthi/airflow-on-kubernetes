@@ -105,7 +105,7 @@ with
         datediff(day, repaid_date, current_date()) as days_since_repaid
       from "ANALYTICS_PRODUCTION"."DBT_ARIO"."DIM_LOAN"
       where
-        days_since_repaid <= 365
+        (days_since_repaid <= 365 and state = 'closed')
         or
         outstanding_balance <> 0.0
     ),
@@ -154,7 +154,8 @@ with
 select
     row_number() over (order by applicant_guid) as id,
     *
-from final"""
+from final
+"""
 )
 
 
