@@ -1,5 +1,7 @@
 from sqlalchemy import Table, Column, Integer
+from sqlalchemy.orm import column_property
 
+from equifax_extras.data.decorators import to_string
 from equifax_extras.data.models.base import Base, metadata
 
 from typing import List
@@ -24,6 +26,67 @@ address_table = Table(
 
 class Address(Base):
     __table__ = address_table
+
+    _city = column_property(address_table.c.city)
+    _country_alpha_3 = column_property(address_table.c.country_alpha_3)
+    _post_box_number = column_property(address_table.c.post_box_number)
+    _post_box_type = column_property(address_table.c.post_box_type)
+    _postal_code = column_property(address_table.c.postal_code)
+    _premise_number = column_property(address_table.c.premise_number)
+    _state_province = column_property(address_table.c.state_province)
+    _sub_premise_number = column_property(address_table.c.sub_premise_number)
+    _sub_premise_type = column_property(address_table.c.sub_premise_type)
+    _thoroughfare = column_property(address_table.c.thoroughfare)
+
+    @property  # type: ignore
+    @to_string
+    def city(self) -> str:
+        return self._city
+
+    @property  # type: ignore
+    @to_string
+    def country_alpha_3(self) -> str:
+        return self._country_alpha_3
+
+    @property  # type: ignore
+    @to_string
+    def post_box_number(self) -> str:
+        return self._post_box_number
+
+    @property  # type: ignore
+    @to_string
+    def post_box_type(self) -> str:
+        return self._post_box_type
+
+    @property  # type: ignore
+    @to_string
+    def postal_code(self) -> str:
+        return self._postal_code
+
+    @property  # type: ignore
+    @to_string
+    def premise_number(self) -> str:
+        return self._premise_number
+
+    @property  # type: ignore
+    @to_string
+    def state_province(self) -> str:
+        return self._state_province
+
+    @property  # type: ignore
+    @to_string
+    def sub_premise_number(self) -> str:
+        return self._sub_premise_number
+
+    @property  # type: ignore
+    @to_string
+    def sub_premise_type(self) -> str:
+        return self._sub_premise_type
+
+    @property  # type: ignore
+    @to_string
+    def thoroughfare(self) -> str:
+        return self._thoroughfare
 
     @property
     def lines(self) -> List[str]:

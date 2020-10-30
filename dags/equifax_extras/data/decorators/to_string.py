@@ -7,6 +7,8 @@ def to_string(func: Callable) -> Callable:
         if not value:
             return ""
 
-        return str(value, "utf-8") if type(value) is bytes else str(value)
+        s = str(value, "utf-8") if type(value) is bytes else str(value)
+        s = s.strip()
+        return s
 
     return from_type
