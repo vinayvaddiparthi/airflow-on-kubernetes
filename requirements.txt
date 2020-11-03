@@ -131,7 +131,7 @@ rubymarshal==1.2.6
 s3transfer==0.3.3
 setproctitle==1.1.10
 six==1.15.0
-snowflake-connector-python==2.2.7
+snowflake-connector-python==2.3.4
 snowflake-sqlalchemy==1.2.3
 SQLAlchemy==1.3.17
 SQLAlchemy-JSONField==0.9.0
