@@ -93,6 +93,23 @@ reports = {
             }
         ]
     },
+    "usr": {
+        "reportRequests": [
+            {
+                "viewId": VIEW_ID,
+                "dateRanges": [{"startDate": None, "endDate": None}],
+                "metrics": [
+                    {"expression": "ga:sessions"},
+                ],
+                "dimensions": [
+                    {"name": "ga:dimension6"},
+                    {"name": "ga:dimension5"},
+                ],
+                "pageToken": "0",
+                "pageSize": ROW_LIMIT,
+            }
+        ]
+    },
 }
 
 
