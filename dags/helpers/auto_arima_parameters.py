@@ -32,4 +32,4 @@ class ArimaProjectionParameters:
 
 @attr.s(kw_only=True)
 class CashFlowProjectionParameters:
-    version: int = 2
+    version: int = 3

@@ -23,6 +23,10 @@ from math import sqrt
 
 from typing import Dict, Any, cast, List
 
+from helpers.cash_flow_helper import (
+    calculate_opening_balances,
+    guardrail_linear_regression,
+)
 from helpers.auto_arima_parameters import (
     AutoArimaParameters,
     ArimaProjectionParameters,
@@ -373,26 +377,6 @@ def copy_transactions(
                     )
 
 
-def calculate_opening_balances(
-    opening_balance: float, df: pd.DataFrame, credits_label: str, debits_label: str
-) -> List[float]:
-    running_balance = opening_balance
-
-    opening_balances = []
-    opening_balances.append(running_balance)
-
-    for index in range(1, len(df.index)):
-        running_balance = (
-            running_balance
-            + df[credits_label].iloc[index]
-            - df[debits_label].iloc[index]
-        )
-
-        opening_balances.append(running_balance)
-
-    return opening_balances
-
-
 def calculate_balance_projection(
     df: pd.DataFrame, prediction_df: pd.DataFrame, balance_spreads: List[float]
 ) -> None:
@@ -544,7 +528,7 @@ def apply_pre_projection_guardrails(
     return required_cash_flow_weeks > non_zero_weeks
 
 
-def apply_post_projection_guardrails(
+def apply_post_projection_guardrail_closing_balance(
     cash_flow_df: pd.DataFrame, projection_df: pd.DataFrame
 ) -> bool:
     projection_df.index = pd.to_datetime(projection_df.index)
@@ -718,9 +702,26 @@ def do_projection(
         arima_projection_parameters,
     )
 
-    if apply_post_projection_guardrails(cash_flow_df, projection_df):
+    if apply_post_projection_guardrail_closing_balance(cash_flow_df, projection_df):
         logging.warning(
-            f"❌ Post projection guardrail for {merchant_guid} - {account_guid} applied"
+            f"❌ Post projection guardrail on closing balance for {merchant_guid} - {account_guid} applied"
+        )
+
+        store_projection(
+            merchant_guid,
+            account_guid,
+            cash_flow_df,
+            parameters_to_hash,
+            details,
+            snowflake_zetatango_connection,
+            zetatango_schema,
+        )
+
+        return
+
+    if guardrail_linear_regression(cash_flow_df, projection_df):
+        logging.warning(
+            f"❌ Post projection guardrail on linear regression for {merchant_guid} - {account_guid} applied"
         )
 
         store_projection(
@@ -854,10 +855,14 @@ def generate_projections(
                 df.index = pd.to_datetime(df.index)
 
                 full_index = pd.date_range(df.index.min(), df.index.max())
-                df = df.reindex(full_index, fill_value=0)
+                df = df.reindex(full_index)
 
                 df.index.rename(inplace=True, name="DateTime")
                 df.sort_index(inplace=True)
+
+                for column in ["credits", "debits"]:
+                    df[column].fillna(0, inplace=True)
+                df["balance"].ffill(inplace=True)
 
                 try:
                     executor.submit(
