@@ -110,6 +110,28 @@ reports = {
             }
         ]
     },
+    "new_cx": {
+        "reportRequests": [
+            {
+                "viewId": VIEW_ID,
+                "dateRanges": [{"startDate": None, "endDate": None}],
+                "metrics": [
+                    {"expression": "ga:users"},
+                ],
+                "dimensions": [
+                    {"name": "ga:dimension6"},
+                    {"name": "ga:hostname"},
+                    {"name": "ga:pagePath"},
+                    {"name": "ga:eventAction"},
+                    {"name": "ga:date"},
+                    {"name": "ga:dateHourMinute"},
+                    {"name": "ga:eventCategory"},
+                ],
+                "pageToken": "0",
+                "pageSize": ROW_LIMIT,
+            }
+        ]
+    },
 }
 
 
@@ -250,8 +272,12 @@ with DAG(
                     f"create or replace table {dest_db}.{dest_schema}.{table} as "  # nosec
                     f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
                 ).fetchall()
-            grant = f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_DEVELOPMENT"
-            tx.execute(grant)
+            tx.execute(
+                f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_DEVELOPMENT"
+            )
+            tx.execute(
+                f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_PRODUCTION"
+            )
             print(f"✔️ Successfully grant access to tables in {dest_db}.{dest_schema}")
             print(f"✔️ Successfully loaded table {table} for {ds}")
 
