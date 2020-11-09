@@ -194,6 +194,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
 
 with DAG(
     "google_analytics_import",
+    max_active_runs=1,
     schedule_interval="@daily",
     catchup=True,
     start_date=pendulum.datetime(
