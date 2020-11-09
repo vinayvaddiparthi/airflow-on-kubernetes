@@ -550,11 +550,10 @@ def apply_post_projection_guardrail_closing_balance(
         .sum()
     )
 
-    weekly_projections_opening_balance = max(
-        0,
+    weekly_projections_opening_balance = (
         weekly_actuals_df["balance"].iloc[-1]
         + weekly_actuals_df["credits"].iloc[-1]
-        - weekly_actuals_df["debits"].iloc[-1],
+        - weekly_actuals_df["debits"].iloc[-1]
     )
     weekly_projections_df["balance_prediction"] = calculate_opening_balances(
         weekly_projections_opening_balance,

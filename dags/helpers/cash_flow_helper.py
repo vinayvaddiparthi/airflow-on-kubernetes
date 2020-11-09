@@ -82,13 +82,11 @@ def guardrail_linear_regression(
     opening_balance_lower_limit = projection_copy_df["ll"].iloc[-1]
     opening_balance_upper_limit = projection_copy_df["ul"].iloc[-1]
 
-    projection_opening_balance = max(
-        0,
+    projection_opening_balance = (
         cash_flow_copy_df["balance"].iloc[-1]
         + cash_flow_copy_df["credits"].iloc[-1]
-        - cash_flow_copy_df["debits"].iloc[-1],
+        - cash_flow_copy_df["debits"].iloc[-1]
     )
-
     projection_copy_df["balance_prediction"] = calculate_opening_balances(
         projection_opening_balance,
         projection_copy_df,
