@@ -14,7 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from equifax_extras.data import models
-from equifax_extras.commercial import RequestFile
+from equifax_extras.commercial.request_file import RequestFile
 
 from typing import Any
 
