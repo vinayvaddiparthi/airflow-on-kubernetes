@@ -230,7 +230,7 @@ def validate_file(
         IV: Postal code: alphanumeric, regex match [a-zA-Z]\\d[a-zA-Z]\\d[a-zA-Z]\\d
     ]
     """
-    filename = context["task_instance"].xcom_pull(task_ids="pushing_task")
+    filename = context["task_instance"].xcom_pull(task_ids="generate_file")
     s3 = S3Hook(aws_conn_id=s3_connection)
     credentials = s3.get_credentials()
     dest_fs = open_fs(
