@@ -25,6 +25,7 @@ def get_month_tag(ds: str) -> str:
         scheduled = then.add(months=-1)
     else:
         scheduled = then.add(months=-2)
+    print(f"Current month tag: [{scheduled.year}{str(scheduled.month).zfill(2)}]")
     return f"{scheduled.year}{str(scheduled.month).zfill(2)}"
 
 
@@ -75,18 +76,17 @@ def commercial_batch_import(ds: str, **context: Any) -> None:
                 client.upload_fileobj(file, bucket, path)
 
             # load csv to target source table in snowflake
+            print(f"Copy into table {table_name}")
             with SnowflakeHook(
                 "airflow_production"
-            ).get_sqlalchemy_engine().begin() as conn:
+            ).get_sqlalchemy_engine().begin() as tx:
                 sql_copy_stage = f"""COPY INTO {table_name}
                                      FROM S3://{bucket}/{path}
                                      CREDENTIALS = (
                                         aws_key_id='{aws_credentials.access_key}',
                                         aws_secret_key='{aws_credentials.secret_key}')
                                      FILE_FORMAT=(field_delimiter='\t', skip_header=1)"""
-                cs = conn.cursor()
-                cs.execute(sql_copy_stage)
-                conn.commit()
+                tx.execute(sql_copy_stage)
 
 
 with DAG(
