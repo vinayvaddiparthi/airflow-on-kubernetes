@@ -24,7 +24,7 @@ def get_month_tag(ds: str) -> str:
     if then.month % 2 == 1:
         scheduled = then.add(months=-1)
     else:
-        scheduled = then.add(months=-2)
+        scheduled = then
     print(f"Current month tag: [{scheduled.year}{str(scheduled.month).zfill(2)}]")
     return f"{scheduled.year}{str(scheduled.month).zfill(2)}"
 
