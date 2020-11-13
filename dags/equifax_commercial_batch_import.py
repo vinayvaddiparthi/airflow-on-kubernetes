@@ -66,7 +66,7 @@ def commercial_batch_import(ds: str, **context: Any) -> None:
             df["import_month"] = get_month_tag(ds)
 
             # generate csv file
-            df.to_csv(f"{table_name}.csv", index=False, sep="\t")
+            df.to_csv(f"{table_name}.csv", index=False, sep="|")
 
             # upload converted csv to S3
             with open(f"{table_name}.csv", "rb") as file:
@@ -85,7 +85,7 @@ def commercial_batch_import(ds: str, **context: Any) -> None:
                                      CREDENTIALS = (
                                         aws_key_id='{aws_credentials.access_key}',
                                         aws_secret_key='{aws_credentials.secret_key}')
-                                     FILE_FORMAT=(field_delimiter='\t', skip_header=1)"""
+                                     FILE_FORMAT=(field_delimiter='|', skip_header=1)"""
                 tx.execute(sql_copy_stage)
 
 
