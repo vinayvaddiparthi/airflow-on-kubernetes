@@ -132,6 +132,27 @@ reports = {
             }
         ]
     },
+    "new_acquisition": {
+        "reportRequests": [
+            {
+                "viewId": VIEW_ID,
+                "dateRanges": [{"startDate": None, "endDate": None}],
+                "metrics": [
+                    {"expression": "ga:newUsers"},
+                ],
+                "dimensions": [
+                    {"name": "ga:dimension6"},
+                    {"name": "ga:sourceMedium"},
+                    {"name": "ga:landingPagePath"},
+                    {"name": "ga:fullReferrer"},
+                    {"name": "ga:campaign"},
+                    {"name": "ga:dateHourMinute"},
+                ],
+                "pageToken": "0",
+                "pageSize": ROW_LIMIT,
+            }
+        ]
+    },
 }
 
 
