@@ -18,122 +18,99 @@ from utils.failure_callbacks import slack_ti
 VIEW_ID = "102376443"
 ROW_LIMIT = 10000
 
-reports = {
-    "audiance": {
-        "reportRequests": [
+LIST_OF_REPORTS = [
             {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    # acquisition
-                    {"expression": "ga:newUsers"},
-                    {"expression": "ga:sessions"},
-                ],
-                "dimensions": [
-                    {"name": "ga:sessionCount"},
-                    {"name": "ga:country"},
-                    {"name": "ga:city"},
-                    {"name": "ga:browser"},
-                    {"name": "ga:dateHourMinute"},
-                    {"name": "ga:dimension5"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
-    },
-    "cx": {
-        "reportRequests": [
+            "reportName": "audiance",
+            "expression": ["ga:newUsers", "ga:sessions"],
+            "name": ["ga:sessionCount", 
+                    "ga:country", 
+                    "ga:city", 
+                    "ga:browser", 
+                    "ga:dateHourMinute", 
+                    "ga:dimension5"]
+            },
             {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    {"expression": "ga:newUsers"},
-                    {"expression": "ga:sessions"},
-                    {"expression": "ga:totalEvents"},
-                    {"expression": "ga:uniqueEvents"},
-                    {"expression": "ga:timeOnPage"},
-                ],
-                "dimensions": [
-                    {"name": "ga:landingPagePath"},
-                    {"name": "ga:secondPagePath"},
-                    {"name": "ga:eventCategory"},
-                    {"name": "ga:eventAction"},
-                    {"name": "ga:hostname"},
-                    {"name": "ga:pagePath"},
-                    {"name": "ga:dateHourMinute"},
-                    {"name": "ga:dimension5"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
-    },
-    "acquisition": {
-        "reportRequests": [
+            "reportName": "cx",
+            "expression": ["ga:newUsers", 
+                            "ga:sessions",
+                            "ga:totalEvents",
+                            "ga:uniqueEvents",
+                            "ga:timeOnPage"],
+            "name": ["ga:landingPagePath",
+                    "ga:secondPagePath",
+                    "ga:eventCategory",
+                    "ga:eventAction",
+                    "ga:hostname",
+                    "ga:pagePath",
+                    "ga:dateHourMinute",
+                    "ga:dimension5"]
+            },
             {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    {"expression": "ga:newUsers"},
-                    {"expression": "ga:sessions"},
-                ],
-                "dimensions": [
-                    {"name": "ga:channelGrouping"},
-                    {"name": "ga:fullReferrer"},
-                    {"name": "ga:campaign"},
-                    {"name": "ga:sourceMedium"},
-                    {"name": "ga:hostname"},
-                    {"name": "ga:pagePath"},
-                    {"name": "ga:dateHourMinute"},
-                    {"name": "ga:dimension5"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
-    },
-    "usr": {
-        "reportRequests": [
+            "reportName": "acquisition",
+            "expression": ["ga:newUsers"
+                            "ga:sessions"],
+            "name": ["ga:channelGrouping",
+                    "ga:fullReferrer",
+                    "ga:campaign",
+                    "ga:sourceMedium",
+                    "ga:hostname",
+                    "ga:pagePath",
+                    "ga:dateHourMinute",
+                    "ga:dimension5"]
+            },
             {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    {"expression": "ga:sessions"},
-                ],
-                "dimensions": [
-                    {"name": "ga:dimension6"},
-                    {"name": "ga:dimension5"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
-    },
-    "new_cx": {
-        "reportRequests": [
+            "reportName": "usr",
+            "expression": ["ga:sessions"],
+            "name": ["ga:dimension6",
+                    "ga:dimension5"]
+            },
             {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    {"expression": "ga:users"},
-                ],
-                "dimensions": [
-                    {"name": "ga:dimension6"},
-                    {"name": "ga:hostname"},
-                    {"name": "ga:pagePath"},
-                    {"name": "ga:eventAction"},
-                    {"name": "ga:date"},
-                    {"name": "ga:dateHourMinute"},
-                    {"name": "ga:eventCategory"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
-    },
-}
+            "reportName": "new_cx",
+            "expression": ["ga:users"],
+            "name": ["ga:dimension6",
+                    "ga:hostname",
+                    "ga:pagePath",
+                    "ga:eventAction",
+                    "ga:date",
+                    "ga:dateHourMinute",
+                    "ga:eventCategory",]
+            },
+            {
+            "reportName": "new_acq",
+            "expression": ["ga:users"],
+            "name": ["ga:dimension6",
+                    "ga:sourceMedium",
+                    "ga:landingPagePath",
+                    "ga:fullReferrer",
+                    "ga:campaign",
+                    "ga:dateHourMinute",]
+            },
+            ]
 
+def gen_reports():
+    reports = {}
+    for report in LIST_OF_REPORTS:
+        expressions = []
+        for expression in report["expression"]:
+            expressions.append({"expression": expression})
+        
+        metrics = []
+        for metric in report["name"]:
+            metrics.append({"name": metric})
+
+        reports[report["reportName"]]={
+                "reportRequests":[{
+                    "viewId": VIEW_ID,
+                    "dateRanges": [{"startDate": None, "endDate": None}],
+                    "metrics": metrics,
+                    "dimentions": expressions,
+                    "pageToken": "0",
+                    "pageSize" : ROW_LIMIT,
+                }]
+            }
+    return reports
+
+reports = gen_reports();
 
 def initialize_analytics_reporting() -> Any:
     hook = GoogleCloudBaseHook(gcp_conn_id="google_analytics_default")
