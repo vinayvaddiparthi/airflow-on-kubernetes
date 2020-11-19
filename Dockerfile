@@ -1,6 +1,5 @@
-FROM python:3.8.3-slim
+FROM python:3.8-slim AS base
 
-# Never prompts the user for choices on installation/configuration of packages
 ENV DEBIAN_FRONTEND noninteractive
 ENV TERM linux
 
@@ -61,6 +60,9 @@ RUN set -ex \
         /usr/share/doc-base
 
 RUN chown -R airflow: ${AIRFLOW_USER_HOME}
+
+FROM base
+ARG AIRFLOW_USER_HOME=/usr/local/airflow
 
 EXPOSE 8080 5555 8793
 
