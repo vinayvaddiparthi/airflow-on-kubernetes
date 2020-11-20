@@ -240,6 +240,9 @@ def copy_transactions(
     num_threads: int = 4,
     **context: Dict[str, Any],
 ) -> None:
+    # Ensure the tables are created
+    create_tables(snowflake_connection, schema)
+
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     metadata = MetaData(bind=snowflake_engine)
 
@@ -882,7 +885,7 @@ def generate_projections(
 def create_dag() -> DAG:
     with DAG(
         "cash_flow_projection",
-        max_active_runs=5,
+        max_active_runs=10,
         schedule_interval=None,
         start_date=pendulum.datetime(
             2020, 8, 1, tzinfo=pendulum.timezone("America/Toronto")
@@ -891,13 +894,6 @@ def create_dag() -> DAG:
         default_args={"retries": 5, "retry_delay": timedelta(minutes=2)},
     ) as dag:
         dag << PythonOperator(
-            task_id="create_tables",
-            python_callable=create_tables,
-            op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_production",
-                "schema": "CORE_PRODUCTION",
-            },
-        ) >> PythonOperator(
             task_id="copy_transactions",
             python_callable=copy_transactions,
             provide_context=True,
@@ -967,7 +963,6 @@ if __name__ == "__main__":
     # Monkeypatch the AWS hack so we can set AWS creds in the environment
     hack_clear_aws_keys = lambda: None  # noqa
 
-    #     create_tables("snowflake_zetatango_production", "CORE_STAGING")
     #     copy_transactions(
     #         "snowflake_zetatango_production", "CORE_STAGING", "ario-documents-staging", 1
     #     )
