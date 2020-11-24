@@ -9,6 +9,7 @@ import sys
 import pika
 
 from airflow import DAG
+from airflow.models.dagrun import DagRun
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import Variable
@@ -199,10 +200,11 @@ def notify_subscribers(
     rabbit_url: str,
     exchange_label: str,
     topic: str,
-    **context: Dict[str, Any],
+    dag_run: DagRun,
+    **kwargs: Any,
 ) -> None:
-    if "dag_run" in context and "merchant_guid" in context["dag_run"].conf:  # type: ignore
-        merchant_guid = context["dag_run"].conf["merchant_guid"]  # type: ignore
+    if "merchant_guid" in dag_run.conf:
+        merchant_guid = dag_run.conf["merchant_guid"]
 
         logging.info(
             f"Notifying subscribers cash flow projection is complete for {merchant_guid}"
@@ -237,8 +239,9 @@ def copy_transactions(
     snowflake_connection: str,
     schema: str,
     bucket_name: str,
+    dag_run: DagRun,
     num_threads: int = 4,
-    **context: Dict[str, Any],
+    **kwargs: Any,
 ) -> None:
     # Ensure the tables are created
     create_tables(snowflake_connection, schema)
@@ -246,10 +249,10 @@ def copy_transactions(
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     metadata = MetaData(bind=snowflake_engine)
 
-    if "dag_run" in context and "raw_files" in context["dag_run"].conf:  # type: ignore
+    if "merchant_guid" in dag_run.conf and "raw_files" in dag_run.conf:
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            merchant_guid = context["dag_run"].conf["merchant_guid"]  # type: ignore
-            raw_files = context["dag_run"].conf["raw_files"]  # type: ignore
+            merchant_guid = dag_run.conf["merchant_guid"]
+            raw_files = dag_run.conf["raw_files"]
 
             logging.info(
                 f"Executing cash flow projections for merchant {merchant_guid}"
@@ -760,6 +763,7 @@ def generate_projections(
     ts_nodash: str,
     analytics_schema: str,
     zetatango_schema: str,
+    dag_run: DagRun,
     **kwargs: Any,
 ) -> None:
     metadata = MetaData()
@@ -850,6 +854,24 @@ def generate_projections(
 
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             for row in tx.execute(statement).fetchall():
+                if "account_ids" in dag_run.conf:
+                    merchant_guid = dag_run.conf["merchant_guid"]
+                    account_guids = dag_run.conf["account_ids"]
+
+                    if (
+                        row["merchant_guid"] != merchant_guid
+                        or row["account_guid"] not in account_guids
+                    ):
+                        logging.info(
+                            (
+                                f"Skipping projection calculation: "
+                                f" {row['merchant_guid']} != {merchant_guid},"
+                                f" {row['account_guid']} not in {account_guids}"
+                            )
+                        )
+
+                        continue
+
                 df = pd.DataFrame.from_dict(
                     json.loads(row["daily_cash_flow"]), orient="index"
                 )
