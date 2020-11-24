@@ -862,14 +862,6 @@ def generate_projections(
                         row["merchant_guid"] != merchant_guid
                         or row["account_guid"] not in account_guids
                     ):
-                        logging.info(
-                            (
-                                f"Skipping projection calculation: "
-                                f" {row['merchant_guid']} != {merchant_guid},"
-                                f" {row['account_guid']} not in {account_guids}"
-                            )
-                        )
-
                         continue
 
                 df = pd.DataFrame.from_dict(
@@ -907,7 +899,6 @@ def generate_projections(
 def create_dag() -> DAG:
     with DAG(
         "cash_flow_projection",
-        max_active_runs=10,
         schedule_interval=None,
         start_date=pendulum.datetime(
             2020, 8, 1, tzinfo=pendulum.timezone("America/Toronto")
@@ -946,7 +937,6 @@ def create_dag() -> DAG:
             task_id="generate_projections",
             python_callable=generate_projections,
             provide_context=True,
-            pool="cash_flow_projection_pool",
             op_kwargs={
                 "snowflake_zetatango_connection": "snowflake_zetatango_production",
                 "snowflake_analytics_connection": "airflow_production",
