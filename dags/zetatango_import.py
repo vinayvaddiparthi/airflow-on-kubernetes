@@ -248,7 +248,7 @@ def decrypt_pii_columns(
                 )
 
                 whereclause: ClauseElement = (
-                    (unknown_hashes_whereclause & spec.whereclause)
+                    and_(spec.whereclause, unknown_hashes_whereclause)
                     if spec.whereclause
                     else unknown_hashes_whereclause
                 )
