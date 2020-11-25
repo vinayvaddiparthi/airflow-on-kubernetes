@@ -31,6 +31,7 @@ from sqlalchemy import (
     union_all,
 )
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.sql import Select, ClauseElement
 
 from helpers.suspend_aws_env import SuspendAwsEnvVar
@@ -220,10 +221,6 @@ def decrypt_pii_columns(
                 f"file_format=(type=parquet)"  # nosec
             ).fetchall()
 
-            unknown_hashes_whereclause: ClauseElement = literal_column("_hash").notin_(
-                Select([literal_column("$1:_hash::varchar")], from_obj=text(dst_table))
-            )
-
             stmt = Select(
                 columns=[
                     literal_column(f"{spec.table}.$1:id::integer").label("id"),
@@ -239,10 +236,30 @@ def decrypt_pii_columns(
                     for col in spec.columns
                 ],
                 from_obj=text(f"{spec.schema}.{spec.table}"),
-                whereclause=(unknown_hashes_whereclause & spec.whereclause),
             )
 
-            dfs = pd.read_sql(stmt, con=tx, chunksize=500)
+            try:
+                unknown_hashes_whereclause: ClauseElement = literal_column(
+                    "_hash"
+                ).notin_(
+                    Select(
+                        [literal_column("$1:_hash::varchar")], from_obj=text(dst_table)
+                    )
+                )
+
+                whereclause: ClauseElement = (
+                    (unknown_hashes_whereclause & spec.whereclause)
+                    if spec.whereclause
+                    else unknown_hashes_whereclause
+                )
+                dfs = pd.read_sql(stmt.where(whereclause), con=tx, chunksize=500)
+            except ProgrammingError:
+                dfs = pd.read_sql(
+                    stmt.where(spec.whereclause) if spec.whereclause else stmt,
+                    con=tx,
+                    chunksize=500,
+                )
+
             with SuspendAwsEnvVar():
                 for df in dfs:
                     with tempfile.NamedTemporaryFile() as tempfile_:
