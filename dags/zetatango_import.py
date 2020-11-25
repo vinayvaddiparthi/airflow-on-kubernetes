@@ -249,7 +249,7 @@ def decrypt_pii_columns(
 
                 whereclause: ClauseElement = (
                     and_(spec.whereclause, unknown_hashes_whereclause)
-                    if spec.whereclause
+                    if spec.whereclause is not None
                     else unknown_hashes_whereclause
                 )
                 dfs = pd.read_sql(stmt.where(whereclause), con=tx, chunksize=500)
