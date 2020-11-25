@@ -369,15 +369,14 @@ def create_dag() -> DAG:
                         columns=[
                             "offer_results",
                             "adjudication_results",
-                            "encrypted_adjudication_results",
-                            "encrypted_notes",
+                            "notes",
                         ],
                         format="yaml",
                     ),
                     DecryptionSpec(
                         schema="CORE_PRODUCTION",
                         table="LENDING_ADJUDICATION_DECISIONS",
-                        columns=["encrypted_notes"],
+                        columns=["notes"],
                         format="yaml",
                     ),
                     DecryptionSpec(
