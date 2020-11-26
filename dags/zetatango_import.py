@@ -1,8 +1,9 @@
+import datetime
 import logging
 import tempfile
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Optional, Any, cast
+from typing import List, Optional, Any, cast, Union, Dict
 
 import attr
 import heroku3
@@ -19,6 +20,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
 import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
+from json import dumps as json_dumps
 
 from sqlalchemy import (
     text,
@@ -46,7 +48,7 @@ class DecryptionSpec:
     schema: str = attr.ib()
     table: str = attr.ib()
     columns: List[str] = attr.ib()
-    format: Optional[str] = attr.ib(default=None)
+    format: Optional[Union[List[Optional[str]], str]] = attr.ib(default=None)
     catalog: str = attr.ib(default=None)
     whereclause: Optional[ClauseElement] = attr.ib(default=None)
 
@@ -165,13 +167,20 @@ def stage_table_in_snowflake(
     return f"✔️ Successfully loaded table {table}"
 
 
+def _json_converter(o: Any) -> Union[str, int, float, bool, List, Dict, None]:
+    if isinstance(o, datetime.date):
+        return str(o)
+
+    return o
+
+
 def decrypt_pii_columns(
     snowflake_connection: str,
     decryption_specs: List[DecryptionSpec],
     target_schema: str,
 ) -> None:
     from pyporky.symmetric import SymmetricPorky
-    from json import loads as json_loads, dumps as json_dumps
+    from json import loads as json_loads
     from base64 import b64decode
     import yaml
     from rubymarshal.reader import loads as rubymarshal_loads
@@ -181,17 +190,35 @@ def decrypt_pii_columns(
         lambda loader, node: float(loader.construct_scalar(node).split(":")[1]),
     )
 
-    def _postprocess_marshal(list_: List) -> List[Any]:
-        return [(rubymarshal_loads(field) if field else None) for field in list_]
+    yaml.add_constructor(
+        "!ruby/object:ActiveSupport::TimeWithZone",
+        lambda loader, node: loader.construct_yaml_timestamp(node.value[0][1]),
+    )
 
-    def _postprocess_yaml(list_: List) -> List[str]:
-        return [
-            json_dumps(yaml.load(field) if field else None) for field in list_  # nosec
-        ]
+    def _postprocess_marshal(field: Any) -> Any:
+        return rubymarshal_loads(field) if field else None
 
-    postprocessors = {"marshal": _postprocess_marshal, "yaml": _postprocess_yaml}
+    def _postprocess_yaml(field: Any) -> Optional[str]:
+        return json_dumps(yaml.load(field)) if field else None  # nosec
 
-    def _decrypt(row: pd.Series, format: Optional[str] = None) -> List[Any]:
+    def _postprocess_passthrough(field: Any) -> Any:
+        return field if field else None
+
+    postprocessors = {
+        "marshal": _postprocess_marshal,
+        "yaml": _postprocess_yaml,
+        None: _postprocess_passthrough,
+    }
+
+    def _postprocess(list_: List, format: Union[str, List[str]]) -> List:
+        if isinstance(format, str):
+            return [postprocessors[format](field) for field in list_]
+
+        return [postprocessors[format_](field) for field, format_ in zip(list_, format)]
+
+    def _decrypt(
+        row: pd.Series, format: Optional[Union[str, List[str]]] = None
+    ) -> List[Any]:
         list_: List[Optional[bytes]] = []
         for field in row[3:]:
             if not field:
@@ -207,7 +234,7 @@ def decrypt_pii_columns(
                 )
             )
 
-        return row[0:3].tolist() + (postprocessors[format](list_) if format else list_)
+        return row[0:3].tolist() + (_postprocess(list_, format) if format else list_)
 
     engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     for spec in decryption_specs:
@@ -371,13 +398,12 @@ def create_dag() -> DAG:
                             "adjudication_results",
                             "notes",
                         ],
-                        format="yaml",
+                        format=["yaml", "yaml", None],
                     ),
                     DecryptionSpec(
                         schema="CORE_PRODUCTION",
                         table="LENDING_ADJUDICATION_DECISIONS",
                         columns=["notes"],
-                        format="yaml",
                     ),
                     DecryptionSpec(
                         schema="CORE_PRODUCTION",
@@ -617,4 +643,36 @@ def create_dag() -> DAG:
     return dag
 
 
-globals()["ztimportdag"] = create_dag()
+if __name__ == "__main__":
+    import os
+    from unittest.mock import patch
+    from snowflake.sqlalchemy import URL
+
+    with patch(
+        "dags.zetatango_import.SnowflakeHook.get_sqlalchemy_engine",
+        return_value=create_engine(
+            URL(
+                account="thinkingcapital.ca-central-1.aws",
+                user=os.environ["SNOWFLAKE_USERNAME"],
+                password=os.environ["SNOWFLAKE_PASSWORD"],
+                database="ZETATANGO",
+                warehouse="ETL",
+            )
+        ),
+    ):
+        decrypt_pii_columns(
+            "abc",
+            [
+                DecryptionSpec(
+                    schema="KYC_STAGING",
+                    table="INDIVIDUAL_ATTRIBUTES",
+                    columns=["value"],
+                    format="marshal",
+                    whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
+                )
+            ],
+            target_schema="PII_STAGING",
+        )
+
+else:
+    globals()["ztimportdag"] = create_dag()
