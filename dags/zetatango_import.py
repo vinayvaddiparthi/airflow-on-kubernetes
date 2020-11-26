@@ -280,12 +280,25 @@ def decrypt_pii_columns(
                     else unknown_hashes_whereclause
                 )
                 dfs = pd.read_sql(stmt.where(whereclause), con=tx, chunksize=500)
+
+                select_froms: List[Select] = [
+                    Select(
+                        [literal_column("$1").label("fields")],
+                        from_obj=text(f"@{target_schema}.{dst_stage}"),
+                    ),
+                    Select(
+                        [literal_column("$1").label("fields")],
+                        from_obj=text(dst_table),
+                    ),
+                ]
             except ProgrammingError:
                 dfs = pd.read_sql(
                     stmt.where(spec.whereclause) if spec.whereclause else stmt,
                     con=tx,
                     chunksize=500,
                 )
+
+                select_froms = select_froms[:1]
 
             with SuspendAwsEnvVar():
                 for df in dfs:
@@ -304,19 +317,9 @@ def decrypt_pii_columns(
                                 f"put file://{tempfile_.name} @{target_schema}.{dst_stage}"
                             )
                         ).fetchall()
-
             stmt = Select(
                 [literal_column("*")],
-                from_obj=union_all(
-                    Select(
-                        [literal_column("$1").label("fields")],
-                        from_obj=text(f"@{target_schema}.{dst_stage}"),
-                    ),
-                    Select(
-                        [literal_column("$1").label("fields")],
-                        from_obj=text(dst_table),
-                    ),
-                ),
+                from_obj=union_all(*select_froms),
             )
 
             tx.execute(
