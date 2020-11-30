@@ -341,6 +341,7 @@ def create_dag() -> DAG:
         default_args={"retries": 10, "retry_delay": timedelta(minutes=5)},
         catchup=False,
         on_failure_callback=slack_dag("slack_data_alerts"),
+        max_active_runs=1,
     ) as dag:
         import_core_prod = PythonOperator(
             task_id="zt-production-elt-core__import",
