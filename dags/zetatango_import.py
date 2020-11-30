@@ -354,7 +354,6 @@ def create_dag() -> DAG:
             executor_config={
                 "resources": {
                     "requests": {"memory": "2Gi"},
-                    "limits": {"memory": "2Gi"},
                 },
             },
         )
@@ -370,7 +369,6 @@ def create_dag() -> DAG:
             executor_config={
                 "resources": {
                     "requests": {"memory": "2Gi"},
-                    "limits": {"memory": "2Gi"},
                 },
             },
         )
@@ -426,7 +424,6 @@ def create_dag() -> DAG:
                 },
                 "resources": {
                     "requests": {"memory": "2Gi"},
-                    "limits": {"memory": "2Gi"},
                 },
             },
         )
@@ -472,7 +469,6 @@ def create_dag() -> DAG:
                     },
                     "resources": {
                         "requests": {"memory": "2Gi"},
-                        "limits": {"memory": "2Gi"},
                     },
                 }
             },
@@ -490,7 +486,6 @@ def create_dag() -> DAG:
             executor_config={
                 "resources": {
                     "requests": {"memory": "2Gi"},
-                    "limits": {"memory": "2Gi"},
                 },
             },
         )
@@ -506,7 +501,6 @@ def create_dag() -> DAG:
             executor_config={
                 "resources": {
                     "requests": {"memory": "2Gi"},
-                    "limits": {"memory": "2Gi"},
                 },
             },
         )
@@ -523,7 +517,6 @@ def create_dag() -> DAG:
             executor_config={
                 "resources": {
                     "requests": {"memory": "2Gi"},
-                    "limits": {"memory": "2Gi"},
                 },
             },
         )
@@ -539,7 +532,6 @@ def create_dag() -> DAG:
             executor_config={
                 "resources": {
                     "requests": {"memory": "2Gi"},
-                    "limits": {"memory": "2Gi"},
                 },
             },
         )
@@ -581,7 +573,6 @@ def create_dag() -> DAG:
                 },
                 "resources": {
                     "requests": {"memory": "2Gi"},
-                    "limits": {"memory": "2Gi"},
                 },
             },
         )
@@ -612,7 +603,6 @@ def create_dag() -> DAG:
                     },
                     "resources": {
                         "requests": {"memory": "2Gi"},
-                        "limits": {"memory": "2Gi"},
                     },
                 }
             },
