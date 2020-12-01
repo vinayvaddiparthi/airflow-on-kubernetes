@@ -899,6 +899,7 @@ def generate_projections(
 def create_dag() -> DAG:
     with DAG(
         "cash_flow_projection",
+        max_active_runs=10,
         schedule_interval=None,
         start_date=pendulum.datetime(
             2020, 8, 1, tzinfo=pendulum.timezone("America/Toronto")
