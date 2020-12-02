@@ -10,7 +10,6 @@ pylint
 apache-airflow[crypto,postgres,ssh,kubernetes,s3,snowflake]==1.10.11
 flask-bcrypt  # required by airflow
 fab-oidc
-pyarrow[pandas]<0.18.0
 salesforce-bulk
 zeep
 snowflake-sqlalchemy
@@ -18,7 +17,6 @@ rubymarshal
 PyYAML
 PyNaCl
 pyhive
-requests<2.24
 requests-oauthlib
 authlib
 python-slugify
@@ -35,3 +33,7 @@ heroku3
 pytz
 google-api-python-client
 fs.sshfs
+
+pyarrow[pandas]<0.18.0  # pinned because of snowflake connector
+requests<2.24  # pinned because of snowflake connector
+boto3<1.16  # pinned because of snowflake connector
