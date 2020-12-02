@@ -265,6 +265,17 @@ def decrypt_pii_columns(
                 from_obj=text(f"{spec.schema}.{spec.table}"),
             )
 
+            select_froms: List[Select] = [
+                Select(
+                    [literal_column("$1").label("fields")],
+                    from_obj=text(f"@{target_schema}.{dst_stage}"),
+                ),
+                Select(
+                    [literal_column("$1").label("fields")],
+                    from_obj=text(dst_table),
+                ),
+            ]
+
             try:
                 unknown_hashes_whereclause: ClauseElement = literal_column(
                     "_hash"
@@ -280,17 +291,6 @@ def decrypt_pii_columns(
                     else unknown_hashes_whereclause
                 )
                 dfs = pd.read_sql(stmt.where(whereclause), con=tx, chunksize=500)
-
-                select_froms: List[Select] = [
-                    Select(
-                        [literal_column("$1").label("fields")],
-                        from_obj=text(f"@{target_schema}.{dst_stage}"),
-                    ),
-                    Select(
-                        [literal_column("$1").label("fields")],
-                        from_obj=text(dst_table),
-                    ),
-                ]
             except ProgrammingError:
                 dfs = pd.read_sql(
                     stmt.where(spec.whereclause)
@@ -300,7 +300,7 @@ def decrypt_pii_columns(
                     chunksize=500,
                 )
 
-                select_froms = select_froms[:1]
+                select_froms = select_froms[:1]  # don't union if table doesn't exist.
 
             with SuspendAwsEnvVar():
                 for df in dfs:
