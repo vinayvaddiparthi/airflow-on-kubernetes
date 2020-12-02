@@ -218,8 +218,9 @@ def create_dag(bucket: str, folder: str) -> DAG:
                 "folder": folder,
             },
             executor_config={
-                "KubernetesExecutor": {
-                    "request_memory": "512Mi",
+                "resources": {
+                    "requests": {"memory": "512Mi"},
+                    "limits": {"memory": "1Gi"},
                 },
             },
             execution_timeout=timedelta(hours=3),

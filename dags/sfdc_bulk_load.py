@@ -369,8 +369,8 @@ def create_dag(instances: List[str]) -> DAG:
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
                 executor_config={
-                    "KubernetesExecutor": {
-                        "request_memory": "8Gi",
+                    "resources": {
+                        "requests": {"memory": "8Gi"},
                     },
                 },
             )
