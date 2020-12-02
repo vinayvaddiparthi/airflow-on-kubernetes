@@ -38,7 +38,7 @@ local params = import "params.libsonnet";
           {
             name: "airflow",
             image: params.image.repo + ":" + params.image.tag,
-            command: ["bash", "-c", "airflow initdb && airflow scheduler"],
+            command: ["bash", "-c", "airflow scheduler"],
             resources: {
               requests: {
                 cpu: "2",
