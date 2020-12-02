@@ -34,6 +34,8 @@ pytz
 google-api-python-client
 fs.sshfs
 
+fastparquet
+
 pyarrow[pandas]<0.18.0  # pinned because of snowflake connector
 requests<2.24  # pinned because of snowflake connector
 boto3<1.16  # pinned because of snowflake connector
