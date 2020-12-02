@@ -14,6 +14,7 @@ pylint = "*"
 [packages]
 apache-airflow = {extras=["crypto","postgres","ssh","kubernetes","s3","snowflake"], version = "==1.10.13"}
 flask-bcrypt = "*"
+fab-oidc = "*"
 pyarrow = "*"
 salesforce-bulk = "*"
 zeep = "*"
