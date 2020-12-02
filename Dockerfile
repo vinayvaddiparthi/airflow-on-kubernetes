@@ -5,9 +5,7 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV TERM linux
 
 # Airflow
-ARG AIRFLOW_VERSION=1.10.11
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
-ARG AIRFLOW_DEPS="kubernetes,s3,snowflake"
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
 
 # Define en_US.
@@ -19,8 +17,10 @@ ENV LC_MESSAGES en_US.UTF-8
 
 COPY requirements.txt .
 
+ENV AIRFLOW_GPL_UNIDECODE=yes
+
 RUN set -ex \
-    && buildDeps=' \
+       buildDeps=' \
         freetds-dev \
         libkrb5-dev \
         libsasl2-dev \
@@ -48,13 +48,7 @@ RUN set -ex \
     && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
     && useradd -ms /bin/bash -d ${AIRFLOW_USER_HOME} airflow \
     && pip install -U pip setuptools wheel \
-    && pip install pytz \
-    && pip install pyOpenSSL \
-    && pip install ndg-httpsclient \
-    && pip install pyasn1 \
-    && pip install apache-airflow[crypto,postgres,hive,jdbc,mysql,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}] \
-    && if [ -n "${PYTHON_DEPS}" ]; then pip install ${PYTHON_DEPS}; fi \
-    && pip install -r requirements.txt \
+    && pip install -r requirements.txt --use-deprecated=legacy-resolver \
     && apt-get purge --auto-remove -yqq $buildDeps \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \

@@ -13,6 +13,7 @@ variables:
   DOCKER_REPOSITORY: ${DOCKER_REPOSITORY_BASE_URI}/tc-data/airflow
   DOCKER_IMAGE_TAG: gitlab-${CI_PIPELINE_ID}
   APP_NAME: "airflow"
+  AIRFLOW_GPL_UNIDECODE: "yes"
 
 black:
   stage: pre-test
@@ -29,7 +30,8 @@ mypy:
     - k8s
   image: python:${PYTHON_VERSION}
   script:
-    - pip install -r requirements.txt && pip install pytest-mypy
+    - pip install -r requirements.txt --use-deprecated=legacy-resolver
+    - pip install pytest-mypy
     - pytest --mypy --junit-xml=mypy.xml dags
   artifacts:
     when: always
@@ -45,7 +47,8 @@ flakes:
     - k8s
   image: python:${PYTHON_VERSION}
   script:
-    - pip install -r requirements.txt && pip install pytest-flakes
+    - pip install -r requirements.txt --use-deprecated=legacy-resolver
+    - pip install pytest-flakes
     - pytest --flakes --junitxml=flakes.xml --ignore=legacy_tests dags
   artifacts:
     when: always
@@ -61,7 +64,8 @@ test:
     - docker
   image: python:${PYTHON_VERSION}
   script:
-    - pip install -r requirements.txt && pip install pytest-cov
+    - pip install -r requirements.txt --use-deprecated=legacy-resolver
+    - pip install pytest-cov
     - python -m pytest --ignore=legacy_tests/ --cov=. --cov-report=xml:cov.xml --cov-report=term --junitxml=pytest.xml
   artifacts:
     when: always
