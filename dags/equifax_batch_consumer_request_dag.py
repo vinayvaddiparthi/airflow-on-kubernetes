@@ -265,11 +265,14 @@ def create_dag(bucket: str, folder: str) -> DAG:
             },
             executor_config={
                 "KubernetesExecutor": {
-                    "request_memory": "512Mi",
                     "annotations": {
                         "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                         "KubernetesAirflowProductionZetatangoPiiRole"
-                    },
+                    }
+                },
+                "resources": {
+                    "requests": {"memory": "512Mi"},
+                    "limits": {"memory": "1Gi"},
                 },
             },
             execution_timeout=timedelta(hours=3),
