@@ -353,8 +353,8 @@ def create_dag() -> DAG:
                 "snowflake_schema": "CORE_PRODUCTION",
             },
             executor_config={
-                "resources": {
-                    "requests": {"memory": "2Gi"},
+                "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                 },
             },
         )
@@ -368,8 +368,8 @@ def create_dag() -> DAG:
                 "snowflake_schema": "CORE_STAGING",
             },
             executor_config={
-                "resources": {
-                    "requests": {"memory": "2Gi"},
+                "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                 },
             },
         )
@@ -418,13 +418,11 @@ def create_dag() -> DAG:
             },
             executor_config={
                 "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                     "annotations": {
                         "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                         "KubernetesAirflowProductionZetatangoPiiRole"
-                    }
-                },
-                "resources": {
-                    "requests": {"memory": "2Gi"},
+                    },
                 },
             },
         )
@@ -464,12 +462,10 @@ def create_dag() -> DAG:
             },
             executor_config={
                 "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                     "annotations": {
                         "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                         "KubernetesAirflowNonProdZetatangoPiiRole"
-                    },
-                    "resources": {
-                        "requests": {"memory": "2Gi"},
                     },
                 }
             },
@@ -485,8 +481,8 @@ def create_dag() -> DAG:
                 "snowflake_schema": "IDP_PRODUCTION",
             },
             executor_config={
-                "resources": {
-                    "requests": {"memory": "2Gi"},
+                "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                 },
             },
         )
@@ -500,8 +496,8 @@ def create_dag() -> DAG:
                 "snowflake_schema": "IDP_STAGING",
             },
             executor_config={
-                "resources": {
-                    "requests": {"memory": "2Gi"},
+                "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                 },
             },
         )
@@ -516,8 +512,8 @@ def create_dag() -> DAG:
                 "snowflake_schema": "KYC_PRODUCTION",
             },
             executor_config={
-                "resources": {
-                    "requests": {"memory": "2Gi"},
+                "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                 },
             },
         )
@@ -531,8 +527,8 @@ def create_dag() -> DAG:
                 "snowflake_schema": "KYC_STAGING",
             },
             executor_config={
-                "resources": {
-                    "requests": {"memory": "2Gi"},
+                "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                 },
             },
         )
@@ -567,13 +563,11 @@ def create_dag() -> DAG:
             },
             executor_config={
                 "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                     "annotations": {
                         "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                         "KubernetesAirflowProductionZetatangoPiiRole"
-                    }
-                },
-                "resources": {
-                    "requests": {"memory": "2Gi"},
+                    },
                 },
             },
         )
@@ -598,12 +592,10 @@ def create_dag() -> DAG:
             },
             executor_config={
                 "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                     "annotations": {
                         "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                         "KubernetesAirflowNonProdZetatangoPiiRole"
-                    },
-                    "resources": {
-                        "requests": {"memory": "2Gi"},
                     },
                 }
             },

@@ -207,13 +207,11 @@ def create_dag() -> DAG:
             retries=10,
             executor_config={
                 "KubernetesExecutor": {
+                    "request_memory": "2Gi",
                     "annotations": {
                         "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
                         "KubernetesAirflowProductionTalkdeskRole"
                     },
-                },
-                "resources": {
-                    "requests": {"memory": "512Mi"},
                 },
             },
         )
