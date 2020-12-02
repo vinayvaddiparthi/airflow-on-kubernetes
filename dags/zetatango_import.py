@@ -293,7 +293,9 @@ def decrypt_pii_columns(
                 ]
             except ProgrammingError:
                 dfs = pd.read_sql(
-                    stmt.where(spec.whereclause) if spec.whereclause else stmt,
+                    stmt.where(spec.whereclause)
+                    if spec.whereclause is not None
+                    else stmt,
                     con=tx,
                     chunksize=500,
                 )
