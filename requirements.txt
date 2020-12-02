@@ -10,16 +10,15 @@ pylint
 apache-airflow[crypto,postgres,ssh,kubernetes,s3,snowflake]==1.10.11
 flask-bcrypt  # required by airflow
 fab-oidc
-pyarrow
+pyarrow[pandas]<0.18.0
 salesforce-bulk
 zeep
-snowflake-connector-python
 snowflake-sqlalchemy
 rubymarshal
 PyYAML
 PyNaCl
 pyhive
-requests==2.24
+requests<2.24
 requests-oauthlib
 authlib
 python-slugify
