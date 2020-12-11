@@ -285,7 +285,7 @@ with DAG(
                     f"when matched then delete"
                 )
                 result = tx.execute(
-                    f"insert into {dest_db}.{dest_schema}.{table} select * from {dest_db}.{dest_schema}.{table}_stage"
+                    f"insert into {dest_db}.{dest_schema}.{table} select * from {dest_db}.{dest_schema}.{table}_stage"  # nosec
                 ).fetchall()
                 tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
             else:

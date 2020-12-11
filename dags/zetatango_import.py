@@ -415,6 +415,11 @@ def create_dag() -> DAG:
                         columns=["value"],
                         whereclause=literal_column("$1:key").in_(["external_id"]),
                     ),
+                    DecryptionSpec(
+                        schema="CORE_PRODUCTION",
+                        table="QUICKBOOKS_ACCOUNTING_TRANSACTIONS",
+                        columns=["account"],
+                    ),
                 ],
                 "target_schema": "PII_PRODUCTION",
             },
@@ -460,6 +465,11 @@ def create_dag() -> DAG:
                         table="LENDING_LOAN_ATTRIBUTES",
                         columns=["value"],
                         whereclause=literal_column("$1:key").in_(["external_id"]),
+                    ),
+                    DecryptionSpec(
+                        schema="CORE_STAGING",
+                        table="QUICKBOOKS_ACCOUNTING_TRANSACTIONS",
+                        columns=["account"],
                     ),
                 ],
                 "target_schema": "PII_STAGING",

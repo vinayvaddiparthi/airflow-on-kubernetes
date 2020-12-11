@@ -1601,7 +1601,7 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
 
 def fix_date_format() -> None:
     with _get_snowflake() as sfh:
-        select = f"SELECT * FROM {table_name_raw}"
+        select = f"SELECT * FROM {table_name_raw}"  # nosec
         result = sfh.execute(select)
 
         df = pd.DataFrame(result.cursor.fetchall())
