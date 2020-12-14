@@ -403,7 +403,7 @@ def create_dag() -> DAG:
                     DecryptionSpec(
                         schema="CORE_PRODUCTION",
                         table="QUICKBOOKS_ACCOUNTING_TRANSACTIONS",
-                        columns=["account"],
+                        columns=["account", "split"],
                     ),
                 ],
                 "target_schema": "PII_PRODUCTION",
