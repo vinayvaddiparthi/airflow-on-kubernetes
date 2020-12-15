@@ -33,6 +33,7 @@ heroku3
 pytz
 google-api-python-client
 fs.sshfs
+python-gnupg
 
 fastparquet
 
