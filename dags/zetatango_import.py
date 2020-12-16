@@ -376,6 +376,8 @@ def create_dag() -> DAG:
                                 "industry",
                                 "bank_connection_required",
                                 "selected_bank_account",
+                                "manual_sic_code",
+                                "manual_business_online",
                             ]
                         ),
                     ),
