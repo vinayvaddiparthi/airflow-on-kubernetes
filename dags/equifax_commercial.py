@@ -1,20 +1,26 @@
 import datetime
+import logging
 import os
 from io import BytesIO
 
 from pathlib import Path
-from typing import Tuple, IO, List
+from typing import Tuple, IO, List, Any
 from unittest.mock import patch, MagicMock
 
 import pendulum
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from fs.sshfs import SSHFS
 from fs.tools import copy_file_data
 from fs_s3fs import S3FS
+
+import pyarrow.csv as pv, pyarrow.parquet as pq
+from pyarrow._csv import ReadOptions
+from pyarrow.lib import ArrowInvalid
 
 from helpers.suspend_aws_env import SuspendAwsEnvVar
 
@@ -106,6 +112,53 @@ def decrypt_received_files(aws_conn: str) -> None:
                 copy_file_data(decrypted, decrypted_file)
 
 
+def decode_decrypted_files(
+    aws_conn: str, ds_nodash: str, run_id: str, **kwargs: Any
+) -> None:
+    with SuspendAwsEnvVar():
+        s3fs = _get_s3fs_from_conn(aws_conn)
+
+        for file in (
+            file
+            for file in s3fs.listdir("decrypted")
+            if f"{file[:-4]}.parquet" not in set(s3fs.listdir("parquet"))
+        ):
+            with s3fs.open(f"decrypted/{file}", "rb") as decrypted_file, s3fs.open(
+                f"parquet/{file[:-4]}.parquet", "wb"
+            ) as parquet_file:
+                try:
+                    table_ = (
+                        pv.read_csv(
+                            f"{decrypted_file}",
+                            read_options=ReadOptions(block_size=8388608),
+                        )
+                        .append_column("ds", ds_nodash)
+                        .append_column("run_id", run_id)
+                    )
+
+                except ArrowInvalid as exc:
+                    logging.error(f"❌ Failed to read file {decrypted_file}: {exc}")
+
+                if table_.num_rows == 0:
+                    logging.warning(f"📝️ Skipping empty file {decrypted_file}")
+
+                pq.write_table(table_, f"{parquet_file}")
+
+                logging.info(f"📝️ Converted file {decrypted_file}")
+
+
+def create_table_from_stage(snowflake_conn: str, schema: str, stage: str) -> None:
+    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
+    qualified_table = f"{schema}.{stage}"
+
+    with engine.begin() as tx:
+        stmt = "select $1 as fields from @{qualified_table}"
+
+        tx.execute(
+            f"create or replace transient table {qualified_table} as {stmt}"  # nosec
+        ).fetchall()
+
+
 def encrypt(fd: IO[bytes]) -> IO[bytes]:
     gpg = _init_gnupg()
     encrypted_message = gpg.encrypt_file(fd, "sts@equifax.com", always_trust=True)
@@ -142,6 +195,27 @@ def create_dags() -> Tuple[DAG, DAG]:
             python_callable=decrypt_received_files,
             op_kwargs={
                 "aws_conn": "s3_equifax_commercial",
+            },
+            retry_delay=datetime.timedelta(hours=1),
+            retries=3,
+            executor_config=EXECUTOR_CONFIG,
+        ) >> PythonOperator(
+            task_id="convert_to_parquet",
+            python_callable=decode_decrypted_files,
+            op_kwargs={
+                "aws_conn": "s3_equifax_commercial",
+            },
+            provide_context=True,
+            retry_delay=datetime.timedelta(hours=1),
+            retries=3,
+            executor_config=EXECUTOR_CONFIG,
+        ) >> PythonOperator(
+            task_id="create_table_from_stage",
+            python_callable=create_table_from_stage,
+            op_kwargs={
+                "snowflake_conn": "airflow_production",
+                "schema": "production",
+                "stage": "equifax_commercial_inbox",
             },
             retry_delay=datetime.timedelta(hours=1),
             retries=3,
