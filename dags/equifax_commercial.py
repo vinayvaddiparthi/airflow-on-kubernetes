@@ -127,24 +127,21 @@ def decode_decrypted_files(
                 f"parquet/{file[:-9]}.parquet", "wb"
             ) as parquet_file:
                 try:
-                    table_ = (
-                        pv.read_csv(
-                            f"{decrypted_file}",
-                            read_options=ReadOptions(block_size=8388608),
-                        )
-                        .append_column("ds", ds_nodash)
-                        .append_column("run_id", run_id)
+                    table_ = pv.read_csv(
+                        decrypted_file,
+                        read_options=ReadOptions(block_size=8388608),
                     )
 
+                    if table_.num_rows == 0:
+                        logging.warning(f"📝️ Skipping empty file {decrypted_file}")
+                        continue
+
+                    pq.write_table(table_, parquet_file)
+
                 except ArrowInvalid as exc:
-                    logging.error(f"❌ Failed to read file {decrypted_file}: {exc}")
+                    logging.error(f"❌ Failed to read file {decrypted_file.name}: {exc}")
 
-                if table_.num_rows == 0:
-                    logging.warning(f"📝️ Skipping empty file {decrypted_file}")
-
-                pq.write_table(table_, f"{parquet_file}")
-
-                logging.info(f"📝️ Converted file {decrypted_file}")
+                logging.info(f"📝️ Converted file {decrypted_file.name}")
 
 
 def create_table_from_stage(snowflake_conn: str, schema: str, stage: str) -> None:
@@ -270,6 +267,10 @@ if __name__ == "__main__":
     ):
         sync_s3fs_to_sshfs("aws_conn", "ssh_conn")
         sync_sshfs_to_s3fs("aws_conn", "ssh_conn")
+        decrypt_received_files("aws_conn")
+        decode_decrypted_files(
+            "aws_conn", ds_nodash="20201222", run_id="manual_local_test"
+        )
 else:
     inbox_dag, outbox_dag = create_dags()
     globals()["inbox_dag"] = inbox_dag
