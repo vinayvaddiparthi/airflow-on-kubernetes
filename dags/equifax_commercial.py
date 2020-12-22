@@ -1,20 +1,27 @@
 import datetime
+import logging
 import os
 from io import BytesIO
 
 from pathlib import Path
-from typing import Tuple, IO, List
+from typing import Tuple, IO, List, Any
 from unittest.mock import patch, MagicMock
 
 import pendulum
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from fs.sshfs import SSHFS
 from fs.tools import copy_file_data
 from fs_s3fs import S3FS
+
+import pyarrow.csv as pv, pyarrow.parquet as pq
+from pendulum import Pendulum
+from pyarrow._csv import ReadOptions
+from pyarrow.lib import ArrowInvalid, array
 
 from helpers.suspend_aws_env import SuspendAwsEnvVar
 
@@ -106,6 +113,55 @@ def decrypt_received_files(aws_conn: str) -> None:
                 copy_file_data(decrypted, decrypted_file)
 
 
+def decode_decrypted_files(
+    aws_conn: str, execution_date: Pendulum, run_id: str, **kwargs: Any
+) -> None:
+    with SuspendAwsEnvVar():
+        s3fs = _get_s3fs_from_conn(aws_conn)
+
+        for file in (
+            file
+            for file in s3fs.listdir("decrypted")
+            if f"{file[:-9]}.parquet" not in set(s3fs.listdir("parquet"))
+        ):
+            with s3fs.open(f"decrypted/{file}", "rb") as decrypted_file, s3fs.open(
+                f"parquet/{file[:-9]}.parquet", "wb"
+            ) as parquet_file:
+                try:
+                    table_ = pv.read_csv(
+                        decrypted_file,
+                        read_options=ReadOptions(block_size=8388608),
+                    )
+
+                    table_ = table_.append_column(
+                        "__execution_date",
+                        array([execution_date.to_iso8601_string()] * len(table_)),
+                    ).append_column("__run_id", array([run_id] * len(table_)))
+
+                    if table_.num_rows == 0:
+                        logging.warning(f"📝️ Skipping empty file {decrypted_file}")
+                        continue
+
+                    pq.write_table(table_, parquet_file)
+
+                except ArrowInvalid as exc:
+                    logging.error(f"❌ Failed to read file {decrypted_file.name}: {exc}")
+
+                logging.info(f"📝️ Converted file {decrypted_file.name}")
+
+
+def create_table_from_stage(snowflake_conn: str, schema: str, stage: str) -> None:
+    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
+    qualified_table = f"{schema}.{stage}"
+
+    with engine.begin() as tx:
+        stmt = "select $1 as fields from @{qualified_table}"
+
+        tx.execute(
+            f"create or replace transient table {qualified_table} as {stmt}"  # nosec
+        ).fetchall()
+
+
 def encrypt(fd: IO[bytes]) -> IO[bytes]:
     gpg = _init_gnupg()
     encrypted_message = gpg.encrypt_file(fd, "sts@equifax.com", always_trust=True)
@@ -142,6 +198,27 @@ def create_dags() -> Tuple[DAG, DAG]:
             python_callable=decrypt_received_files,
             op_kwargs={
                 "aws_conn": "s3_equifax_commercial",
+            },
+            retry_delay=datetime.timedelta(hours=1),
+            retries=3,
+            executor_config=EXECUTOR_CONFIG,
+        ) >> PythonOperator(
+            task_id="convert_to_parquet",
+            python_callable=decode_decrypted_files,
+            op_kwargs={
+                "aws_conn": "s3_equifax_commercial",
+            },
+            provide_context=True,
+            retry_delay=datetime.timedelta(hours=1),
+            retries=3,
+            executor_config=EXECUTOR_CONFIG,
+        ) >> PythonOperator(
+            task_id="create_table_from_stage",
+            python_callable=create_table_from_stage,
+            op_kwargs={
+                "snowflake_conn": "airflow_production",
+                "schema": "production",
+                "stage": "equifax_commercial_inbox",
             },
             retry_delay=datetime.timedelta(hours=1),
             retries=3,
@@ -196,6 +273,10 @@ if __name__ == "__main__":
     ):
         sync_s3fs_to_sshfs("aws_conn", "ssh_conn")
         sync_sshfs_to_s3fs("aws_conn", "ssh_conn")
+        decrypt_received_files("aws_conn")
+        decode_decrypted_files(
+            "aws_conn", execution_date=Pendulum.now(), run_id="manual_local_test"
+        )
 else:
     inbox_dag, outbox_dag = create_dags()
     globals()["inbox_dag"] = inbox_dag
