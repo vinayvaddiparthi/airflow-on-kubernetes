@@ -134,7 +134,8 @@ def decode_decrypted_files(
                     )
 
                     table_ = table_.append_column(
-                        "__execution_date", array([execution_date.to_iso8601_string()] * len(table_))
+                        "__execution_date",
+                        array([execution_date.to_iso8601_string()] * len(table_)),
                     ).append_column("__run_id", array([run_id] * len(table_)))
 
                     if table_.num_rows == 0:
