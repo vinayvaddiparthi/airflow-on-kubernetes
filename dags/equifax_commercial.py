@@ -19,6 +19,7 @@ from fs.tools import copy_file_data
 from fs_s3fs import S3FS
 
 import pyarrow.csv as pv, pyarrow.parquet as pq
+from pendulum import Pendulum
 from pyarrow._csv import ReadOptions
 from pyarrow.lib import ArrowInvalid, array
 
@@ -113,7 +114,7 @@ def decrypt_received_files(aws_conn: str) -> None:
 
 
 def decode_decrypted_files(
-    aws_conn: str, ds_nodash: str, run_id: str, **kwargs: Any
+    aws_conn: str, execution_date: Pendulum, run_id: str, **kwargs: Any
 ) -> None:
     with SuspendAwsEnvVar():
         s3fs = _get_s3fs_from_conn(aws_conn)
@@ -133,8 +134,8 @@ def decode_decrypted_files(
                     )
 
                     table_ = table_.append_column(
-                        "ds", array([ds_nodash] * len(table_))
-                    ).append_column("run_id", array([run_id] * len(table_)))
+                        "__execution_date", array([execution_date] * len(table_))
+                    ).append_column("__run_id", array([run_id] * len(table_)))
 
                     if table_.num_rows == 0:
                         logging.warning(f"📝️ Skipping empty file {decrypted_file}")
@@ -273,7 +274,7 @@ if __name__ == "__main__":
         sync_sshfs_to_s3fs("aws_conn", "ssh_conn")
         decrypt_received_files("aws_conn")
         decode_decrypted_files(
-            "aws_conn", ds_nodash="20201222", run_id="manual_local_test"
+            "aws_conn", execution_date=Pendulum.now(), run_id="manual_local_test"
         )
 else:
     inbox_dag, outbox_dag = create_dags()
