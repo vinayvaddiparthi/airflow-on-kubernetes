@@ -20,7 +20,7 @@ from fs_s3fs import S3FS
 
 import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ReadOptions
-from pyarrow.lib import ArrowInvalid
+from pyarrow.lib import ArrowInvalid, array
 
 from helpers.suspend_aws_env import SuspendAwsEnvVar
 
@@ -127,9 +127,13 @@ def decode_decrypted_files(
                 f"parquet/{file[:-9]}.parquet", "wb"
             ) as parquet_file:
                 try:
-                    table_ = pv.read_csv(
-                        decrypted_file,
-                        read_options=ReadOptions(block_size=8388608),
+                    table_ = (
+                        pv.read_csv(
+                            decrypted_file,
+                            read_options=ReadOptions(block_size=8388608),
+                        )
+                        .append_column("ds", array([ds_nodash] * len(table_)))
+                        .append_column("run_id", array([run_id] * len(table_)))
                     )
 
                     if table_.num_rows == 0:
