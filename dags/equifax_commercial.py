@@ -127,14 +127,14 @@ def decode_decrypted_files(
                 f"parquet/{file[:-9]}.parquet", "wb"
             ) as parquet_file:
                 try:
-                    table_ = (
-                        pv.read_csv(
-                            decrypted_file,
-                            read_options=ReadOptions(block_size=8388608),
-                        )
-                        .append_column("ds", array([ds_nodash] * len(table_)))
-                        .append_column("run_id", array([run_id] * len(table_)))
+                    table_ = pv.read_csv(
+                        decrypted_file,
+                        read_options=ReadOptions(block_size=8388608),
                     )
+
+                    table_ = table_.append_column(
+                        "ds", array([ds_nodash] * len(table_))
+                    ).append_column("run_id", array([run_id] * len(table_)))
 
                     if table_.num_rows == 0:
                         logging.warning(f"📝️ Skipping empty file {decrypted_file}")
