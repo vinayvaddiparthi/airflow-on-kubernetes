@@ -18,140 +18,99 @@ from utils.failure_callbacks import slack_ti
 VIEW_ID = "102376443"
 ROW_LIMIT = 10000
 
-reports = {
-    "audiance": {
-        "reportRequests": [
-            {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    # acquisition
-                    {"expression": "ga:newUsers"},
-                    {"expression": "ga:sessions"},
-                ],
-                "dimensions": [
-                    {"name": "ga:sessionCount"},
-                    {"name": "ga:country"},
-                    {"name": "ga:city"},
-                    {"name": "ga:browser"},
-                    {"name": "ga:dateHourMinute"},
-                    {"name": "ga:dimension5"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
+reports: Dict[str, Any] = {
+    "usr": {
+        "payload": {
+            "reportRequests": [
+                {
+                    "viewId": VIEW_ID,
+                    "dateRanges": [{"startDate": None, "endDate": None}],
+                    "metrics": [
+                        {"expression": "ga:sessions"},
+                    ],
+                    "dimensions": [
+                        {"name": "ga:dimension6"},
+                        {"name": "ga:dimension5"},
+                    ],
+                    "pageToken": "0",
+                    "pageSize": ROW_LIMIT,
+                }
+            ]
+        }
+    },
+    "ad_cost": {
+        "payload": {
+            "reportRequests": [
+                {
+                    "viewId": VIEW_ID,
+                    "dateRanges": [{"startDate": None, "endDate": None}],
+                    "metrics": [
+                        {"expression": "ga:adClicks"},
+                        {"expression": "ga:adCost"},
+                    ],
+                    "dimensions": [
+                        {"name": "ga:date"},
+                        {"name": "ga:adwordsCampaignID"},
+                        {"name": "ga:campaign"},
+                    ],
+                    "pageToken": "0",
+                    "pageSize": ROW_LIMIT,
+                }
+            ]
+        }
     },
     "cx": {
-        "reportRequests": [
-            {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    {"expression": "ga:newUsers"},
-                    {"expression": "ga:sessions"},
-                    {"expression": "ga:totalEvents"},
-                    {"expression": "ga:uniqueEvents"},
-                    {"expression": "ga:timeOnPage"},
-                ],
-                "dimensions": [
-                    {"name": "ga:landingPagePath"},
-                    {"name": "ga:secondPagePath"},
-                    {"name": "ga:eventCategory"},
-                    {"name": "ga:eventAction"},
-                    {"name": "ga:hostname"},
-                    {"name": "ga:pagePath"},
-                    {"name": "ga:dateHourMinute"},
-                    {"name": "ga:dimension5"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
+        "primary_keys": [
+            "fields:dimension6::string",
+            "fields:eventAction::string",
+            "fields:dateHourMinute::string",
+        ],
+        "payload": {
+            "reportRequests": [
+                {
+                    "viewId": VIEW_ID,
+                    "dateRanges": [{"startDate": None, "endDate": None}],
+                    "metrics": [
+                        {"expression": "ga:users"},
+                    ],
+                    "dimensions": [
+                        {"name": "ga:dimension6"},
+                        {"name": "ga:hostname"},
+                        {"name": "ga:pagePath"},
+                        {"name": "ga:eventAction"},
+                        {"name": "ga:date"},
+                        {"name": "ga:dateHourMinute"},
+                        {"name": "ga:eventCategory"},
+                    ],
+                    "pageToken": "0",
+                    "pageSize": ROW_LIMIT,
+                }
+            ]
+        },
     },
     "acquisition": {
-        "reportRequests": [
-            {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    {"expression": "ga:newUsers"},
-                    {"expression": "ga:sessions"},
-                ],
-                "dimensions": [
-                    {"name": "ga:channelGrouping"},
-                    {"name": "ga:fullReferrer"},
-                    {"name": "ga:campaign"},
-                    {"name": "ga:sourceMedium"},
-                    {"name": "ga:hostname"},
-                    {"name": "ga:pagePath"},
-                    {"name": "ga:dateHourMinute"},
-                    {"name": "ga:dimension5"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
-    },
-    "usr": {
-        "reportRequests": [
-            {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    {"expression": "ga:sessions"},
-                ],
-                "dimensions": [
-                    {"name": "ga:dimension6"},
-                    {"name": "ga:dimension5"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
-    },
-    "new_cx": {
-        "reportRequests": [
-            {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    {"expression": "ga:users"},
-                ],
-                "dimensions": [
-                    {"name": "ga:dimension6"},
-                    {"name": "ga:hostname"},
-                    {"name": "ga:pagePath"},
-                    {"name": "ga:eventAction"},
-                    {"name": "ga:date"},
-                    {"name": "ga:dateHourMinute"},
-                    {"name": "ga:eventCategory"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
-    },
-    "new_acquisition": {
-        "reportRequests": [
-            {
-                "viewId": VIEW_ID,
-                "dateRanges": [{"startDate": None, "endDate": None}],
-                "metrics": [
-                    {"expression": "ga:newUsers"},
-                ],
-                "dimensions": [
-                    {"name": "ga:dimension6"},
-                    {"name": "ga:sourceMedium"},
-                    {"name": "ga:landingPagePath"},
-                    {"name": "ga:fullReferrer"},
-                    {"name": "ga:campaign"},
-                    {"name": "ga:dateHourMinute"},
-                ],
-                "pageToken": "0",
-                "pageSize": ROW_LIMIT,
-            }
-        ]
+        "primary_keys": ["fields:dimension6::string", "fields:dateHourMinute::string"],
+        "payload": {
+            "reportRequests": [
+                {
+                    "viewId": VIEW_ID,
+                    "dateRanges": [{"startDate": None, "endDate": None}],
+                    "metrics": [
+                        {"expression": "ga:newUsers"},
+                    ],
+                    "dimensions": [
+                        {"name": "ga:dimension6"},
+                        {"name": "ga:sourceMedium"},
+                        {"name": "ga:landingPagePath"},
+                        {"name": "ga:fullReferrer"},
+                        {"name": "ga:campaign"},
+                        {"name": "ga:dateHourMinute"},
+                    ],
+                    "pageToken": "0",
+                    "pageSize": ROW_LIMIT,
+                }
+            ]
+        },
     },
 }
 
@@ -170,7 +129,7 @@ def initialize_analytics_reporting() -> Any:
 
 def get_report(analytics: Any, table: str, ds: str, page_token: Any) -> Any:
     print(f"Current page_token: {page_token}")
-    payload: Dict[str, Any] = reports[table]
+    payload: Dict[str, Any] = reports[table]["payload"]
     payload["reportRequests"][0]["dateRanges"][0]["startDate"] = ds
     payload["reportRequests"][0]["dateRanges"][0]["endDate"] = ds
     if page_token:
@@ -222,6 +181,14 @@ with DAG(
         2020, 8, 24, tzinfo=pendulum.timezone("America/Toronto")
     ),
 ) as dag:
+
+    def build_deduplicate_query(dest_db: str, dest_schema: str, table: str) -> str:
+        query = f"merge into {dest_db}.{dest_schema}.{table} using {dest_db}.{dest_schema}.{table}_stage on "  # nosec
+        for key in report[table]["primary_keys"]:  # type: ignore
+            query += f"{dest_db}.{dest_schema}.{table}.{key} = {dest_db}.{dest_schema}.{table}_stage.{key} and "
+        query = query[:-4]
+        query += "when matched then delete"
+        return query
 
     def process(table: str, conn: str, **context: Any) -> None:
         ds = context["ds"]
@@ -278,22 +245,19 @@ with DAG(
                     f"create or replace table {dest_db}.{dest_schema}.{table}_stage as "  # nosec
                     f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
                 )
+                if "primary_keys" in report[table]:  # type: ignore
+                    tx.execute(build_deduplicate_query(dest_db, dest_schema, table))
                 tx.execute(
-                    f"merge into {dest_db}.{dest_schema}.{table} using {dest_db}.{dest_schema}.{table}_stage "  # nosec
-                    f"on {dest_db}.{dest_schema}.{table}.fields:date::string = {dest_db}.{dest_schema}.{table}_stage.fields:date::string "
-                    f"and {dest_db}.{dest_schema}.{table}.fields:dimension5::string = {dest_db}.{dest_schema}.{table}_stage.fields:dimension5::string "
-                    f"when matched then delete"
+                    f"insert into {dest_db}.{dest_schema}.{table} "  # nosec
+                    f"select * from {dest_db}.{dest_schema}.{table}_stage"  # nosec
                 )
-                result = tx.execute(
-                    f"insert into {dest_db}.{dest_schema}.{table} select * from {dest_db}.{dest_schema}.{table}_stage"  # nosec
-                ).fetchall()
                 tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
             else:
                 # create table for new report
-                result = tx.execute(
+                tx.execute(
                     f"create or replace table {dest_db}.{dest_schema}.{table} as "  # nosec
                     f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
-                ).fetchall()
+                )
             tx.execute(
                 f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_DEVELOPMENT"
             )
