@@ -184,7 +184,7 @@ with DAG(
 
     def build_deduplicate_query(dest_db: str, dest_schema: str, table: str) -> str:
         query = f"merge into {dest_db}.{dest_schema}.{table} using {dest_db}.{dest_schema}.{table}_stage on "  # nosec
-        for key in report[table]["primary_keys"]:  # type: ignore
+        for key in reports[table]["primary_keys"]:  # type: ignore
             query += f"{dest_db}.{dest_schema}.{table}.{key} = {dest_db}.{dest_schema}.{table}_stage.{key} and "
         query = query[:-4]
         query += "when matched then delete"
@@ -245,7 +245,7 @@ with DAG(
                     f"create or replace table {dest_db}.{dest_schema}.{table}_stage as "  # nosec
                     f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
                 )
-                if "primary_keys" in report[table]:  # type: ignore
+                if "primary_keys" in reports[table]:  # type: ignore
                     tx.execute(build_deduplicate_query(dest_db, dest_schema, table))
                 tx.execute(
                     f"insert into {dest_db}.{dest_schema}.{table} "  # nosec
