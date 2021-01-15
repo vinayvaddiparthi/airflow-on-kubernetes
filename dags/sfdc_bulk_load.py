@@ -410,6 +410,6 @@ if __name__ == "__main__":
             },
         ),
     ) as mock_engine:
-        import_sfdc("snowflake_conn", "salesforce_conn", "sfoi")
+        import_sfdc("snowflake_conn", "salesforce_conn", "sftc")
 else:
-    globals()["salesforce_bulk_import_dag"] = create_dag(["sfoi", "sfni"])
+    globals()["salesforce_bulk_import_dag"] = create_dag(["sftc"])
