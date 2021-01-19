@@ -3,10 +3,7 @@ import json
 import pendulum
 import pandas as pd
 import attr
-import boto3
-import sqlalchemy
 import sys
-import pika
 
 from airflow import DAG
 from airflow.models.dagrun import DagRun
@@ -19,7 +16,6 @@ from datetime import timedelta
 from concurrent.futures.thread import ThreadPoolExecutor
 from pmdarima.arima import auto_arima
 from hashlib import sha256
-from base64 import b64decode
 from math import sqrt
 
 from typing import Dict, Any, cast, List
@@ -34,353 +30,11 @@ from helpers.auto_arima_parameters import (
     CashFlowProjectionParameters,
 )
 
-from snowflake.sqlalchemy import VARIANT
-from sqlalchemy.sql import select, func, text, literal_column, literal, join
-from sqlalchemy.engine import Engine
-from sqlalchemy import Table, MetaData, Column, VARCHAR, Date, DateTime
+from sqlalchemy.sql import select, func, text, literal_column
+from sqlalchemy import Table, MetaData
 
-from pyporky.symmetric import SymmetricPorky
-from helpers.aws_hack import hack_clear_aws_keys
+from helpers.rabbit_mq_helper import notify_subscribers
 from utils.failure_callbacks import slack_dag
-
-
-def create_cash_flow_projection_table(
-    metadata: MetaData,
-    snowflake_engine: Engine,
-    schema: str,
-) -> None:
-    cash_flow_projections = Table(
-        "cash_flow_projections",
-        metadata,
-        Column("merchant_guid", VARCHAR, nullable=False),
-        Column("account_guid", VARCHAR, nullable=False),
-        Column("projections", VARIANT, nullable=False),
-        Column("last_cash_flow_date", Date, nullable=False),
-        Column("parameters_hash", VARCHAR, nullable=False),
-        Column("generated_at", DateTime, nullable=False),
-        schema=schema,
-    )
-
-    cash_flow_projections.create(snowflake_engine, checkfirst=True)
-
-
-def create_flinks_raw_responses(
-    metadata: MetaData,
-    snowflake_engine: Engine,
-    schema: str,
-) -> None:
-    flinks_raw_responses = Table(
-        "flinks_raw_responses",
-        metadata,
-        Column("merchant_guid", VARCHAR, nullable=False),
-        Column("batch_timestamp", DateTime, nullable=False),
-        Column("file_path", VARCHAR, nullable=False),
-        Column("raw_response", VARIANT, nullable=False),
-        schema=schema,
-    )
-
-    flinks_raw_responses.create(snowflake_engine, checkfirst=True)
-
-
-def grant_permissions(
-    snowflake_connection: str,
-    schema: str,
-) -> None:
-    snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-
-    tables = [f"{schema}.CASH_FLOW_PROJECTIONS", f"{schema}.FLINKS_RAW_RESPONSES"]
-    roles = ["DBT_DEVELOPMENT", "DBT_PRODUCTION"]
-
-    with snowflake_engine.begin() as tx:
-        for table in tables:
-            for role in roles:
-                grant = f"GRANT SELECT ON {table} TO ROLE {role}"
-
-                tx.execute(grant)
-
-                logging.info(f"✔️ Successfully set grant for {role} on {table}")
-
-
-def create_tables(
-    snowflake_connection: str,
-    schema: str,
-) -> None:
-    metadata = MetaData()
-    snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-
-    create_cash_flow_projection_table(metadata, snowflake_engine, schema)
-    create_flinks_raw_responses(metadata, snowflake_engine, schema)
-
-    grant_permissions(snowflake_connection, schema)
-
-
-def store_flinks_response(
-    merchant_guid: str,
-    file_path: str,
-    bucket_name: str,
-    snowflake_connection: str,
-    schema: str,
-) -> None:
-    hack_clear_aws_keys()
-    metadata = MetaData()
-    snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-
-    logging.info(f"Processing Flinks response for {merchant_guid} in {file_path}")
-
-    s3 = boto3.client("s3")
-    response = s3.get_object(Bucket=bucket_name, Key=file_path)
-
-    # This will read the whole file into memory
-    encrypted_contents = json.loads(response["Body"].read())
-
-    data = str(
-        SymmetricPorky(aws_region="ca-central-1").decrypt(
-            enciphered_dek=b64decode(encrypted_contents["key"], b"-_"),
-            enciphered_data=b64decode(encrypted_contents["data"], b"-_"),
-            nonce=b64decode(encrypted_contents["nonce"], b"-_"),
-        ),
-        "utf-8",
-    )
-
-    # Need to convert from a ruby hash to JSON
-    data = data.replace("=>", ": ")
-    data = data.replace("nil", "null")
-    json_data = json.loads(data)
-
-    logging.info(
-        f"Decrypted Flinks response in {file_path}, bucket={bucket_name} ({type(json_data)})"
-    )
-
-    # Some Flinks files are now stored as arrays of transaction files
-    account_data = json_data if type(json_data) is list else [json_data]
-
-    logging.info(
-        f"Processing {len(account_data)} Flinks files in {file_path}, bucket={bucket_name}"
-    )
-
-    flinks_raw_responses = Table(
-        "flinks_raw_responses",
-        metadata,
-        autoload=True,
-        autoload_with=snowflake_engine,
-        schema=schema,
-    )
-
-    with snowflake_engine.begin() as tx:
-        for i, data in enumerate(account_data, start=1):
-            select_query = select(
-                columns=[
-                    literal_column(f"'{merchant_guid}'").label("merchant_guid"),
-                    literal_column(f"'{response['LastModified']}'").label(
-                        "batch_timestamp"
-                    ),
-                    literal_column(f"'{file_path}'").label("file_path"),
-                    func.parse_json(json.dumps(data)).label("raw_response"),
-                ]
-            )
-
-            insert_query = flinks_raw_responses.insert().from_select(
-                [
-                    "merchant_guid",
-                    "batch_timestamp",
-                    "file_path",
-                    "raw_response",
-                ],
-                select_query,
-            )
-
-            tx.execute(insert_query)
-
-            logging.info(
-                f"✔️ Successfully stored {file_path} for {merchant_guid} ({i})"
-            )
-
-
-def notify_subscribers(
-    rabbit_url: str,
-    exchange_label: str,
-    topic: str,
-    dag_run: DagRun,
-    **kwargs: Any,
-) -> None:
-    if "merchant_guid" in dag_run.conf:
-        merchant_guid = dag_run.conf["merchant_guid"]
-
-        logging.info(
-            f"Notifying subscribers cash flow projection is complete for {merchant_guid}"
-        )
-
-        params = pika.URLParameters(rabbit_url)
-
-        connection = pika.BlockingConnection(params)
-        channel = connection.channel()
-
-        message = {"merchant_guid": merchant_guid}
-
-        channel.exchange_declare(
-            exchange=exchange_label, exchange_type="topic", durable=True
-        )
-        channel.basic_publish(
-            exchange=exchange_label,
-            routing_key=topic,
-            body=json.dumps(message),
-            mandatory=True,
-            properties=pika.BasicProperties(
-                delivery_mode=2,  # make message persistent
-            ),
-        )
-
-        logging.info(f"✔️ MQ sent {topic}: {merchant_guid}")
-    else:
-        logging.warning("No subscribers notified, DAG was run without context.")
-
-
-def copy_transactions(
-    snowflake_connection: str,
-    schema: str,
-    bucket_name: str,
-    dag_run: DagRun,
-    num_threads: int = 4,
-    **kwargs: Any,
-) -> None:
-    # Ensure the tables are created
-    create_tables(snowflake_connection, schema)
-
-    snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-    metadata = MetaData(bind=snowflake_engine)
-
-    if "merchant_guid" in dag_run.conf and "raw_files" in dag_run.conf:
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            merchant_guid = dag_run.conf["merchant_guid"]
-            raw_files = dag_run.conf["raw_files"]
-
-            logging.info(
-                f"Executing cash flow projections for merchant {merchant_guid}"
-            )
-            logging.info(f"Processing transactions: {raw_files}")
-
-            for raw_file in raw_files:
-                executor.submit(
-                    store_flinks_response,
-                    merchant_guid,
-                    raw_file,
-                    bucket_name,
-                    snowflake_connection,
-                    schema,
-                )
-    else:
-        merchants = Table(
-            "merchants",
-            metadata,
-            autoload=True,
-            schema=schema,
-        )
-
-        merchant_documents = Table(
-            "merchant_documents",
-            metadata,
-            autoload=True,
-            schema=schema,
-        )
-
-        flinks_raw_responses = Table(
-            "flinks_raw_responses",
-            metadata,
-            autoload=True,
-            schema=schema,
-        )
-
-        merchants_merchant_documents_join = join(
-            merchant_documents,
-            merchants,
-            func.get(merchants.c.fields, "id")
-            == func.get(merchant_documents.c.fields, "merchant_id"),
-        )
-        merchant_documents_select = (
-            select(
-                columns=[
-                    sqlalchemy.cast(
-                        func.get(merchants.c.fields, "guid"), VARCHAR
-                    ).label("merchant_guid"),
-                    sqlalchemy.cast(
-                        func.get(merchant_documents.c.fields, "cloud_file_path"),
-                        VARCHAR,
-                    ).label("file_path"),
-                    text("1"),
-                ],
-                from_obj=merchant_documents,
-            )
-            .where(
-                sqlalchemy.cast(
-                    func.get(merchant_documents.c.fields, "doc_type"), VARCHAR
-                )
-                == literal("flinks_raw_response")
-            )
-            .select_from(merchants_merchant_documents_join)
-        )
-
-        logging.info(
-            merchant_documents_select.compile(compile_kwargs={"literal_binds": True})
-        )
-
-        flinks_raw_responses_select = select(
-            columns=[
-                flinks_raw_responses.c.merchant_guid,
-                flinks_raw_responses.c.file_path,
-                text("1"),
-            ],
-            from_obj=flinks_raw_responses,
-        )
-
-        logging.info(
-            flinks_raw_responses_select.compile(compile_kwargs={"literal_binds": True})
-        )
-
-        # Get the set of all the raw flinks responses
-        all_flinks_responses = pd.read_sql_query(
-            merchant_documents_select,
-            snowflake_engine,
-            index_col=[
-                "merchant_guid",
-                "file_path",
-            ],
-        )
-
-        # Get the set of downloaded flinks responses
-        downloaded_flinks_responses = pd.read_sql_query(
-            flinks_raw_responses_select,
-            snowflake_engine,
-            index_col=[
-                "merchant_guid",
-                "file_path",
-            ],
-        )
-
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            for _index, row in all_flinks_responses.iterrows():
-                try:
-                    # See if we already have it
-                    downloaded_flinks_responses.loc[
-                        (
-                            row.name[0],
-                            row.name[1],
-                        )
-                    ]
-
-                    # We already have it
-                    logging.info(
-                        f"⏩️️ Skipping generating projections for {row.name[0]} - {row.name[1]}"
-                    )
-                except KeyError:
-                    # We don't have it
-                    executor.submit(
-                        store_flinks_response,
-                        row.name[0],
-                        row.name[1],
-                        bucket_name,
-                        snowflake_connection,
-                        schema,
-                    )
 
 
 def calculate_balance_projection(
@@ -908,33 +562,6 @@ def create_dag() -> DAG:
         default_args={"retries": 5, "retry_delay": timedelta(minutes=2)},
     ) as dag:
         dag << PythonOperator(
-            task_id="copy_transactions",
-            python_callable=copy_transactions,
-            provide_context=True,
-            op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_production",
-                "schema": "CORE_PRODUCTION",
-                "bucket_name": "ario-documents-production",
-                "num_threads": 10,
-            },
-            executor_config={
-                "KubernetesExecutor": {
-                    "annotations": {
-                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                        "KubernetesAirflowProductionFlinksRole"
-                    }
-                }
-            },
-        ) >> DbtOperator(
-            task_id="dbt_run_process_transactions",
-            execution_timeout=timedelta(hours=1),
-            action=DbtAction.run,
-            models=(
-                "fct_bank_account_transaction fct_daily_bank_account_balance "
-                "fct_weekly_bank_account_balance fct_monthly_bank_account_balance "
-                "fct_bank_account_balance_week_over_week fct_bank_account_balance_month_over_month"
-            ),
-        ) >> PythonOperator(
             task_id="generate_projections",
             python_callable=generate_projections,
             provide_context=True,
@@ -960,7 +587,7 @@ def create_dag() -> DAG:
             op_kwargs={
                 "rabbit_url": Variable.get("CLOUDAMQP_URL"),
                 "exchange_label": Variable.get("CLOUDAMQP_EXCHANGE"),
-                "topic": Variable.get("CLOUDAMQP_TOPIC"),
+                "topic": Variable.get("CLOUDAMQP_TOPIC_CASH_FLOW_PROJECTION"),
             },
         )
 
