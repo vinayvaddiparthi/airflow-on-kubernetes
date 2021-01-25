@@ -378,6 +378,7 @@ def create_dag() -> DAG:
                                 "selected_bank_account",
                                 "manual_sic_code",
                                 "manual_business_online",
+                                "selected_sales_volume_accounts",
                             ]
                         ),
                     ),
