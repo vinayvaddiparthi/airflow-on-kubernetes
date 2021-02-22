@@ -311,10 +311,10 @@ else:
 if __name__ == "__main__":
     from collections import namedtuple
 
-    MockDagRun = namedtuple("MockDagRun", ["run_id"])
+    MockDagRun = namedtuple("MockDagRun", ["run_id", "conf"])
     timestamp = datetime.now()
     time_tag = timestamp.strftime("%Y-%m-%d_%H-%M-%S")
-    mock_context = {"dag_run": MockDagRun(time_tag)}
+    mock_context = {"dag_run": MockDagRun(time_tag, {})}
 
     generate_file(
         snowflake_connection="airflow_production",

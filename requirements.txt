@@ -36,6 +36,7 @@ fs.sshfs
 python-gnupg
 
 fastparquet
+transliterate
 
 pyarrow[pandas]<0.18.0  # pinned because of snowflake connector
 requests<2.24  # pinned because of snowflake connector
