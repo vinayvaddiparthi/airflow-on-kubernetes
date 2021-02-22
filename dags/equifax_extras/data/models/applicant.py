@@ -4,8 +4,12 @@ from typing import Optional
 from sqlalchemy import Table, Column, Integer
 
 from equifax_extras.data.models.base import Base, metadata
-from equifax_extras.data.decorators import encrypted, marshalled, to_string
-
+from equifax_extras.data.decorators import (
+    encrypted,
+    marshalled,
+    to_string,
+    transliterate,
+)
 
 applicant_table = Table(
     "applicant",
@@ -38,18 +42,21 @@ class Applicant(Base):
             return None
 
     @property  # type: ignore
+    @transliterate("fr")
     @to_string
     @encrypted
     def first_name(self) -> str:
         return self.encrypted_first_name
 
     @property  # type: ignore
+    @transliterate("fr")
     @to_string
     @encrypted
     def last_name(self) -> str:
         return self.encrypted_last_name
 
     @property  # type: ignore
+    @transliterate("fr")
     @to_string
     @encrypted
     def middle_name(self) -> str:
@@ -63,6 +70,7 @@ class Applicant(Base):
         return self.encrypted_sin
 
     @property  # type: ignore
+    @transliterate("fr")
     @to_string
     @marshalled
     @encrypted
