@@ -1,7 +1,7 @@
 from sqlalchemy import Table, Column, Integer
 from sqlalchemy.orm import column_property
 
-from equifax_extras.data.decorators import to_string
+from equifax_extras.data.decorators import to_string, transliterate
 from equifax_extras.data.models.base import Base, metadata
 
 from typing import List
@@ -39,6 +39,7 @@ class Address(Base):
     _thoroughfare = column_property(address_table.c.thoroughfare)
 
     @property  # type: ignore
+    @transliterate("fr")
     @to_string
     def city(self) -> str:
         return self._city
@@ -64,6 +65,7 @@ class Address(Base):
         return self._postal_code
 
     @property  # type: ignore
+    @transliterate("fr")
     @to_string
     def premise_number(self) -> str:
         return self._premise_number
@@ -79,11 +81,13 @@ class Address(Base):
         return self._sub_premise_number
 
     @property  # type: ignore
+    @transliterate("fr")
     @to_string
     def sub_premise_type(self) -> str:
         return self._sub_premise_type
 
     @property  # type: ignore
+    @transliterate("fr")
     @to_string
     def thoroughfare(self) -> str:
         return self._thoroughfare
