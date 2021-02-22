@@ -30,7 +30,6 @@ dbt-snowflake==0.18.1
 pika
 scipy
 heroku3
-pytz
 google-api-python-client
 fs.sshfs
 python-gnupg
@@ -43,3 +42,4 @@ requests<2.24  # pinned because of snowflake connector
 boto3<1.16  # pinned because of snowflake connector
 urllib3<1.26  # pinned because of snowflake connector
 pyjwt<2.0 # pinned because of snowflake connector
+pytz<2021.0 # pinned because of snowflake connector
