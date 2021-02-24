@@ -167,11 +167,7 @@ def generate_file(
     if conf and "applicant_guids" in conf:
         manual_list = conf["applicant_guids"]
         if manual_list:
-            sub_query = """
-            union
-            select applicant.* 
-            from applicant where applicant.applicant_guid in {{applicant_guids}}
-            """
+            sub_query = """where applicant.applicant_guid in {{applicant_guids}}"""
             manual_process = Template(sub_query).render(
                 applicant_guids=tuple(manual_list)
             )
