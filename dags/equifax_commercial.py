@@ -238,7 +238,7 @@ def create_dags() -> Tuple[DAG, DAG]:
             python_callable=sync_s3fs_to_sshfs,
             op_kwargs={
                 "aws_conn": "s3_equifax_commercial",
-                "ssh_conn": "ssh_equifax_commercial",
+                "sshfs_conn": "ssh_equifax_commercial",
             },
             executor_config=EXECUTOR_CONFIG,
         )
