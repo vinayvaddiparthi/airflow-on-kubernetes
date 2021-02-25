@@ -63,7 +63,7 @@ def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
 
 
 def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
-    aws_connection = AwsHook.get_connection(aws_conn)
+    aws_connection = AwsHook(aws_conn_id=aws_conn)
 
     return S3FS(
         bucket_name=aws_connection.extra_dejson["bucket"],
