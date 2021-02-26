@@ -157,7 +157,7 @@ def create_table_from_stage(snowflake_conn: str, schema: str, stage: str) -> Non
     qualified_table = f"{schema}.{stage}"
 
     with engine.begin() as tx:
-        stmt = "select $1 as fields from @{qualified_table}"
+        stmt = f"select $1 as fields from @{qualified_table}"  # nosec
 
         tx.execute(
             f"create or replace transient table {qualified_table} as {stmt}"  # nosec
