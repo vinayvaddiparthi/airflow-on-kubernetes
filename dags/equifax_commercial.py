@@ -172,7 +172,8 @@ def encrypt(fd: IO[bytes]) -> IO[bytes]:
 
 def decrypt(fd: IO[bytes]) -> IO[bytes]:
     gpg = _init_gnupg()
-    decrypted_message = gpg.decrypt_file(fd, always_trust=True)
+    pass_phrase = Variable.get("equifax_pgp_passphrase", deserialize_json=False)
+    decrypted_message = gpg.decrypt_file(fd, always_trust=True, passphrase=pass_phrase)
     return BytesIO(decrypted_message.data)
 
 
