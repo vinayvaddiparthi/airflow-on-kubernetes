@@ -220,7 +220,7 @@ def create_dags() -> Tuple[DAG, DAG]:
             python_callable=create_table_from_stage,
             op_kwargs={
                 "snowflake_conn": "airflow_production",
-                "schema": "production",
+                "schema": "airflow.production",
                 "stage": "equifax_commercial_inbox",
             },
             retry_delay=datetime.timedelta(hours=1),
