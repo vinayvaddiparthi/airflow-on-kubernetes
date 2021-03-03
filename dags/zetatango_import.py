@@ -509,6 +509,12 @@ def create_dag() -> DAG:
             action=DbtAction.snapshot,
         )
 
+        dbt_test = DbtOperator(
+            task_id="dbt_test",
+            execution_timeout=timedelta(hours=1),
+            action=DbtAction.test,
+        )
+
         dag << import_core_prod >> decrypt_core_prod
         dag << import_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
@@ -516,7 +522,7 @@ def create_dag() -> DAG:
             decrypt_core_prod,
             decrypt_kyc_prod,
             import_idp_prod,
-        ] >> dbt_run >> dbt_snapshot
+        ] >> dbt_run >> dbt_snapshot >> dbt_test
 
     return dag
 
