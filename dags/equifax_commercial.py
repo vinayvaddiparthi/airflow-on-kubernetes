@@ -124,10 +124,10 @@ def decode_decrypted_files(
         for file in (
             file
             for file in s3fs.listdir("decrypted")
-            if f"{file[:-9]}.parquet" not in set(s3fs.listdir("parquet"))
+            if f"{file[:-6]}.parquet" not in set(s3fs.listdir("parquet"))
         ):
             with s3fs.open(f"decrypted/{file}", "rb") as decrypted_file, s3fs.open(
-                f"parquet/{file[:-9]}.parquet", "wb"
+                f"parquet/{file[:-6]}.parquet", "wb"
             ) as parquet_file:
                 try:
                     table_ = pv.read_csv(
