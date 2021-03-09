@@ -43,8 +43,8 @@ with
       select 
         merchant.merchant_guid,
         business_file_number.encrypted_value as encrypted_file_number
-      from business_file_number
-      left join merchant on
+      from merchant
+      left join business_file_number on
         merchant.business_id = business_file_number.business_id
     ),
     
