@@ -1,7 +1,7 @@
 from sqlalchemy import Table, Column, Integer
 
-from equifax_extras.data.decorators import to_string, encrypted, marshalled
 from equifax_extras.data.models.base import Base, metadata
+from equifax_extras.data.decorators import encrypted, marshalled, to_string
 
 
 merchant_table = Table(
