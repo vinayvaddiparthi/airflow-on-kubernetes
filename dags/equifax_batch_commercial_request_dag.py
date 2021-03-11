@@ -26,8 +26,26 @@ with
       select
         fields:name::string as name,
         fields:id::string as merchant_id,
+        fields:entities_business_id::string as business_id,
         fields:guid::string as merchant_guid
       from "ZETATANGO"."KYC_PRODUCTION"."ENTITIES_MERCHANTS"
+    ),
+    
+    business_file_number as (
+      select
+        fields:entities_businesses_id::string as business_id,
+        fields:encrypted_value::string as encrypted_value
+      from "ZETATANGO"."KYC_PRODUCTION"."ENTITIES_BUSINESS_ATTRIBUTES"
+      where
+        fields:key::string = 'file_number'
+    ),
+    merchant_with_attributes as (
+      select 
+        merchant.merchant_guid,
+        business_file_number.encrypted_value as encrypted_file_number
+      from merchant
+      left join business_file_number on
+        merchant.business_id = business_file_number.business_id
     ),
     
     eligible_loan as (
@@ -134,12 +152,15 @@ with
         state_province,
         sub_premise_number,
         sub_premise_type,
-        thoroughfare
+        thoroughfare,
+        encrypted_file_number
       from eligible_merchant
       left join merchant_with_address on
         eligible_merchant.merchant_guid = merchant_with_address.merchant_guid
       left join merchant_with_phone_number on
         eligible_merchant.merchant_guid = merchant_with_phone_number.merchant_guid
+      left join merchant_with_attributes on
+        eligible_merchant.merchant_guid = merchant_with_attributes.merchant_guid
     )
 select
     row_number() over (order by merchant_guid) as id,

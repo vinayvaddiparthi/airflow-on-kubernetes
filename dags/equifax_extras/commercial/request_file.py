@@ -16,6 +16,7 @@ class RequestFile(BaseRequestFile):
         postal_code = Column()
         phone = Column()
         fax = Column()
+        file_number = Column()
 
     def __init__(self, path: Path) -> None:
         super().__init__(path)
@@ -44,6 +45,7 @@ class RequestFile(BaseRequestFile):
         postal_code = address.postal_code if address else ""
         phone = str(phone_number) if phone_number else ""
         fax = ""
+        file_number = merchant.file_number
 
         row = self.__class__.Row(
             reference_number=reference_number,
@@ -54,6 +56,7 @@ class RequestFile(BaseRequestFile):
             postal_code=postal_code,
             phone=phone,
             fax=fax,
+            file_number=file_number,
         )
         data = row.column_data
         self._writer.writerow(data)
