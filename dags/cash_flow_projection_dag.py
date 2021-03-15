@@ -179,8 +179,6 @@ def skip_multi_account_projection(
         ],
     )
 
-    digest = sha256(json.dumps(parameters).encode("utf-8")).hexdigest()
-
     try:
         existing_projections_df.loc[
             (
@@ -677,17 +675,13 @@ def generate_multi_projections(
     dag_run: DagRun,
     **kwargs: Any,
 ) -> None:
-    metadata = MetaData()
     production_engine = SnowflakeHook(
         snowflake_analytics_connection
-    ).get_sqlalchemy_engine()
-    zetatango_engine = SnowflakeHook(
-        snowflake_zetatango_connection
     ).get_sqlalchemy_engine()
 
     if "merchant_guid" not in dag_run.conf or "account_ids" not in dag_run.conf:
         logging.error(
-            f"❌ Unable to execute multi projection without merchant_guid or account_ids"
+            "❌ Unable to execute multi projection without merchant_guid or account_ids"
         )
 
         return
@@ -735,7 +729,6 @@ def get_account_last_transaction_date(
     merchant_guid: str,
     account_guids: List[str],
 ) -> Dict[str, str]:
-    metadata = MetaData()
     production_engine = SnowflakeHook(
         snowflake_analytics_connection
     ).get_sqlalchemy_engine()
