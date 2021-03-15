@@ -5,6 +5,7 @@ import pandas as pd
 import attr
 import sys
 import sqlalchemy
+import datetime
 
 from airflow import DAG
 from airflow.models.dagrun import DagRun
@@ -35,7 +36,7 @@ from sqlalchemy.sql import select, func, text, literal_column, literal
 from sqlalchemy.engine import RowProxy
 from sqlalchemy.sql.selectable import Select
 from snowflake.sqlalchemy import VARIANT
-from sqlalchemy import Table, MetaData
+from sqlalchemy import Table, MetaData, Date
 
 from helpers.rabbit_mq_helper import notify_subscribers
 from utils.failure_callbacks import slack_dag
@@ -522,6 +523,61 @@ def do_projection(
     )
 
 
+def first_common_transaction_date_query(
+    snowflake_analytics_connection: str,
+    analytics_schema: str,
+    merchant_guid: str,
+    account_guids: List[str],
+) -> Select:
+    metadata = MetaData()
+    production_engine = SnowflakeHook(
+        snowflake_analytics_connection
+    ).get_sqlalchemy_engine()
+
+    fct_daily_bank_account_balance = Table(
+        "fct_daily_bank_account_balance",
+        metadata,
+        autoload=True,
+        autoload_with=production_engine,
+        schema=analytics_schema,
+    )
+
+    first_transaction_by_account_query = (
+        select(
+            columns=[
+                fct_daily_bank_account_balance.c.merchant_guid,
+                fct_daily_bank_account_balance.c.account_guid,
+                sqlalchemy.cast(
+                    func.min(fct_daily_bank_account_balance.c.date), Date
+                ).label("first_transaction"),
+            ],
+            from_obj=fct_daily_bank_account_balance,
+        )
+        .group_by(
+            fct_daily_bank_account_balance.c.merchant_guid,
+            fct_daily_bank_account_balance.c.account_guid,
+        )
+        .cte("first_transaction_by_account")
+    )
+
+    statement = (
+        select(
+            columns=[
+                first_transaction_by_account_query.c.merchant_guid,
+                func.max(first_transaction_by_account_query.c.first_transaction).label(
+                    "first_common_transaction_date"
+                ),
+            ]
+        )
+        .where(first_transaction_by_account_query.c.merchant_guid == merchant_guid)
+        .where(first_transaction_by_account_query.c.account_guid.in_(account_guids))
+        .group_by(first_transaction_by_account_query.c.merchant_guid)
+        .select_from(first_transaction_by_account_query)
+    )
+
+    return statement
+
+
 def last_transaction_date_query(
     snowflake_analytics_connection: str,
     analytics_schema: str,
@@ -697,6 +753,17 @@ def generate_multi_projections(
     ).hexdigest()
 
     with production_engine.begin() as tx:
+        first_transaction_date = get_first_common_transaction_date(
+            snowflake_analytics_connection,
+            analytics_schema,
+            merchant_guid,
+            account_guids,
+        )
+
+        logging.info(
+            f"First common transaction date for {merchant_guid} - {account_guids} is {first_transaction_date}"
+        )
+
         debit_credits_statement = debits_credits_query(
             snowflake_analytics_connection,
             analytics_schema,
@@ -705,7 +772,7 @@ def generate_multi_projections(
         )
 
         row = tx.execute(debit_credits_statement).first()
-        cash_flow_df = format_cash_flow_into_df(row)
+        cash_flow_df = format_cash_flow_into_df(row, first_transaction_date)
 
         try:
             do_multi_account_projection(
@@ -721,6 +788,29 @@ def generate_multi_projections(
         except:
             e = sys.exc_info()[0]
             logging.error(f"Error: {e}")
+
+
+def get_first_common_transaction_date(
+    snowflake_analytics_connection: str,
+    analytics_schema: str,
+    merchant_guid: str,
+    account_guids: List[str],
+) -> datetime.date:
+    production_engine = SnowflakeHook(
+        snowflake_analytics_connection
+    ).get_sqlalchemy_engine()
+
+    with production_engine.begin() as tx:
+        first_common_transaction_statement = first_common_transaction_date_query(
+            snowflake_analytics_connection,
+            analytics_schema,
+            merchant_guid,
+            account_guids,
+        )
+
+        row = tx.execute(first_common_transaction_statement).first()
+
+        return row["first_common_transaction_date"]
 
 
 def get_account_last_transaction_date(
@@ -877,14 +967,16 @@ def do_multi_account_projection(
     )
 
 
-def format_cash_flow_into_df(cash_flow_result: RowProxy) -> pd.DataFrame:
+def format_cash_flow_into_df(
+    cash_flow_result: RowProxy, first_transaction_date: datetime.date
+) -> pd.DataFrame:
     df = pd.DataFrame.from_dict(
         json.loads(cash_flow_result["daily_cash_flow"]), orient="index"
     )
 
     df.index = pd.to_datetime(df.index)
 
-    full_index = pd.date_range(df.index.min(), df.index.max())
+    full_index = pd.date_range(start=first_transaction_date, end=df.index.max())
     df = df.reindex(full_index)
 
     df.index.rename(inplace=True, name="DateTime")
@@ -894,6 +986,8 @@ def format_cash_flow_into_df(cash_flow_result: RowProxy) -> pd.DataFrame:
         df[column].fillna(0, inplace=True)
 
     df["balance"].ffill(inplace=True)
+
+    print(f"Cash flow: {df}")
 
     return df
 
