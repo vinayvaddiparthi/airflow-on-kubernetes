@@ -13,6 +13,7 @@ fab-oidc
 salesforce-bulk
 zeep
 snowflake-sqlalchemy
+sqlalchemy
 rubymarshal
 PyYAML
 PyNaCl
