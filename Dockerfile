@@ -33,7 +33,7 @@ RUN set -ex \
     && apt-get install -yqq --no-install-recommends \
         $buildDeps \
         libicu-dev \
-        icu-config \
+        pkg-config \
         git \
         freetds-bin \
         build-essential \
