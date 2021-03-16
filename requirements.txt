@@ -13,7 +13,7 @@ fab-oidc
 salesforce-bulk
 zeep
 snowflake-sqlalchemy
-sqlalchemy
+sqlalchemy>=1.3.18, <1.4
 rubymarshal
 PyYAML
 PyNaCl
