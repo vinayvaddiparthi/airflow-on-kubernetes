@@ -32,6 +32,7 @@ RUN set -ex \
     && apt-get upgrade -yqq \
     && apt-get install -yqq --no-install-recommends \
         $buildDeps \
+        libicu-dev \
         git \
         freetds-bin \
         build-essential \
