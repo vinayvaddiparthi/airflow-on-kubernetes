@@ -875,6 +875,8 @@ def do_multi_account_projection(
         ),
     }
 
+    logging.info(f"Details: {details}")
+
     parameters_to_hash: Dict[str, Dict[str, Any]] = {
         "auto_arima_params": cast(Dict[str, Any], details["auto_arima_params"]),
         "arima_projection_params": cast(
@@ -885,7 +887,12 @@ def do_multi_account_projection(
             Dict[str, str], details["last_transaction_dates"]
         ),
     }
+
+    logging.info(f"Params to hash (before): {parameters_to_hash}")
+
     parameters_to_hash["auto_arima_params"].pop("random_state", None)
+
+    logging.info(f"Params to hash (after): {parameters_to_hash}")
 
     if skip_multi_account_projection(
         merchant_guid,
@@ -1215,12 +1222,10 @@ if __name__ == "__main__":
     #         "task_id",
     #         "task_ts",
     #         "DBT_ARIO",
-    #         "CORE_STAGING",
-    #         "m_XkunNiHLGkcWcmw6",
+    #         "CORE_PRODUCTION",
+    #         "m_4CuFnPVB2eaHZSjC",
     #         [
-    #             "088c1bed-4dfd-4735-a4df-47e26e8e582f",
-    #             "838e6f3c-78fb-4a2c-bcdd-3b2634d4b820",
-    #             "a435f82c-ee7e-4413-a308-712b5f291ae9",
+    #             "b03a34a4-469b-46dd-b388-86786ae7a52a",
     #         ],
     #         None,
     #     )
