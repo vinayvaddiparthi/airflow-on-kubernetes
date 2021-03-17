@@ -19,8 +19,8 @@ class RequestFile(BaseRequestFile):
         city = FixedWidthColumn(20)
         province_code = FixedWidthColumn(2)
         postal_code = FixedWidthColumn(6)
-        file_number = FixedWidthColumn(9)
-        filler2 = FixedWidthColumn(9)
+        file_number = FixedWidthColumn(10)
+        filler2 = FixedWidthColumn(8)
         applicant_guid = FixedWidthColumn(25)
         equifax_reserved_field = FixedWidthColumn(25)  # RESERVED, DO NOT USE
 
