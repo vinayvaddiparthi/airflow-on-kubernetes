@@ -48,16 +48,27 @@ with
       where
         fields:key::string = 'suffix'
     ),
+    applicant_file_number as (
+      select
+        fields:individuals_applicant_id::integer as applicant_id,
+        fields:encrypted_value::string as encrypted_value
+      from "ZETATANGO"."KYC_PRODUCTION"."INDIVIDUAL_ATTRIBUTES"
+      where
+        fields:key::string = 'file_number'
+    ),
     applicant_with_attributes as (
       select
         applicant.applicant_guid,
         applicant_suffix.encrypted_value as encrypted_suffix,
-        applicant_sin.encrypted_value as encrypted_sin
+        applicant_sin.encrypted_value as encrypted_sin,
+        applicant_file_number.encrypted_value as encrypted_file_number
       from applicant
       left join applicant_sin on
         applicant.applicant_id = applicant_sin.applicant_id
       left join applicant_suffix on
         applicant.applicant_id = applicant_suffix.applicant_id
+      left join applicant_file_number on
+        applicant.applicant_id = applicant_file_number.applicant_id
     ),
     address_relationship as (
       select
@@ -132,6 +143,7 @@ with
         encrypted_middle_name,
         encrypted_suffix,
         encrypted_sin,
+        encrypted_file_number,
         city,
         country_alpha_3,
         post_box_number,
