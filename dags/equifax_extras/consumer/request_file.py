@@ -58,32 +58,8 @@ class RequestFile(BaseRequestFile):
         city = address.city if address else ""
         province_code = address.state_province if address else ""
         postal_code = address.postal_code if address else ""
-
-        civic_line_map = {
-            "app_CSCxQR2CUGThiHE4": "RR3 Station Main Site 13 Box 32",
-            "app_EsxRKn7eXkeGs4hJ": "RR2 Site 10 Box 45",
-            "app_GiYaY9WgVHYA7zyN": "RR4 Site 8 Box 5",
-            "app_SwWBcvnUrzgtcAe2": "RR1 Site 27 Box 8",
-            "app_aX1h23qDSMDiDN1t": "RR1",
-            "app_pZ2Q6PoYD8aicBqk": "RR6 SITE 15 BOX 17",
-            "app_rzfgAcw56PqJv25K": "RR2 SITE 4 BOX 2",
-            "app_tN6snL8yJjmR8fCt": "RR1 Site 2 Comp 13",
-        }
-        city_map = {
-            "app_CSCxQR2CUGThiHE4": "Ponoka",
-            "app_EsxRKn7eXkeGs4hJ": "Sexsmith",
-            "app_GiYaY9WgVHYA7zyN": "Prince Albert",
-            "app_SwWBcvnUrzgtcAe2": "Dewinton",
-            "app_aX1h23qDSMDiDN1t": "Prince Albert",
-            "app_pZ2Q6PoYD8aicBqk": "Calgary",
-            "app_rzfgAcw56PqJv25K": "High River",
-            "app_tN6snL8yJjmR8fCt": "Didsbury",
-        }
-
         file_number = applicant.file_number
         guid = applicant.guid
-        civic_line = civic_line_map[guid] if guid in civic_line_map else civic_line
-        city = city_map[guid] if guid in city_map else city
 
         row = self.__class__.Row(
             reference_number=reference_number,
@@ -98,6 +74,6 @@ class RequestFile(BaseRequestFile):
             province_code=province_code,
             postal_code=postal_code,
             file_number=file_number,
-            applicant_guid=applicant.guid,
+            applicant_guid=guid,
         )
         self.write(str(row))
