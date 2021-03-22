@@ -164,11 +164,6 @@ select
     row_number() over (order by applicant_guid) as id,
     *
 from final
-where applicant_guid in [
-'app_1x9zu6KjHRDy9BFY',
-'app_2Ug5BUnvJnBNmdbu',
-'app_3efpiiHb1vS1un6N'
-]
 """
 
 
