@@ -19,7 +19,8 @@ class RequestFile(BaseRequestFile):
         city = FixedWidthColumn(20)
         province_code = FixedWidthColumn(2)
         postal_code = FixedWidthColumn(6)
-        account_number = FixedWidthColumn(18)
+        file_number = FixedWidthColumn(10)
+        filler2 = FixedWidthColumn(8)
         applicant_guid = FixedWidthColumn(25)
         equifax_reserved_field = FixedWidthColumn(25)  # RESERVED, DO NOT USE
 
@@ -40,9 +41,7 @@ class RequestFile(BaseRequestFile):
         with open(self.path, "a+", encoding=self.encoding) as file:
             file.write(trailer)
 
-    def append(
-        self, applicant: Applicant, address: Address, sfoi_account_id: str = ""
-    ) -> None:
+    def append(self, applicant: Applicant, address: Address) -> None:
         reference_number = f"{applicant.id}".rjust(12, "0")
         last_name = applicant.last_name.strip()
         first_name = applicant.first_name.strip()
@@ -54,11 +53,13 @@ class RequestFile(BaseRequestFile):
             if applicant.date_of_birth
             else ""
         )
+
         civic_line = " ".join(address.lines) if address else ""
         city = address.city if address else ""
         province_code = address.state_province if address else ""
         postal_code = address.postal_code if address else ""
-        account_number = sfoi_account_id if sfoi_account_id else ""
+        file_number = applicant.file_number
+        guid = applicant.guid
 
         row = self.__class__.Row(
             reference_number=reference_number,
@@ -72,7 +73,7 @@ class RequestFile(BaseRequestFile):
             city=city,
             province_code=province_code,
             postal_code=postal_code,
-            account_number=account_number,
-            applicant_guid=applicant.guid,
+            file_number=file_number,
+            applicant_guid=guid,
         )
         self.write(str(row))

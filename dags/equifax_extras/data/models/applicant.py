@@ -22,6 +22,7 @@ applicant_table = Table(
     Column("encrypted_middle_name"),
     Column("encrypted_sin"),
     Column("encrypted_suffix"),
+    Column("encrypted_file_number"),
 )
 
 
@@ -76,6 +77,13 @@ class Applicant(Base):
     @encrypted
     def suffix(self) -> str:
         return self.encrypted_suffix
+
+    @property  # type: ignore
+    @to_string
+    @marshalled
+    @encrypted
+    def file_number(self) -> str:
+        return self.encrypted_file_number
 
     def __str__(self) -> str:
         return str(self.first_name) + " " + str(self.last_name)
