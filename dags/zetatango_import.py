@@ -327,7 +327,7 @@ def decrypt_pii_columns(
             tx.execute(
                 f"create or replace transient table {dst_table} as {stmt} "  # nosec
                 f"qualify row_number() "
-                f"over (partition by fields:id::integer order by fields:updated_at::datetime) = 1"
+                f"over (partition by fields:id::integer order by fields:updated_at::datetime desc) = 1"
             ).fetchall()
 
             logging.info(f"🔓 Successfully decrypted {spec}")
