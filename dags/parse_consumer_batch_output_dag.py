@@ -99,6 +99,7 @@ result_dict_2 = {
     "fico_reason_code_4": 2,
     "fico_score": 3,
     "filler8": 4,
+    "equifax_unique_number": 10,
     "equifax_sequence_number": 7,
     "OTXX001": 1,
     "OTXX002": 1,
@@ -1569,7 +1570,7 @@ def _get_snowflake() -> Any:
 
 
 def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
-    d3 = {**result_dict_1, **result_dict_2}
+    d3: Dict[str, int] = {**result_dict_1, **result_dict_2}
     logging.info(f"Size of dict: {len(d3)}")
 
     cols = []
