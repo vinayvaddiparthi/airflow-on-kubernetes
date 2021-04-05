@@ -12,6 +12,8 @@ from sqlalchemy import text, cast, column, Date
 from sqlalchemy.sql import Select
 from zeep import Client
 
+from utils.failure_callbacks import slack_dag
+
 
 def build_journal_entry(
     correlation_guid: str,
@@ -223,7 +225,8 @@ with DAG(
         2020, 8, 29, tzinfo=pendulum.timezone("America/Toronto")
     ),
     default_args={"retries": 5, "retry_delay": timedelta(minutes=30)},
-    description="",
+    on_failure_callback=slack_dag("slack_data_alerts"),
+    description="Platform ERP Pipeline",
 ) as dag:
     dag << PythonOperator(
         task_id="get_transactions_by_created_date",
