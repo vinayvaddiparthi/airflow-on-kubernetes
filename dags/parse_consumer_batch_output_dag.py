@@ -53,16 +53,8 @@ table_name_public = (
 )
 
 personal_info = [37, 52, 62, 88, 94, 124, 144, 146, 152]
-# "last_name": 37,
-# "first_name": 52,
-# "middle_name": 62,
-# "sin": 88,
-# "dob_text": 94,
-# "address": 124,
-# "city": 144,
-# "province": 146,
-# "postal_code": 152,
-result_dict_1 = {
+
+result_dict = {
     "customer_reference_number": 12,
     "last_name": 25,
     "first_name": 15,
@@ -106,13 +98,13 @@ result_dict_1 = {
     "OTXX003": 1,
     "OTXX004": 5,
     "OTXX005": 1,
-    "filler9": 15,
-    "filler10": 50,
+    "consumer_alert_number": 15,
+    "consumer_alert_name": 50,
     "OTXX008": 1,
     "OTXX009": 1,
     "OTXX010": 5,
     "OTXX011": 3,
-    "filler11": 5,
+    "equifax_reserved_field_5": 5,
     "OTXX013": 5,
     "PRXX001": 5,
     "PRXX002": 5,
@@ -1511,7 +1503,7 @@ aws_credentials = aws_hook.get_credentials()
 
 
 def _convert_line_csv(line: str) -> str:
-    indices = _gen_arr(0, result_dict_1) + _gen_arr(94, result_dict_2)
+    indices = _gen_arr(0, result_dict)
     parts = []
     x = zip(indices, indices[1:] + [None])
     for i, j in x:
@@ -1561,16 +1553,12 @@ def _get_s3() -> Any:
 
 
 def _get_snowflake() -> Any:
-    snowflake_hook = BaseHook.get_connection(snowflake_conn)
-    if snowflake_hook.password:
-        return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine().begin()
-    else:
-        kwargs = {"connect_args": {"authenticator": "externalbrowser"}}
-        return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin()
+    snowflake_conn = "airflow_production"
+    return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine().begin()
 
 
 def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
-    d3: Dict[str, int] = {**result_dict_1, **result_dict_2}
+    d3: Dict[str, int] = result_dict
     logging.info(f"Size of dict: {len(d3)}")
 
     cols = []
@@ -1778,22 +1766,32 @@ task_check_output >> [task_get_file, task_end]
 task_get_file >> [task_convert_file, task_end]
 task_convert_file >> task_insert_snowflake_raw >> task_fix_date >> task_insert_snowflake >> task_insert_snowflake_public
 
+
+def clone_table():
+    t = "EQUIFAX.PUBLIC.CONSUMER_BATCH"
+    t_new = "EQUIFAX.PUBLIC.BVTEST_CONSUMER_BATCH"
+    sql = f"""
+            CREATE TABLE IF NOT EXISTS {t_new} CLONE {t}
+        """
+    role = "DBT_DEVELOPMENT"
+
+    with _get_snowflake() as sfh:
+        sfh.execute(sql)
+        sfh.execute(f"GRANT OWNERSHIP ON TABLE {t_new} TO ROLE {role}")
+
+
+environment = Variable.get("environment", "")
+if environment == "development":
+    from equifax_extras.utils.local_get_sqlalchemy_engine import (
+        local_get_sqlalchemy_engine,
+    )
+
+    SnowflakeHook.get_sqlalchemy_engine = local_get_sqlalchemy_engine
+
+
 if __name__ == "__main__":
-    import os
 
-    # from unittest.mock import MagicMock, patch
-    # from sqlalchemy import create_engine
-    # from snowflake.sqlalchemy import URL
-
-    account = os.environ.get("SNOWFLAKE_ACCOUNT", "thinkingcapital.ca-central-1.aws")
-    database = os.environ.get("SNOWFLAKE_DATABASE", "SANDBOX")
-    role = os.environ.get("SNOWFLAKE_ROLE", "SYSADMIN")
-
-    # url = (
-    #     URL(account=account, database=database, role=role)
-    #     if role
-    #     else URL(account=account, database=database)
-    # )
+    clone_table()
 
     # get_input()
     # convert_file()
