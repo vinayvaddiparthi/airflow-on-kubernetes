@@ -18,7 +18,7 @@ first = today.replace(day=1)
 last_month = first - timedelta(days=1)
 
 Variable.set("t_stamp", last_month.strftime("%Y%m"))
-t_stamp = Variable.get('t_stamp')  # '202199'
+t_stamp = Variable.get("t_stamp")  # '202199'
 base_file_name = f"tc_consumer_batch_{t_stamp}"
 bucket = "tc-datalake"
 prefix_path = "equifax_automated_batch"
@@ -1690,9 +1690,9 @@ def insert_snowflake_public() -> None:
         "accountid",
         "contractid",
         "business_name",
-        *result_dict.keys()
+        *result_dict.keys(),
     ]
-    columns_string = ','.join(columns)
+    columns_string = ",".join(columns)
 
     sql = f"""
             INSERT INTO {table_name_public}({columns_string})
