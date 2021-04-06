@@ -10,20 +10,17 @@ from typing import Dict, List, Any
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.hooks.base_hook import BaseHook
 from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
 from airflow.models import Variable
-
-# from pyporky.symmetric import SymmetricPorky
 
 today = datetime.now().today()
 first = today.replace(day=1)
 last_month = first - timedelta(days=1)
 
 Variable.set("t_stamp", last_month.strftime("%Y%m"))
-base_file_name = f"tc_consumer_batch_{Variable.get('t_stamp')}"
+t_stamp = Variable.get("t_stamp")  # '202199'
+base_file_name = f"tc_consumer_batch_{t_stamp}"
 bucket = "tc-datalake"
-# bucket = "test-bucket-for-julien"
 prefix_path = "equifax_automated_batch"
 response_path = "/response"
 output_path = "/output"
@@ -31,86 +28,65 @@ consumer_path = "/consumer"
 full_response_path = prefix_path + response_path + consumer_path
 full_output_path = prefix_path + output_path + consumer_path
 
-table_name_raw = (
-    # "SANDBOX.JMASSON.CONSUMER_BATCH_RAW"
-    "EQUIFAX.OUTPUT.CONSUMER_BATCH_RAW"
-)
-table_name_raw_history = (
-    # f"SANDBOX.JMASSON.CONSUMER_BATCH_RAW_HISTORY_{Variable.get('t_stamp')}"
-    f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_RAW_{Variable.get('t_stamp')}"
-)
-table_name = (
-    # "SANDBOX.JMASSON.CONSUMER_BATCH"
-    "EQUIFAX.OUTPUT.CONSUMER_BATCH"
-)
-table_name_history = (
-    # f"SANDBOX.JMASSON.CONSUMER_BATCH_HISTORY_{Variable.get('t_stamp')}"
-    f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_{Variable.get('t_stamp')}"
-)
-table_name_public = (
-    # "SANDBOX.JMASSON.CONSUMER_PUBLIC"
-    "EQUIFAX.PUBLIC.CONSUMER_BATCH"
-)
+table_name_raw = "EQUIFAX.OUTPUT.CONSUMER_BATCH_RAW"
+table_name_raw_history = f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_RAW_{t_stamp}"
+table_name = "EQUIFAX.OUTPUT.CONSUMER_BATCH"
+table_name_history = f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_{t_stamp}"
+table_name_public = "EQUIFAX.PUBLIC.CONSUMER_BATCH"
 
 personal_info = [37, 52, 62, 88, 94, 124, 144, 146, 152]
-# "last_name": 37,
-# "first_name": 52,
-# "middle_name": 62,
-# "sin": 88,
-# "dob_text": 94,
-# "address": 124,
-# "city": 144,
-# "province": 146,
-# "postal_code": 152,
-result_dict_1 = {
+
+result_dict = {
     "customer_reference_number": 12,
     "last_name": 25,
     "first_name": 15,
     "middle_name": 10,
-    "filler1": 17,
+    "suffix": 2,
+    "filler_1": 15,
     "sin": 9,
     "dob_text": 6,
-}
-result_dict_2 = {
     "address": 30,
     "city": 20,
     "province": 2,
     "postal_code": 6,
-    "account_number": 18,
-    "filler2": 25,
+    "unique_number": 10,
+    "filler_2": 8,
+    "applicant_guid": 20,
+    "filler_3": 5,
     "ers_classification_ind": 1,
-    "filler3": 1,
+    "equifax_reserved_field_1": 1,
     "ers_reject_code": 3,
-    "filler4": 5,
+    "equifax_reserved_field_2": 5,
     "ers_reason_code_1": 2,
     "ers_reason_code_2": 2,
     "ers_reason_code_3": 2,
     "ers_reason_code_4": 2,
     "ers_score": 3,
-    "filler5": 4,
+    "ers_score_type_indicator": 4,
     "fico_classification_ind": 1,
-    "filler6": 1,
+    "equifax_reserved_field_3": 1,
     "fico_reject_code": 3,
-    "filler7": 5,
+    "equifax_reserved_field_4": 5,
     "fico_reason_code_1": 2,
     "fico_reason_code_2": 2,
     "fico_reason_code_3": 2,
     "fico_reason_code_4": 2,
     "fico_score": 3,
-    "filler8": 4,
+    "fico_score_type_indicator": 4,
+    "equifax_unique_number": 10,
     "equifax_sequence_number": 7,
     "OTXX001": 1,
     "OTXX002": 1,
     "OTXX003": 1,
     "OTXX004": 5,
     "OTXX005": 1,
-    "filler9": 15,
-    "filler10": 50,
+    "OTXX006": 15,
+    "OTXX007": 50,
     "OTXX008": 1,
     "OTXX009": 1,
     "OTXX010": 5,
     "OTXX011": 3,
-    "filler11": 5,
+    "OTXX012": 5,
     "OTXX013": 5,
     "PRXX001": 5,
     "PRXX002": 5,
@@ -1509,7 +1485,7 @@ aws_credentials = aws_hook.get_credentials()
 
 
 def _convert_line_csv(line: str) -> str:
-    indices = _gen_arr(0, result_dict_1) + _gen_arr(94, result_dict_2)
+    indices = _gen_arr(0, result_dict)
     parts = []
     x = zip(indices, indices[1:] + [None])
     for i, j in x:
@@ -1558,26 +1534,17 @@ def _get_s3() -> Any:
     )
 
 
-def _get_snowflake() -> Any:
-    snowflake_hook = BaseHook.get_connection(snowflake_conn)
-    if snowflake_hook.password:
-        return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine().begin()
-    else:
-        kwargs = {"connect_args": {"authenticator": "externalbrowser"}}
-        return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine(kwargs).begin()
-
-
 def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
-    d3 = {**result_dict_1, **result_dict_2}
+    d3: Dict[str, int] = result_dict
     logging.info(f"Size of dict: {len(d3)}")
 
     cols = []
     value_cols = []
-    for col in d3:
-        cols.append(_get_col_def(col, d3[col]))
+    for col, l in d3.items():
+        cols.append(_get_col_def(col, l))
         value_cols.append(col)
 
-    with _get_snowflake() as sfh:
+    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
         if date_formatted:
             pass
             if "HISTORY" in table:
@@ -1589,18 +1556,23 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
             sql = f"CREATE OR REPLACE TABLE {table} ({','.join(cols)});"
             sfh.execute(sql)
 
-        # insert = f"INSERT INTO {table} ({','.join(value_cols)}) VALUES{','.join(values)};"
-        copy = f"""COPY INTO {table} FROM S3://{bucket}/{full_output_path}/{file_name} CREDENTIALS = (
-                                            aws_key_id='{aws_credentials.access_key}',
-                                            aws_secret_key='{aws_credentials.secret_key}')
-                                            FILE_FORMAT=(field_delimiter=',', FIELD_OPTIONALLY_ENCLOSED_BY = '"'{', skip_header=1' if date_formatted else ''})
-                                            """
-        # result = sfh.execute(insert)
+        copy = f"""
+                COPY INTO {table} FROM S3://{bucket}/{full_output_path}/{file_name}
+                CREDENTIALS = (
+                    aws_key_id='{aws_credentials.access_key}',
+                    aws_secret_key='{aws_credentials.secret_key}'
+                )
+                FILE_FORMAT = (
+                    field_delimiter=',',
+                    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+                    {', skip_header=1' if date_formatted else ''}
+                )
+                """
         sfh.execute(copy)
 
 
 def fix_date_format() -> None:
-    with _get_snowflake() as sfh:
+    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
         select = f"SELECT * FROM {table_name_raw}"  # nosec
         result = sfh.execute(select)
 
@@ -1687,6 +1659,7 @@ def convert_file() -> None:
                 lines.append(_convert_line_csv(line))
                 formatted.write(_convert_line_csv(line))
                 formatted.write("\n")
+
         upload_file_s3(
             formatted,
             f"{full_output_path}/{base_file_name}.csv",
@@ -1707,16 +1680,25 @@ def upload_file_s3(file: Any, path: str) -> None:
 
 
 def insert_snowflake_public() -> None:
+    columns = [
+        "import_month",
+        "accountid",
+        "contractid",
+        "business_name",
+        *result_dict.keys(),
+    ]
+    columns_string = ",".join(columns)
+
     sql = f"""
-            INSERT INTO {table_name_public}
-            SELECT '{Variable.get('t_stamp')}' as import_month,
+            INSERT INTO {table_name_public}({columns_string})
+            SELECT '{t_stamp}' as import_month,
                     NULL as accountid,
                     NULL as contractid,
                     NULL as business_name,
                     u.*
             FROM {table_name} u
             """
-    with _get_snowflake() as sfh:
+    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
         sfh.execute(sql)
 
 
@@ -1776,23 +1758,17 @@ task_check_output >> [task_get_file, task_end]
 task_get_file >> [task_convert_file, task_end]
 task_convert_file >> task_insert_snowflake_raw >> task_fix_date >> task_insert_snowflake >> task_insert_snowflake_public
 
+environment = Variable.get("environment", "")
+if environment == "development":
+    from equifax_extras.utils.local_get_sqlalchemy_engine import (
+        local_get_sqlalchemy_engine,
+    )
+
+    SnowflakeHook.get_sqlalchemy_engine = local_get_sqlalchemy_engine
+
+
 if __name__ == "__main__":
-    import os
-
-    # from unittest.mock import MagicMock, patch
-    # from sqlalchemy import create_engine
-    # from snowflake.sqlalchemy import URL
-
-    account = os.environ.get("SNOWFLAKE_ACCOUNT", "thinkingcapital.ca-central-1.aws")
-    database = os.environ.get("SNOWFLAKE_DATABASE", "SANDBOX")
-    role = os.environ.get("SNOWFLAKE_ROLE", "SYSADMIN")
-
-    # url = (
-    #     URL(account=account, database=database, role=role)
-    #     if role
-    #     else URL(account=account, database=database)
-    # )
-
+    pass
     # get_input()
     # convert_file()
     # insert_snowflake_raw()
