@@ -1708,7 +1708,7 @@ def insert_snowflake_raw() -> None:
 
 
 def insert_snowflake() -> None:
-    _insert_snowflake(table_name, f"{base_file_name}.csv", True)
+    _insert_snowflake(table_name, f"{base_file_name}.csv")
     _insert_snowflake(table_name_history, f"{base_file_name}.csv", True)
 
 
