@@ -21,9 +21,9 @@ first = today.replace(day=1)
 last_month = first - timedelta(days=1)
 
 Variable.set("t_stamp", last_month.strftime("%Y%m"))
-base_file_name = f"tc_consumer_batch_{Variable.get('t_stamp')}"
+t_stamp = Variable.get('t_stamp')
+base_file_name = f"tc_consumer_batch_{t_stamp}"
 bucket = "tc-datalake"
-# bucket = "test-bucket-for-julien"
 prefix_path = "equifax_automated_batch"
 response_path = "/response"
 output_path = "/output"
@@ -31,26 +31,12 @@ consumer_path = "/consumer"
 full_response_path = prefix_path + response_path + consumer_path
 full_output_path = prefix_path + output_path + consumer_path
 
-table_name_raw = (
-    # "SANDBOX.JMASSON.CONSUMER_BATCH_RAW"
-    "EQUIFAX.OUTPUT.CONSUMER_BATCH_RAW"
-)
-table_name_raw_history = (
-    # f"SANDBOX.JMASSON.CONSUMER_BATCH_RAW_HISTORY_{Variable.get('t_stamp')}"
-    f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_RAW_{Variable.get('t_stamp')}"
-)
-table_name = (
-    # "SANDBOX.JMASSON.CONSUMER_BATCH"
-    "EQUIFAX.OUTPUT.CONSUMER_BATCH"
-)
-table_name_history = (
-    # f"SANDBOX.JMASSON.CONSUMER_BATCH_HISTORY_{Variable.get('t_stamp')}"
-    f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_{Variable.get('t_stamp')}"
-)
-table_name_public = (
-    # "SANDBOX.JMASSON.CONSUMER_PUBLIC"
-    "EQUIFAX.PUBLIC.CONSUMER_BATCH"
-)
+table_name_raw = "EQUIFAX.OUTPUT.CONSUMER_BATCH_RAW"
+table_name_raw_history = f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_RAW_{t_stamp}"
+
+table_name = "EQUIFAX.OUTPUT.CONSUMER_BATCH"
+table_name_history = f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_{t_stamp}"
+table_name_public = "EQUIFAX.PUBLIC.CONSUMER_BATCH"
 
 personal_info = [37, 52, 62, 88, 94, 124, 144, 146, 152]
 
@@ -60,7 +46,7 @@ result_dict = {
     "first_name": 15,
     "middle_name": 10,
     "suffix": 2,
-    "filler1": 15,
+    "filler_1": 15,
     "sin": 9,
     "dob_text": 6,
     "address": 30,
@@ -68,9 +54,9 @@ result_dict = {
     "province": 2,
     "postal_code": 6,
     "unique_number": 10,
-    "filler2": 8,
+    "filler_2": 8,
     "applicant_guid": 20,
-    "filler3": 5,
+    "filler_3": 5,
     "ers_classification_ind": 1,
     "equifax_reserved_field_1": 1,
     "ers_reject_code": 3,
@@ -1563,8 +1549,8 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
 
     cols = []
     value_cols = []
-    for col in d3:
-        cols.append(_get_col_def(col, d3[col]))
+    for col, l in d3.items():
+        cols.append(_get_col_def(col, l))
         value_cols.append(col)
 
     with _get_snowflake() as sfh:
@@ -1579,13 +1565,18 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
             sql = f"CREATE OR REPLACE TABLE {table} ({','.join(cols)});"
             sfh.execute(sql)
 
-        # insert = f"INSERT INTO {table} ({','.join(value_cols)}) VALUES{','.join(values)};"
-        copy = f"""COPY INTO {table} FROM S3://{bucket}/{full_output_path}/{file_name} CREDENTIALS = (
-                                            aws_key_id='{aws_credentials.access_key}',
-                                            aws_secret_key='{aws_credentials.secret_key}')
-                                            FILE_FORMAT=(field_delimiter=',', FIELD_OPTIONALLY_ENCLOSED_BY = '"'{', skip_header=1' if date_formatted else ''})
-                                            """
-        # result = sfh.execute(insert)
+        copy = f"""
+                COPY INTO {table} FROM S3://{bucket}/{full_output_path}/{file_name}
+                CREDENTIALS = (
+                    aws_key_id='{aws_credentials.access_key}',
+                    aws_secret_key='{aws_credentials.secret_key}'
+                )
+                FILE_FORMAT = (
+                    field_delimiter=',',
+                    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+                    {', skip_header=1' if date_formatted else ''}
+                )
+                """
         sfh.execute(copy)
 
 
@@ -1677,6 +1668,7 @@ def convert_file() -> None:
                 lines.append(_convert_line_csv(line))
                 formatted.write(_convert_line_csv(line))
                 formatted.write("\n")
+
         upload_file_s3(
             formatted,
             f"{full_output_path}/{base_file_name}.csv",
@@ -1697,9 +1689,18 @@ def upload_file_s3(file: Any, path: str) -> None:
 
 
 def insert_snowflake_public() -> None:
+    cols = [
+        "import_month",
+        "accountid",
+        "contractid",
+        "business_name"
+    ]
+    cols += list(result_dict.keys())
+    s = ','.join(cols)
+
     sql = f"""
-            INSERT INTO {table_name_public}
-            SELECT '{Variable.get('t_stamp')}' as import_month,
+            INSERT INTO {table_name_public}({s})
+            SELECT '{t_stamp}' as import_month,
                     NULL as accountid,
                     NULL as contractid,
                     NULL as business_name,
@@ -1766,20 +1767,6 @@ task_check_output >> [task_get_file, task_end]
 task_get_file >> [task_convert_file, task_end]
 task_convert_file >> task_insert_snowflake_raw >> task_fix_date >> task_insert_snowflake >> task_insert_snowflake_public
 
-
-def clone_table():
-    t = "EQUIFAX.PUBLIC.CONSUMER_BATCH"
-    t_new = "EQUIFAX.PUBLIC.BVTEST_CONSUMER_BATCH"
-    sql = f"""
-            CREATE TABLE IF NOT EXISTS {t_new} CLONE {t}
-        """
-    role = "DBT_DEVELOPMENT"
-
-    with _get_snowflake() as sfh:
-        sfh.execute(sql)
-        sfh.execute(f"GRANT OWNERSHIP ON TABLE {t_new} TO ROLE {role}")
-
-
 environment = Variable.get("environment", "")
 if environment == "development":
     from equifax_extras.utils.local_get_sqlalchemy_engine import (
@@ -1790,9 +1777,7 @@ if environment == "development":
 
 
 if __name__ == "__main__":
-
-    clone_table()
-
+    pass
     # get_input()
     # convert_file()
     # insert_snowflake_raw()
