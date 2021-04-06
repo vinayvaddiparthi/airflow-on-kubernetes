@@ -10,18 +10,15 @@ from typing import Dict, List, Any
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.hooks.base_hook import BaseHook
 from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
 from airflow.models import Variable
-
-# from pyporky.symmetric import SymmetricPorky
 
 today = datetime.now().today()
 first = today.replace(day=1)
 last_month = first - timedelta(days=1)
 
 Variable.set("t_stamp", last_month.strftime("%Y%m"))
-t_stamp = Variable.get('t_stamp')
+t_stamp = Variable.get('t_stamp')  # '202199'
 base_file_name = f"tc_consumer_batch_{t_stamp}"
 bucket = "tc-datalake"
 prefix_path = "equifax_automated_batch"
@@ -33,7 +30,6 @@ full_output_path = prefix_path + output_path + consumer_path
 
 table_name_raw = "EQUIFAX.OUTPUT.CONSUMER_BATCH_RAW"
 table_name_raw_history = f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_RAW_{t_stamp}"
-
 table_name = "EQUIFAX.OUTPUT.CONSUMER_BATCH"
 table_name_history = f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_{t_stamp}"
 table_name_public = "EQUIFAX.PUBLIC.CONSUMER_BATCH"
@@ -84,13 +80,13 @@ result_dict = {
     "OTXX003": 1,
     "OTXX004": 5,
     "OTXX005": 1,
-    "consumer_alert_number": 15,
-    "consumer_alert_name": 50,
+    "OTXX006": 15,
+    "OTXX007": 50,
     "OTXX008": 1,
     "OTXX009": 1,
     "OTXX010": 5,
     "OTXX011": 3,
-    "equifax_reserved_field_5": 5,
+    "OTXX012": 5,
     "OTXX013": 5,
     "PRXX001": 5,
     "PRXX002": 5,
@@ -1689,17 +1685,17 @@ def upload_file_s3(file: Any, path: str) -> None:
 
 
 def insert_snowflake_public() -> None:
-    cols = [
+    columns = [
         "import_month",
         "accountid",
         "contractid",
-        "business_name"
+        "business_name",
+        *result_dict.keys()
     ]
-    cols += list(result_dict.keys())
-    s = ','.join(cols)
+    columns_string = ','.join(columns)
 
     sql = f"""
-            INSERT INTO {table_name_public}({s})
+            INSERT INTO {table_name_public}({columns_string})
             SELECT '{t_stamp}' as import_month,
                     NULL as accountid,
                     NULL as contractid,
