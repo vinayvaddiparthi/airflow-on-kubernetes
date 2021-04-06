@@ -1564,8 +1564,8 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
                 )
                 FILE_FORMAT = (
                     field_delimiter=',',
-                    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-                    {', skip_header=1' if date_formatted else ''}
+                    FIELD_OPTIONALLY_ENCLOSED_BY = '"',
+                    skip_header=1
                 )
                 """
         sfh.execute(copy)
