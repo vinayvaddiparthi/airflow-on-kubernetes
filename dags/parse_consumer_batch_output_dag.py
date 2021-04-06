@@ -1534,11 +1534,6 @@ def _get_s3() -> Any:
     )
 
 
-def _get_snowflake() -> Any:
-    snowflake_conn = "airflow_production"
-    return SnowflakeHook(snowflake_conn).get_sqlalchemy_engine().begin()
-
-
 def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
     d3: Dict[str, int] = result_dict
     logging.info(f"Size of dict: {len(d3)}")
@@ -1549,7 +1544,7 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
         cols.append(_get_col_def(col, l))
         value_cols.append(col)
 
-    with _get_snowflake() as sfh:
+    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
         if date_formatted:
             pass
             if "HISTORY" in table:
@@ -1577,7 +1572,7 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
 
 
 def fix_date_format() -> None:
-    with _get_snowflake() as sfh:
+    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
         select = f"SELECT * FROM {table_name_raw}"  # nosec
         result = sfh.execute(select)
 
@@ -1703,7 +1698,7 @@ def insert_snowflake_public() -> None:
                     u.*
             FROM {table_name} u
             """
-    with _get_snowflake() as sfh:
+    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
         sfh.execute(sql)
 
 
