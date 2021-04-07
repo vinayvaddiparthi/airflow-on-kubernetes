@@ -1503,7 +1503,29 @@ def _gen_arr(start: int, dol: Dict) -> List:
     return result[:-1]
 
 
-def _get_col_def(n: str, l: int) -> str:
+def _get_col_def(n: str, l: int, date_formatted: bool) -> str:
+    if date_formatted and n in (
+        "DOB_TEXT",
+        "PRXX014",
+        "PRXX016",
+        "PRXX039",
+        "PRXX044",
+        "INQAL009",
+        "INQAM009",
+        "INQMG009",
+        "INQBK009",
+        "INQCU009",
+        "INQNC009",
+        "INQAF009",
+        "INQPF009",
+        "INQSF009",
+        "INQRT009",
+        "INQRD009",
+        "INQTE009",
+        "INQBD009",
+        "INQCL009",
+    ):
+        return f"{n} date"
     return f"{n} varchar({l})"
 
 
@@ -1541,7 +1563,7 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
     cols = []
     value_cols = []
     for col, l in d3.items():
-        cols.append(_get_col_def(col, l))
+        cols.append(_get_col_def(col, l, date_formatted))
         value_cols.append(col)
 
     with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
