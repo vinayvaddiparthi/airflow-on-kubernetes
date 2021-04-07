@@ -18,7 +18,7 @@ first = today.replace(day=1)
 last_month = first - timedelta(days=1)
 
 Variable.set("t_stamp", last_month.strftime("%Y%m"))
-t_stamp = Variable.get("t_stamp")  # '202199'
+t_stamp = Variable.get("t_stamp")  # '2021XX'
 base_file_name = f"tc_consumer_batch_{t_stamp}"
 bucket = "tc-datalake"
 prefix_path = "equifax_automated_batch"
@@ -1550,14 +1550,15 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
             if "HISTORY" in table:
                 sfh.execute(f"CREATE OR REPLACE TABLE {table} CLONE {table_name}")
 
-            truncate = f"TRUNCATE TABLE {table}"
-            sfh.execute(truncate)
+            sql = f"CREATE OR REPLACE TABLE {table} ({','.join(cols)});"
+            sfh.execute(sql)
         else:
             sql = f"CREATE OR REPLACE TABLE {table} ({','.join(cols)});"
             sfh.execute(sql)
 
+        file = f"S3://{bucket}/{full_output_path}/{file_name}"
         copy = f"""
-                COPY INTO {table} FROM S3://{bucket}/{full_output_path}/{file_name}
+                COPY INTO {table} FROM {file} 
                 CREDENTIALS = (
                     aws_key_id='{aws_credentials.access_key}',
                     aws_secret_key='{aws_credentials.secret_key}'
@@ -1565,7 +1566,7 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
                 FILE_FORMAT = (
                     field_delimiter=',',
                     FIELD_OPTIONALLY_ENCLOSED_BY = '"',
-                    skip_header=1
+                    {', skip_header=1' if date_formatted else ''}
                 )
                 """
         sfh.execute(copy)
@@ -1708,7 +1709,7 @@ def insert_snowflake_raw() -> None:
 
 
 def insert_snowflake() -> None:
-    _insert_snowflake(table_name, f"{base_file_name}.csv")
+    _insert_snowflake(table_name, f"{base_file_name}.csv", True)
     _insert_snowflake(table_name_history, f"{base_file_name}.csv", True)
 
 
@@ -1768,10 +1769,10 @@ if environment == "development":
 
 
 if __name__ == "__main__":
-    pass
-    # get_input()
-    # convert_file()
-    # insert_snowflake_raw()
-    # fix_date_format()
-    # insert_snowflake()
-    # insert_snowflake_public()
+    # pass
+    get_input()
+    convert_file()
+    insert_snowflake_raw()
+    fix_date_format()
+    insert_snowflake()
+    insert_snowflake_public()
