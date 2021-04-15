@@ -13,7 +13,7 @@ def calculate_opening_balances(
     opening_balances = []
     opening_balances.append(running_balance)
 
-    for index in range(1, len(df.index)):
+    for index in range(0, len(df.index) - 1):
         running_balance = (
             running_balance
             + df[credits_label].iloc[index]
