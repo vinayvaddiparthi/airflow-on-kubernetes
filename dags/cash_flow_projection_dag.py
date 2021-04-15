@@ -32,11 +32,11 @@ from helpers.auto_arima_parameters import (
     CashFlowProjectionParameters,
 )
 
-from sqlalchemy.sql import select, func, text, literal_column, literal
+from sqlalchemy.sql import select, func, text, literal_column, literal, outerjoin
 from sqlalchemy.engine import RowProxy
 from sqlalchemy.sql.selectable import Select
 from snowflake.sqlalchemy import VARIANT
-from sqlalchemy import Table, MetaData, Date
+from sqlalchemy import Table, MetaData, Date, case, Numeric
 
 from helpers.rabbit_mq_helper import notify_subscribers
 from utils.failure_callbacks import slack_dag
@@ -655,27 +655,120 @@ def debits_credits_query(
         schema=analytics_schema,
     )
 
-    summed_accounts_query = (
+    dim_date2 = Table(
+        "dim_date2",
+        metadata,
+        autoload=True,
+        autoload_with=production_engine,
+        schema="DBT",
+    )
+
+    merchant_accounts = (
         select(
             columns=[
                 fct_daily_bank_account_balance.c.merchant_guid,
-                func.array_construct(account_guids).label("account_guids"),
-                fct_daily_bank_account_balance.c.date,
-                func.sum(fct_daily_bank_account_balance.c.credits).label("sum_credits"),
-                func.sum(fct_daily_bank_account_balance.c.debits).label("sum_debits"),
-                func.sum(fct_daily_bank_account_balance.c.opening_balance).label(
-                    "sum_opening_balance"
-                ),
+                fct_daily_bank_account_balance.c.account_guid,
+                func.min(fct_daily_bank_account_balance.c.date).label("min_date"),
+                func.max(fct_daily_bank_account_balance.c.date).label("max_date"),
             ],
             from_obj=fct_daily_bank_account_balance,
         )
-        .where(fct_daily_bank_account_balance.c.merchant_guid == merchant_guid)
-        .where(fct_daily_bank_account_balance.c.account_guid.in_(account_guids))
         .group_by(
             fct_daily_bank_account_balance.c.merchant_guid,
-            fct_daily_bank_account_balance.c.date,
+            fct_daily_bank_account_balance.c.account_guid,
         )
-        .order_by(fct_daily_bank_account_balance.c.date.desc())
+        .cte("merchant_accounts")
+    )
+
+    bank_account_days = (
+        select(
+            columns=[
+                merchant_accounts.c.merchant_guid,
+                merchant_accounts.c.account_guid,
+                dim_date2.c.date_day,
+            ],
+            from_obj=[dim_date2, merchant_accounts],
+        )
+        .where(dim_date2.c.date_day >= merchant_accounts.c.min_date)
+        .where(dim_date2.c.date_day <= merchant_accounts.c.max_date)
+        .cte("bank_account_days")
+    )
+
+    fct_daily_bank_account_balance_join = outerjoin(
+        bank_account_days,
+        fct_daily_bank_account_balance,
+        (
+            bank_account_days.c.merchant_guid
+            == fct_daily_bank_account_balance.c.merchant_guid
+        )
+        & (
+            bank_account_days.c.account_guid
+            == fct_daily_bank_account_balance.c.account_guid
+        )
+        & (bank_account_days.c.date_day == fct_daily_bank_account_balance.c.date),
+    )
+
+    bank_account_balance_by_day = (
+        select(
+            columns=[
+                bank_account_days.c.merchant_guid,
+                bank_account_days.c.account_guid,
+                bank_account_days.c.date_day.label("date"),
+                func.zeroifnull(fct_daily_bank_account_balance.c.credits).label(
+                    "credits"
+                ),
+                func.zeroifnull(fct_daily_bank_account_balance.c.debits).label(
+                    "debits"
+                ),
+                sqlalchemy.cast(
+                    case(
+                        [
+                            (
+                                fct_daily_bank_account_balance.c.opening_balance.isnot(
+                                    None
+                                ),
+                                fct_daily_bank_account_balance.c.opening_balance,
+                            )
+                        ],
+                        else_=text(
+                            (
+                                'lag("DBT_ARIO".fct_daily_bank_account_balance.opening_balance) IGNORE NULLS OVER('
+                                " PARTITION BY bank_account_days.merchant_guid, bank_account_days.account_guid"
+                                " ORDER BY bank_account_days.date_day DESC"
+                                ")"
+                            )
+                        ),
+                    ),
+                    Numeric(37, 2),
+                ).label("opening_balance"),
+            ],
+            from_obj=bank_account_days,
+        )
+        .select_from(fct_daily_bank_account_balance_join)
+        .cte("bank_account_balance_by_day")
+    )
+
+    summed_accounts_query = (
+        select(
+            columns=[
+                bank_account_balance_by_day.c.merchant_guid,
+                func.array_construct(account_guids).label("account_guids"),
+                bank_account_balance_by_day.c.date,
+                func.sum(bank_account_balance_by_day.c.credits).label("sum_credits"),
+                func.sum(bank_account_balance_by_day.c.debits).label("sum_debits"),
+                func.sum(bank_account_balance_by_day.c.opening_balance).label(
+                    "sum_opening_balance"
+                ),
+            ],
+            from_obj=bank_account_balance_by_day,
+        )
+        .where(bank_account_balance_by_day.c.merchant_guid == merchant_guid)
+        .where(bank_account_balance_by_day.c.account_guid.in_(account_guids))
+        .group_by(
+            bank_account_balance_by_day.c.merchant_guid,
+            bank_account_balance_by_day.c.date,
+        )
+        .order_by(bank_account_balance_by_day.c.date.desc())
         .cte("summed_accounts")
     )
 
@@ -1215,19 +1308,21 @@ if __name__ == "__main__":
     #         "DBT_ARIO",
     #         "CORE_STAGING",
     #     )
-
-    #     generate_multi_projections(
-    #         "snowflake_zetatango_production",
-    #         "snowflake_analytics_connection",
-    #         "task_id",
-    #         "task_ts",
-    #         "DBT_ARIO",
-    #         "CORE_PRODUCTION",
-    #         "m_4CuFnPVB2eaHZSjC",
-    #         [
-    #             "b03a34a4-469b-46dd-b388-86786ae7a52a",
-    #         ],
-    #         None,
-    #     )
+#
+#     generate_multi_projections(
+#         "snowflake_zetatango_production",
+#         "snowflake_analytics_connection",
+#         "task_id",
+#         "task_ts",
+#         "DBT_ARIO",
+#         "CORE_STAGING",
+#         "m_u3QGuwJPKn3Z9PhX",
+#         [
+#             "2f896acc-28dc-4f73-b180-ef8bba92b1dc",
+#             "e30202b7-7ac4-4823-6b24-08d80cd4bf89",
+#             "701e48d0-44d1-4996-80df-0f3d9879ac1e"
+#         ],
+#         None,
+#     )
 else:
     globals()["cash_flow_projection"] = create_dag()
