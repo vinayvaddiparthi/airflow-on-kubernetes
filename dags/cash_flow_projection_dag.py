@@ -1112,8 +1112,8 @@ def format_cash_flow_into_df(
     df.index.rename(inplace=True, name="DateTime")
     df.sort_index(inplace=True)
 
-    for column in ["credits", "debits"]:
-        df[column].fillna(0, inplace=True)
+    for column_id in ["credits", "debits"]:
+        df[column_id].fillna(0, inplace=True)
 
     df["balance"].ffill(inplace=True)
 
@@ -1243,8 +1243,8 @@ def generate_projections(
                 df.index.rename(inplace=True, name="DateTime")
                 df.sort_index(inplace=True)
 
-                for column in ["credits", "debits"]:
-                    df[column].fillna(0, inplace=True)
+                for column_id in ["credits", "debits"]:
+                    df[column_id].fillna(0, inplace=True)
                 df["balance"].ffill(inplace=True)
 
                 try:
