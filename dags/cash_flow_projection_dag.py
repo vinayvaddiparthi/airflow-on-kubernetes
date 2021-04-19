@@ -32,7 +32,15 @@ from helpers.auto_arima_parameters import (
     CashFlowProjectionParameters,
 )
 
-from sqlalchemy.sql import select, func, text, literal_column, literal, outerjoin
+from sqlalchemy.sql import (
+    select,
+    func,
+    text,
+    literal_column,
+    column,
+    literal,
+    outerjoin,
+)
 from sqlalchemy.engine import RowProxy
 from sqlalchemy.sql.selectable import Select
 from snowflake.sqlalchemy import VARIANT
@@ -667,16 +675,15 @@ def debits_credits_query(
         select(
             columns=[
                 fct_daily_bank_account_balance.c.merchant_guid,
-                fct_daily_bank_account_balance.c.account_guid,
+                func.array_construct(account_guids).label("account_guids"),
                 func.min(fct_daily_bank_account_balance.c.date).label("min_date"),
                 func.max(fct_daily_bank_account_balance.c.date).label("max_date"),
             ],
             from_obj=fct_daily_bank_account_balance,
         )
-        .group_by(
-            fct_daily_bank_account_balance.c.merchant_guid,
-            fct_daily_bank_account_balance.c.account_guid,
-        )
+        .where(fct_daily_bank_account_balance.c.merchant_guid == merchant_guid)
+        .where(fct_daily_bank_account_balance.c.account_guid.in_(account_guids))
+        .group_by(fct_daily_bank_account_balance.c.merchant_guid)
         .cte("merchant_accounts")
     )
 
@@ -684,10 +691,14 @@ def debits_credits_query(
         select(
             columns=[
                 merchant_accounts.c.merchant_guid,
-                merchant_accounts.c.account_guid,
+                literal_column("value").label("account_guid"),
                 dim_date2.c.date_day,
             ],
-            from_obj=[dim_date2, merchant_accounts],
+            from_obj=[
+                dim_date2,
+                merchant_accounts,
+                text("lateral flatten (input => merchant_accounts.account_guids)"),
+            ],
         )
         .where(dim_date2.c.date_day >= merchant_accounts.c.min_date)
         .where(dim_date2.c.date_day <= merchant_accounts.c.max_date)
@@ -720,6 +731,30 @@ def debits_credits_query(
                 func.zeroifnull(fct_daily_bank_account_balance.c.debits).label(
                     "debits"
                 ),
+                literal_column(
+                    (
+                        'lag("DBT_ARIO".fct_daily_bank_account_balance.opening_balance) IGNORE NULLS OVER('
+                        " PARTITION BY bank_account_days.merchant_guid, bank_account_days.account_guid"
+                        " ORDER BY bank_account_days.date_day"
+                        ")"
+                    )
+                ).label("previous_opening_balance"),
+                literal_column(
+                    (
+                        'lag("DBT_ARIO".fct_daily_bank_account_balance.credits) IGNORE NULLS OVER('
+                        " PARTITION BY bank_account_days.merchant_guid, bank_account_days.account_guid"
+                        " ORDER BY bank_account_days.date_day"
+                        ")"
+                    )
+                ).label("previous_credits"),
+                literal_column(
+                    (
+                        'lag("DBT_ARIO".fct_daily_bank_account_balance.debits) IGNORE NULLS OVER('
+                        " PARTITION BY bank_account_days.merchant_guid, bank_account_days.account_guid"
+                        " ORDER BY bank_account_days.date_day"
+                        ")"
+                    )
+                ).label("previous_debits"),
                 sqlalchemy.cast(
                     case(
                         [
@@ -730,14 +765,9 @@ def debits_credits_query(
                                 fct_daily_bank_account_balance.c.opening_balance,
                             )
                         ],
-                        else_=text(
-                            (
-                                'lag("DBT_ARIO".fct_daily_bank_account_balance.opening_balance) IGNORE NULLS OVER('
-                                " PARTITION BY bank_account_days.merchant_guid, bank_account_days.account_guid"
-                                " ORDER BY bank_account_days.date_day DESC"
-                                ")"
-                            )
-                        ),
+                        else_=column("previous_opening_balance")
+                        + column("previous_credits")
+                        - column("previous_debits"),
                     ),
                     Numeric(37, 2),
                 ).label("opening_balance"),
@@ -1082,8 +1112,8 @@ def format_cash_flow_into_df(
     df.index.rename(inplace=True, name="DateTime")
     df.sort_index(inplace=True)
 
-    for column in ["credits", "debits"]:
-        df[column].fillna(0, inplace=True)
+    for column_id in ["credits", "debits"]:
+        df[column_id].fillna(0, inplace=True)
 
     df["balance"].ffill(inplace=True)
 
@@ -1213,8 +1243,8 @@ def generate_projections(
                 df.index.rename(inplace=True, name="DateTime")
                 df.sort_index(inplace=True)
 
-                for column in ["credits", "debits"]:
-                    df[column].fillna(0, inplace=True)
+                for column_id in ["credits", "debits"]:
+                    df[column_id].fillna(0, inplace=True)
                 df["balance"].ffill(inplace=True)
 
                 try:
@@ -1308,21 +1338,21 @@ if __name__ == "__main__":
     #         "DBT_ARIO",
     #         "CORE_STAGING",
     #     )
-#
-#     generate_multi_projections(
-#         "snowflake_zetatango_production",
-#         "snowflake_analytics_connection",
-#         "task_id",
-#         "task_ts",
-#         "DBT_ARIO",
-#         "CORE_STAGING",
-#         "m_u3QGuwJPKn3Z9PhX",
-#         [
-#             "2f896acc-28dc-4f73-b180-ef8bba92b1dc",
-#             "e30202b7-7ac4-4823-6b24-08d80cd4bf89",
-#             "701e48d0-44d1-4996-80df-0f3d9879ac1e"
-#         ],
-#         None,
-#     )
+    #
+    # generate_multi_projections(
+    #     "snowflake_zetatango_production",
+    #     "snowflake_analytics_connection",
+    #     "task_id",
+    #     "task_ts",
+    #     "DBT_ARIO",
+    #     "CORE_STAGING",
+    #     "m_u3QGuwJPKn3Z9PhX",
+    #     [
+    #         "2f896acc-28dc-4f73-b180-ef8bba92b1dc",
+    #         "e30202b7-7ac4-4823-6b24-08d80cd4bf89",
+    #         "701e48d0-44d1-4996-80df-0f3d9879ac1e",
+    #     ],
+    #     None,
+    # )
 else:
     globals()["cash_flow_projection"] = create_dag()
