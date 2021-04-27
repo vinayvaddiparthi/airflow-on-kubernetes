@@ -1274,44 +1274,50 @@ def create_dag() -> DAG:
         on_failure_callback=slack_dag("slack_data_alerts"),
         default_args={"retries": 5, "retry_delay": timedelta(minutes=2)},
     ) as dag:
-        dag << PythonOperator(
-            task_id="generate_projections",
-            python_callable=generate_projections,
-            provide_context=True,
-            op_kwargs={
-                "snowflake_zetatango_connection": "snowflake_zetatango_production",
-                "snowflake_analytics_connection": "airflow_production",
-                "num_threads": 10,
-                "analytics_schema": "DBT_ARIO",
-                "zetatango_schema": "CORE_PRODUCTION",
-            },
-        ) >> PythonOperator(
-            task_id="generate_multi_projections",
-            python_callable=generate_multi_projections,
-            provide_context=True,
-            op_kwargs={
-                "snowflake_zetatango_connection": "snowflake_zetatango_production",
-                "snowflake_analytics_connection": "airflow_production",
-                "analytics_schema": "DBT_ARIO",
-                "zetatango_schema": "CORE_PRODUCTION",
-            },
-        ) >> DbtOperator(
-            task_id="dbt_run_generate_projections",
-            execution_timeout=timedelta(hours=1),
-            action=DbtAction.run,
-            models=(
-                "fct_daily_bank_account_projection fct_weekly_bank_account_projection "
-                "fct_monthly_bank_account_projection"
-            ),
-        ) >> PythonOperator(
-            task_id="notify_subscribers",
-            python_callable=notify_subscribers,
-            provide_context=True,
-            op_kwargs={
-                "rabbit_url": Variable.get("CLOUDAMQP_URL"),
-                "exchange_label": Variable.get("CLOUDAMQP_EXCHANGE"),
-                "topic": Variable.get("CLOUDAMQP_TOPIC_CASH_FLOW_PROJECTION"),
-            },
+        (
+            dag
+            << PythonOperator(
+                task_id="generate_projections",
+                python_callable=generate_projections,
+                provide_context=True,
+                op_kwargs={
+                    "snowflake_zetatango_connection": "snowflake_zetatango_production",
+                    "snowflake_analytics_connection": "airflow_production",
+                    "num_threads": 10,
+                    "analytics_schema": "DBT_ARIO",
+                    "zetatango_schema": "CORE_PRODUCTION",
+                },
+            )
+            >> PythonOperator(
+                task_id="generate_multi_projections",
+                python_callable=generate_multi_projections,
+                provide_context=True,
+                op_kwargs={
+                    "snowflake_zetatango_connection": "snowflake_zetatango_production",
+                    "snowflake_analytics_connection": "airflow_production",
+                    "analytics_schema": "DBT_ARIO",
+                    "zetatango_schema": "CORE_PRODUCTION",
+                },
+            )
+            >> DbtOperator(
+                task_id="dbt_run_generate_projections",
+                execution_timeout=timedelta(hours=1),
+                action=DbtAction.run,
+                models=(
+                    "fct_daily_bank_account_projection fct_weekly_bank_account_projection "
+                    "fct_monthly_bank_account_projection"
+                ),
+            )
+            >> PythonOperator(
+                task_id="notify_subscribers",
+                python_callable=notify_subscribers,
+                provide_context=True,
+                op_kwargs={
+                    "rabbit_url": Variable.get("CLOUDAMQP_URL"),
+                    "exchange_label": Variable.get("CLOUDAMQP_EXCHANGE"),
+                    "topic": Variable.get("CLOUDAMQP_TOPIC_CASH_FLOW_PROJECTION"),
+                },
+            )
         )
 
         return dag
