@@ -1779,7 +1779,13 @@ task_end = PythonOperator(task_id="end", python_callable=end, dag=dag)
 
 task_check_output >> [task_get_file, task_end]
 task_get_file >> [task_convert_file, task_end]
-task_convert_file >> task_insert_snowflake_raw >> task_fix_date >> task_insert_snowflake >> task_insert_snowflake_public
+(
+    task_convert_file
+    >> task_insert_snowflake_raw
+    >> task_fix_date
+    >> task_insert_snowflake
+    >> task_insert_snowflake_public
+)
 
 environment = Variable.get("environment", "")
 if environment == "development":

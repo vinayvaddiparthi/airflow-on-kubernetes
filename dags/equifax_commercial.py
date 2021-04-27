@@ -186,46 +186,52 @@ def create_dags() -> Tuple[DAG, DAG]:
         schedule_interval=None,
         catchup=False,
     ) as inbox_dag:
-        inbox_dag << PythonOperator(
-            task_id="sync_sshfs_to_s3fs",
-            python_callable=sync_sshfs_to_s3fs,
-            op_kwargs={
-                "aws_conn": "s3_equifax_commercial",
-                "sshfs_conn": "ssh_equifax_commercial",
-            },
-            retry_delay=datetime.timedelta(hours=1),
-            retries=3,
-            executor_config=EXECUTOR_CONFIG,
-        ) >> PythonOperator(
-            task_id="decrypt_received_files",
-            python_callable=decrypt_received_files,
-            op_kwargs={
-                "aws_conn": "s3_equifax_commercial",
-            },
-            retry_delay=datetime.timedelta(hours=1),
-            retries=3,
-            executor_config=EXECUTOR_CONFIG,
-        ) >> PythonOperator(
-            task_id="convert_to_parquet",
-            python_callable=decode_decrypted_files,
-            op_kwargs={
-                "aws_conn": "s3_equifax_commercial",
-            },
-            provide_context=True,
-            retry_delay=datetime.timedelta(hours=1),
-            retries=3,
-            executor_config=EXECUTOR_CONFIG,
-        ) >> PythonOperator(
-            task_id="create_table_from_stage",
-            python_callable=create_table_from_stage,
-            op_kwargs={
-                "snowflake_conn": "airflow_production",
-                "schema": "airflow.production",
-                "stage": "equifax_commercial_inbox",
-            },
-            retry_delay=datetime.timedelta(hours=1),
-            retries=3,
-            executor_config=EXECUTOR_CONFIG,
+        (
+            inbox_dag
+            << PythonOperator(
+                task_id="sync_sshfs_to_s3fs",
+                python_callable=sync_sshfs_to_s3fs,
+                op_kwargs={
+                    "aws_conn": "s3_equifax_commercial",
+                    "sshfs_conn": "ssh_equifax_commercial",
+                },
+                retry_delay=datetime.timedelta(hours=1),
+                retries=3,
+                executor_config=EXECUTOR_CONFIG,
+            )
+            >> PythonOperator(
+                task_id="decrypt_received_files",
+                python_callable=decrypt_received_files,
+                op_kwargs={
+                    "aws_conn": "s3_equifax_commercial",
+                },
+                retry_delay=datetime.timedelta(hours=1),
+                retries=3,
+                executor_config=EXECUTOR_CONFIG,
+            )
+            >> PythonOperator(
+                task_id="convert_to_parquet",
+                python_callable=decode_decrypted_files,
+                op_kwargs={
+                    "aws_conn": "s3_equifax_commercial",
+                },
+                provide_context=True,
+                retry_delay=datetime.timedelta(hours=1),
+                retries=3,
+                executor_config=EXECUTOR_CONFIG,
+            )
+            >> PythonOperator(
+                task_id="create_table_from_stage",
+                python_callable=create_table_from_stage,
+                op_kwargs={
+                    "snowflake_conn": "airflow_production",
+                    "schema": "airflow.production",
+                    "stage": "equifax_commercial_inbox",
+                },
+                retry_delay=datetime.timedelta(hours=1),
+                retries=3,
+                executor_config=EXECUTOR_CONFIG,
+            )
         )
 
     with DAG(

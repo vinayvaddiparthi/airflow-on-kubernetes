@@ -262,42 +262,49 @@ def create_dag() -> DAG:
         on_failure_callback=slack_dag("slack_data_alerts"),
         default_args={"retries": 5, "retry_delay": timedelta(minutes=2)},
     ) as dag:
-        dag << PythonOperator(
-            task_id="copy_transactions",
-            python_callable=copy_transactions,
-            provide_context=True,
-            op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_production",
-                "schema": "CORE_PRODUCTION",
-                "bucket_name": "ario-documents-production",
-                "num_threads": 10,
-            },
-            executor_config={
-                "KubernetesExecutor": {
-                    "annotations": {
-                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                        "KubernetesAirflowProductionFlinksRole"
+        (
+            dag
+            << PythonOperator(
+                task_id="copy_transactions",
+                python_callable=copy_transactions,
+                provide_context=True,
+                op_kwargs={
+                    "snowflake_connection": "snowflake_zetatango_production",
+                    "schema": "CORE_PRODUCTION",
+                    "bucket_name": "ario-documents-production",
+                    "num_threads": 10,
+                },
+                executor_config={
+                    "KubernetesExecutor": {
+                        "annotations": {
+                            "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                            "KubernetesAirflowProductionFlinksRole"
+                        }
                     }
-                }
-            },
-        ) >> DbtOperator(
-            task_id="dbt_run_process_transactions",
-            execution_timeout=timedelta(hours=1),
-            action=DbtAction.run,
-            models=(
-                "fct_bank_account_transaction fct_daily_bank_account_balance "
-                "fct_weekly_bank_account_balance fct_monthly_bank_account_balance "
-                "fct_bank_account_balance_week_over_week fct_bank_account_balance_month_over_month"
-            ),
-        ) >> PythonOperator(
-            task_id="notify_subscribers",
-            python_callable=notify_subscribers,
-            provide_context=True,
-            op_kwargs={
-                "rabbit_url": Variable.get("CLOUDAMQP_URL"),
-                "exchange_label": Variable.get("CLOUDAMQP_EXCHANGE"),
-                "topic": Variable.get("CLOUDAMQP_TOPIC_PROCESS_FLINKS_TRANSACTIONS"),
-            },
+                },
+            )
+            >> DbtOperator(
+                task_id="dbt_run_process_transactions",
+                execution_timeout=timedelta(hours=1),
+                action=DbtAction.run,
+                models=(
+                    "fct_bank_account_transaction fct_daily_bank_account_balance "
+                    "fct_weekly_bank_account_balance fct_monthly_bank_account_balance "
+                    "fct_bank_account_balance_week_over_week fct_bank_account_balance_month_over_month"
+                ),
+            )
+            >> PythonOperator(
+                task_id="notify_subscribers",
+                python_callable=notify_subscribers,
+                provide_context=True,
+                op_kwargs={
+                    "rabbit_url": Variable.get("CLOUDAMQP_URL"),
+                    "exchange_label": Variable.get("CLOUDAMQP_EXCHANGE"),
+                    "topic": Variable.get(
+                        "CLOUDAMQP_TOPIC_PROCESS_FLINKS_TRANSACTIONS"
+                    ),
+                },
+            )
         )
 
         return dag

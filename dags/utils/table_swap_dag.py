@@ -51,23 +51,27 @@ def create_table_swap_dag(
         description="",
     ) as dag:
         for table in tables:
-            dag << PythonOperator(
-                task_id=f'ctas__{table["src"]["schema"]}__{table["dst"]["table"]}',
-                python_callable=ctas,
-                op_kwargs={
-                    "input_catalog": input_catalog,
-                    "output_catalog": output_catalog,
-                    "src": table["src"],
-                    "dst": table["dst"],
-                },
-            ) >> PythonOperator(
-                task_id=f'swap__{table["src"]["schema"]}__{table["src"]["table"]}',
-                python_callable=swap,
-                op_kwargs={
-                    "conn": "airflow_production",
-                    "output_database": output_database,
-                    "dst": table["dst"],
-                },
+            (
+                dag
+                << PythonOperator(
+                    task_id=f'ctas__{table["src"]["schema"]}__{table["dst"]["table"]}',
+                    python_callable=ctas,
+                    op_kwargs={
+                        "input_catalog": input_catalog,
+                        "output_catalog": output_catalog,
+                        "src": table["src"],
+                        "dst": table["dst"],
+                    },
+                )
+                >> PythonOperator(
+                    task_id=f'swap__{table["src"]["schema"]}__{table["src"]["table"]}',
+                    python_callable=swap,
+                    op_kwargs={
+                        "conn": "airflow_production",
+                        "output_database": output_database,
+                        "dst": table["dst"],
+                    },
+                )
             )
 
     return dag
