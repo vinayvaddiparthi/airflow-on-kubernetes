@@ -112,6 +112,9 @@ def calculate_projection(
         cash_flow_df["credits"], **(attr.asdict(auto_arima_params))
     )
 
+    logging.info(f"Debits model: {arima_debits_model.summary()}")
+    logging.info(f"Credits model: {arima_credits_model.summary()}")
+
     days_to_project = arima_projection_params.n_periods
 
     prediction_start_date = cash_flow_df.index.max() + timedelta(days=1)
@@ -961,6 +964,17 @@ def get_account_last_transaction_date(
         return last_transactions
 
 
+def apply_data_quality_test(df: pd.DataFrame):
+    df["closing_balance"] = df["balance"] + df["credits"] - df["debits"]
+
+    df["previous_closing"] = df.shift(1)["closing_balance"]
+    df.first("1D")["previous_closing"] = df.first("1D")["balance"]
+
+    df["matches"] = (df["balance"] - df["previous_closing"]).round(4) == 0
+
+    return not df["matches"].eq(True).all()
+
+
 def do_multi_account_projection(
     merchant_guid: str,
     account_guids: List[str],
@@ -1024,6 +1038,23 @@ def do_multi_account_projection(
         zetatango_schema,
         parameters_to_hash,
     ):
+        return
+
+    if apply_data_quality_test(cash_flow_df):
+        logging.warning(
+            f"❌ Data quality test failed for {merchant_guid} - {account_guids}"
+        )
+
+        store_multi_account_projection(
+            merchant_guid,
+            account_guids,
+            cash_flow_df,
+            parameters_to_hash,
+            details,
+            snowflake_zetatango_connection,
+            zetatango_schema,
+        )
+
         return
 
     if apply_pre_projection_guardrails(cash_flow_df, arima_projection_parameters):
@@ -1116,8 +1147,6 @@ def format_cash_flow_into_df(
         df[column_id].fillna(0, inplace=True)
 
     df["balance"].ffill(inplace=True)
-
-    print(f"Cash flow: {df}")
 
     return df
 
@@ -1352,11 +1381,11 @@ if __name__ == "__main__":
     #     "task_ts",
     #     "DBT_ARIO",
     #     "CORE_STAGING",
-    #     "m_u3QGuwJPKn3Z9PhX",
+    #     "m_727F99ZLorkJBHNZ",
     #     [
-    #         "2f896acc-28dc-4f73-b180-ef8bba92b1dc",
-    #         "e30202b7-7ac4-4823-6b24-08d80cd4bf89",
-    #         "701e48d0-44d1-4996-80df-0f3d9879ac1e",
+    #         "e6810185-76ec-4347-ad1e-3f2a36c5cd28",
+    #         "ab518574-2abd-4194-86db-10bdb3c0ca36",
+    #         "2a750ca0-9351-4ffd-8e8f-ad5657b0a25f",
     #     ],
     #     None,
     # )
