@@ -964,7 +964,7 @@ def get_account_last_transaction_date(
         return last_transactions
 
 
-def apply_data_quality_test(df: pd.DataFrame):
+def apply_data_quality_test(df: pd.DataFrame) -> bool:
     df["closing_balance"] = df["balance"] + df["credits"] - df["debits"]
 
     df["previous_closing"] = df.shift(1)["closing_balance"]
