@@ -1334,7 +1334,7 @@ def create_dag() -> DAG:
                 action=DbtAction.run,
                 models=(
                     "fct_daily_bank_account_projection fct_weekly_bank_account_projection "
-                    "fct_monthly_bank_account_projection fct_daily_multi_bank_account_projection"
+                    "fct_monthly_bank_account_projection fct_daily_multi_bank_account_projection "
                     "fct_monthly_multi_bank_account_projection fct_weekly_multi_bank_account_projection"
                 ),
             )
