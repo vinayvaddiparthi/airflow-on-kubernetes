@@ -121,6 +121,8 @@ def stage_table_in_snowflake(
     destination_schema: str,
     table: str,
 ) -> str:
+    if table in ("versions", "job_reports", "job_statuses"):
+        return f"⏭️️ Skipping table {table}"
     logging.info(f"start syncing table: {table}")
     stage_guid = random_identifier()
     with snowflake_engine.begin() as tx, cast(
