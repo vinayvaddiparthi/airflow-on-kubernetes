@@ -109,7 +109,7 @@ def export_to_snowflake(
             )
             for table in tables
         ]
-        logging.info(*output, sep="\n")
+        print(*output, sep="\n")
     finally:
         source_raw_conn.close()
 

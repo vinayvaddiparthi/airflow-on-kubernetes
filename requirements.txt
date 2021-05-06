@@ -35,7 +35,7 @@ google-api-python-client
 fs.sshfs
 python-gnupg
 
-fastparquet
+fastparquet==0.5.0
 transliterate
 
 pyarrow[pandas]<0.18.0  # pinned because of snowflake connector
