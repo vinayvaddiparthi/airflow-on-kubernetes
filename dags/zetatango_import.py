@@ -356,7 +356,7 @@ def create_dag() -> DAG:
             },
             executor_config={
                 "resources": {
-                    "requests": {"memory": "2Gi"},
+                    "requests": {"memory": "4Gi"},
                 },
             },
         )
