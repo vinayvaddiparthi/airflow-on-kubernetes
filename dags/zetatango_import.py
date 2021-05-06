@@ -109,7 +109,7 @@ def export_to_snowflake(
             )
             for table in tables
         ]
-        print(*output, sep="\n")
+        logging.info(*output, sep="\n")
     finally:
         source_raw_conn.close()
 
@@ -121,6 +121,7 @@ def stage_table_in_snowflake(
     destination_schema: str,
     table: str,
 ) -> str:
+    logging.info(f"start syncing table: {table}")
     stage_guid = random_identifier()
     with snowflake_engine.begin() as tx, cast(
         psycopg2.extensions.cursor, source_raw_conn.cursor()
@@ -135,6 +136,8 @@ def stage_table_in_snowflake(
         pq_filepath = Path(tempdir, table).with_suffix(".pq")
 
         with csv_filepath.open("w+b") as csv_filedesc:
+            logging.info(f"copy {source_schema}.{table}")
+
             cursor.copy_expert(
                 f"copy {source_schema}.{table} to stdout "
                 f"with csv header delimiter ',' quote '\"'",
@@ -142,11 +145,13 @@ def stage_table_in_snowflake(
             )
 
         try:
+            logging.info(f"read {csv_filepath} for {table}")
             table_ = pv.read_csv(
                 f"{csv_filepath}",
                 read_options=ReadOptions(block_size=8388608),
                 parse_options=ParseOptions(newlines_in_values=True),
             )
+            logging.info(f"read {csv_filepath} for {table}: Done")
         except ArrowInvalid as exc:
             return f"❌ Failed to read table {table}: {exc}"
 

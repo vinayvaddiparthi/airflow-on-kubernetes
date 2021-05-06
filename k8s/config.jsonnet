@@ -80,7 +80,7 @@ local airflowCfg = {
     operators:{ 
       default_owner:"airflow",
       default_cpus:1,
-      default_ram:512,
+      default_ram:1024,
       default_disk:512,
       default_gpus:0,
 
