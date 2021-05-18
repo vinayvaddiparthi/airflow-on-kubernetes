@@ -13,6 +13,7 @@ import psycopg2
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.http_hook import HttpHook
 from airflow.hooks.postgres_hook import PostgresHook
+from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
 from psycopg2._psycopg import connection
@@ -53,6 +54,75 @@ class DecryptionSpec:
     whereclause: Optional[ClauseElement] = attr.ib(default=None)
 
 
+def fetch_table_list(
+    source_schema: str = "public",
+    heroku_app: Optional[str] = None,
+    heroku_endpoint_url_env_var: str = "DATABASE_URL",
+    heroku_postgres_connection: Optional[str] = None,
+) -> Any:
+    if not (heroku_postgres_connection or heroku_app):
+        raise Exception(
+            "Must receive either `heroku_postgres_connection` or `heroku_app` as argument."
+        )
+
+    source_engine = (
+        PostgresHook(heroku_postgres_connection).get_sqlalchemy_engine(
+            engine_kwargs={"isolation_level": "REPEATABLE_READ"}
+        )
+        if heroku_postgres_connection
+        else create_engine(
+            heroku3.from_key(
+                HttpHook.get_connection("heroku_production_api_key").password
+            )
+            .app(heroku_app)
+            .config()[heroku_endpoint_url_env_var],
+            isolation_level="REPEATABLE_READ",
+        )
+    )
+    tables = None
+    with source_engine.begin() as tx:
+        tables = (
+            x[0]
+            for x in tx.execute(
+                Select(
+                    columns=[column("table_name")],
+                    from_obj=text('"information_schema"."tables"'),
+                    whereclause=and_(
+                        literal_column("table_schema") == literal(source_schema),
+                        literal_column("table_type") == literal("BASE TABLE"),
+                    ),
+                    order_by=1,
+                )
+            ).fetchall()
+        )
+    return tables
+
+
+def create_batches() -> list:
+    import_batch_size = int(Variable.get("zt-import-batch-size", 1))
+    batches = []
+    for i in range(import_batch_size):
+        batches.append(
+            PythonOperator(
+                task_id=f"zt-production-elt-core__import_{i}",
+                python_callable=export_to_snowflake,
+                op_kwargs={
+                    "heroku_app": "zt-production-elt-core",
+                    "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
+                    "snowflake_connection": "snowflake_zetatango_production",
+                    "snowflake_schema": "CORE_PRODUCTION",
+                    "batch_index": i,
+                },
+                executor_config={
+                    "resources": {
+                        "requests": {"memory": "2Gi"},
+                    },
+                },
+            )
+        )
+    return batches
+
+
 def export_to_snowflake(
     snowflake_connection: str,
     snowflake_schema: str,
@@ -60,6 +130,8 @@ def export_to_snowflake(
     heroku_app: Optional[str] = None,
     heroku_endpoint_url_env_var: str = "DATABASE_URL",
     heroku_postgres_connection: Optional[str] = None,
+    batch_index: int = 0,
+    **context: Any,
 ) -> None:
     if not (heroku_postgres_connection or heroku_app):
         raise Exception(
@@ -80,34 +152,23 @@ def export_to_snowflake(
             isolation_level="REPEATABLE_READ",
         )
     )
-
-    with source_engine.begin() as tx:
-        tables = (
-            x[0]
-            for x in tx.execute(
-                Select(
-                    columns=[column("table_name")],
-                    from_obj=text('"information_schema"."tables"'),
-                    whereclause=and_(
-                        literal_column("table_schema") == literal(source_schema),
-                        literal_column("table_type") == literal("BASE TABLE"),
-                    ),
-                )
-            ).fetchall()
-        )
+    tables = context["task_instance"].xcom_pull(task_ids="fetch_table_list")
+    import_batch_size = int(Variable.get("zt-import-batch-size", 1))
 
     source_raw_conn: connection = source_engine.raw_connection()
     try:
         source_raw_conn.set_isolation_level(ISOLATION_LEVEL_REPEATABLE_READ)
+
         output = [
             stage_table_in_snowflake(
                 source_raw_conn,
                 SnowflakeHook(snowflake_connection).get_sqlalchemy_engine(),
                 source_schema,
                 snowflake_schema,
-                table,
+                tables[i],
             )
-            for table in tables
+            for i in range(len(tables))
+            if i % import_batch_size == batch_index
         ]
         print(*output, sep="\n")
     finally:
@@ -352,20 +413,22 @@ def create_dag() -> DAG:
         on_failure_callback=slack_dag("slack_data_alerts"),
         max_active_runs=1,
     ) as dag:
-        import_core_prod = PythonOperator(
-            task_id="zt-production-elt-core__import",
-            python_callable=export_to_snowflake,
+
+        task_fetch_table_list = PythonOperator(
+            task_id="fetch_table_list",
+            python_callable=fetch_table_list,
             op_kwargs={
                 "heroku_app": "zt-production-elt-core",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
-                "snowflake_connection": "snowflake_zetatango_production",
-                "snowflake_schema": "CORE_PRODUCTION",
             },
             executor_config={
                 "resources": {
-                    "requests": {"memory": "4Gi"},
+                    "requests": {
+                        "memory": "2Gi"
+                    },  # revert a change made when investigating
                 },
             },
+            provide_context=True,
         )
 
         decrypt_core_prod = PythonOperator(
@@ -522,7 +585,8 @@ def create_dag() -> DAG:
             action=DbtAction.test,
         )
 
-        dag << import_core_prod >> decrypt_core_prod
+        for task in create_batches():
+            dag << task_fetch_table_list >> task >> decrypt_core_prod
         dag << import_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
         (
