@@ -18,6 +18,8 @@ rubymarshal
 PyYAML
 PyNaCl
 pyhive
+pytest
+pytest-helpers-namespace
 requests-oauthlib
 authlib
 python-slugify
