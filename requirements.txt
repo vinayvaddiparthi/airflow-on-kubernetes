@@ -7,7 +7,7 @@ mypy
 pylint
 
 # runtime
-apache-airflow[crypto,postgres,ssh,kubernetes,s3,snowflake]==1.10.15
+apache-airflow[crypto,postgres,ssh,kubernetes,s3,snowflake]==1.10.14
 flask-bcrypt  # required by airflow
 fab-oidc
 salesforce-bulk
