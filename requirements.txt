@@ -38,6 +38,11 @@ python-gnupg
 fastparquet==0.5.0
 transliterate
 
+types-requests
+types-python-slugify
+types-PyYAML
+types-Jinja2
+
 pyarrow[pandas]<0.18.0  # pinned because of snowflake connector
 requests<2.24  # pinned because of snowflake connector
 boto3<1.16  # pinned because of snowflake connector
