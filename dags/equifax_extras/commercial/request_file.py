@@ -22,7 +22,7 @@ class RequestFile(BaseRequestFile):
         self._output = open(self.path, "a+", encoding=self.encoding)
 
         column_names = self.__class__.Row.column_names
-        self._writer = csv.DictWriter(self._output, fieldnames=column_names)
+        self._writer = csv.DictWriter(self._output, fieldnames=column_names)  # type: ignore
 
     def __del__(self) -> None:
         self._output.close()

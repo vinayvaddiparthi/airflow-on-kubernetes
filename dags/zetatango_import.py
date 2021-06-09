@@ -194,7 +194,7 @@ def decrypt_pii_columns(
 
     yaml.add_constructor(
         "!ruby/object:BigDecimal",
-        lambda loader, node: float(loader.construct_scalar(node).split(":")[1]),
+        lambda loader, node: float(loader.construct_scalar(node).split(":")[1]),  # type: ignore
     )
 
     yaml.add_constructor(
