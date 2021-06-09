@@ -9,6 +9,8 @@ from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.operators.python_operator import PythonOperator
+from utils.failure_callbacks import slack_dag
+
 
 bucket = "tc-datalake"
 commercial_prefix = "equifax_offline_batch/commercial/output/"
@@ -97,6 +99,7 @@ with DAG(
         2020, 7, 21, tzinfo=pendulum.timezone("America/Toronto")
     ),
     default_args={"retries": 3, "retry_delay": timedelta(minutes=30)},
+    on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
     dag << PythonOperator(
         task_id="commercial_batch_import",
