@@ -4,7 +4,7 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from sqlalchemy import create_engine, text
 from sqlalchemy.sql import Select
-
+from utils.failure_callbacks import slack_dag
 
 def ctas(catalog: str, schema: str, table: str) -> None:
     engine = create_engine(
@@ -41,6 +41,7 @@ def create_dag() -> DAG:
         schedule_interval="0 9 * * *",
         catchup=False,
         description="",
+        on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
         for schema, table in [
             ("tc_salesvolume", "currency_code"),
