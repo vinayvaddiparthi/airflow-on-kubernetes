@@ -20,6 +20,9 @@ from equifax_extras.consumer.request_file import RequestFile
 from typing import Any
 from jinja2 import Template
 
+from utils.failure_callbacks import slack_dag
+
+
 statement_template = """
 with
     applicant as (
@@ -265,6 +268,7 @@ def create_dag(bucket: str, folder: str) -> DAG:
         catchup=False,
         default_args=default_args,
         schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
+        on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
         op_generate_file = PythonOperator(
             task_id="generate_file",

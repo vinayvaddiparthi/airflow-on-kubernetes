@@ -27,6 +27,9 @@ from helpers.suspend_aws_env import SuspendAwsEnvVar
 
 import gnupg
 
+from utils.failure_callbacks import slack_dag
+
+
 EXECUTOR_CONFIG = {
     "KubernetesExecutor": {
         "annotations": {
@@ -185,6 +188,7 @@ def create_dags() -> Tuple[DAG, DAG]:
         ),
         schedule_interval=None,
         catchup=False,
+        on_failure_callback=slack_dag("slack_data_alerts"),
     ) as inbox_dag:
         (
             inbox_dag
@@ -241,6 +245,7 @@ def create_dags() -> Tuple[DAG, DAG]:
         ),
         schedule_interval=None,
         catchup=False,
+        on_failure_callback=slack_dag("slack_data_alerts"),
     ) as outbox_dag:
         outbox_dag << PythonOperator(
             task_id="sync_s3fs_to_sshfs",

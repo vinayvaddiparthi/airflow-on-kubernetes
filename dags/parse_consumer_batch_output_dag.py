@@ -13,6 +13,9 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
 from airflow.models import Variable
 
+from utils.failure_callbacks import slack_dag
+
+
 today = datetime.now().today()
 first = today.replace(day=1)
 last_month = first - timedelta(days=1)
@@ -1476,6 +1479,7 @@ dag = DAG(
     schedule_interval="@daily",
     default_args=default_args,
     catchup=False,
+    on_failure_callback=slack_dag("slack_data_alerts"),
 )
 
 snowflake_conn = "airflow_production"
