@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.sql import Select
 from utils.failure_callbacks import slack_dag
 
+
 def ctas(catalog: str, schema: str, table: str) -> None:
     engine = create_engine(
         "presto://presto-production-internal.presto.svc:8080/sf_production_appv3"
