@@ -28,6 +28,9 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Select
 from snowflake.sqlalchemy import VARIANT
 
+from utils.failure_callbacks import slack_dag
+
+
 MAX_RUNS = 360
 
 
@@ -191,6 +194,7 @@ def create_dag() -> DAG:
         catchup=True,
         max_active_runs=4,
         description="",
+        on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
         dag << PythonOperator(
             task_id="talkdesk_import",

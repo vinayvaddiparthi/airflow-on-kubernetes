@@ -3,6 +3,7 @@ from datetime import timedelta
 import pendulum
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
+from utils.failure_callbacks import slack_dag
 
 
 dbt_run = DbtOperator(
@@ -25,5 +26,6 @@ with DAG(
         2020, 4, 21, tzinfo=pendulum.timezone("America/Toronto")
     ),
     description="",
+    on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
     dag << dbt_run >> dbt_snapshot
