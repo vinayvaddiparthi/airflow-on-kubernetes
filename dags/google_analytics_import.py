@@ -88,6 +88,35 @@ reports: Dict[str, Any] = {
             ]
         },
     },
+    "server_cx": {
+        "primary_keys": [
+            "fields:dimension5::string",
+            "fields:eventAction::string",
+            "fields:dateHourMinute::string",
+        ],
+        "payload": {
+            "reportRequests": [
+                {
+                    "viewId": VIEW_ID,
+                    "dateRanges": [{"startDate": None, "endDate": None}],
+                    "metrics": [
+                        {"expression": "ga:users"},
+                    ],
+                    "dimensions": [
+                        {"name": "ga:dimension5"},
+                        {"name": "ga:hostname"},
+                        {"name": "ga:pagePath"},
+                        {"name": "ga:eventAction"},
+                        {"name": "ga:date"},
+                        {"name": "ga:dateHourMinute"},
+                        {"name": "ga:eventCategory"},
+                    ],
+                    "pageToken": "0",
+                    "pageSize": ROW_LIMIT,
+                }
+            ]
+        },
+    },
     "acquisition": {
         "primary_keys": ["fields:dimension6::string", "fields:dateHourMinute::string"],
         "payload": {
