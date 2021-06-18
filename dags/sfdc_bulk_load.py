@@ -14,7 +14,8 @@ import requests
 import urllib.parse as urlparse
 
 from airflow import DAG
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+
+# from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from sqlalchemy import create_engine
 from snowflake.sqlalchemy import URL
 from airflow.hooks.base_hook import BaseHook
@@ -256,6 +257,8 @@ def process_sobject(
     else:
         max_date_col = "SystemModstamp"
 
+    print(f"max_date_col is {max_date_col}")
+
     chunks: List[List[str]] = [sobject.fields]
     if len(sobject.fields) >= WIDE_THRESHOLD:
         chunks = [["Id", max_date_col] for _ in range(NUM_BUCKETS)]
@@ -280,10 +283,7 @@ def process_sobject(
         max_date: Optional[datetime.datetime] = None
         try:
             with engine_.begin() as tx:
-                max_date = (
-                    tx.execute(stmt)
-                    .fetchall()[0][0]
-                )
+                max_date = tx.execute(stmt).fetchall()[0][0]
 
             if max_date is not None:
                 max_date = max_date.replace(tzinfo=datetime.timezone.utc)
@@ -326,12 +326,14 @@ def process_sobject(
 def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str) -> None:
     # engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     engine_ = create_engine(
-        URL(account="thinkingcapital.ca-central-1.aws",
+        URL(
+            account="thinkingcapital.ca-central-1.aws",
             user="juntong.xiao@thinkingcapital.ca",
             password="{any_string}",
             database="ANALYTICS_REVIEW_JXIAO_XSPU22",
             warehouse="ETL",
-            role="DBT_DEVELOPMENT"),
+            role="DBT_DEVELOPMENT",
+        ),
         connect_args={
             "authenticator": "externalbrowser",
         },
@@ -341,13 +343,13 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str) -> None:
         username=salesforce_connection.login,
         password=salesforce_connection.password,
         security_token=salesforce_connection.extra_dejson["security_token"],
-        domain='test'
+        domain="test",
     )
     salesforce_bulk = SalesforceBulk(
         username=salesforce_connection.login,
         password=salesforce_connection.password,
         security_token=salesforce_connection.extra_dejson["security_token"],
-        domain='test'
+        domain="test",
     )
 
     with ThreadPoolExecutor(max_workers=4) as processing_executor:
@@ -403,8 +405,6 @@ def create_dag(instances: List[str]) -> DAG:
 if __name__ == "__main__":
     import os
     from unittest.mock import MagicMock, patch
-    from sqlalchemy import create_engine
-    from snowflake.sqlalchemy import URL
 
     account = os.environ.get("SNOWFLAKE_ACCOUNT", "thinkingcapital.ca-central-1.aws")
     database = os.environ.get("SNOWFLAKE_DATABASE")
@@ -413,12 +413,14 @@ if __name__ == "__main__":
     password = os.environ.get("SNOWFLAKE_PASSWORD")
 
     url = (
-        URL(account=account,
+        URL(
+            account=account,
             user=user,
             password=password,
             database=database,
             warehouse="ETL",
-            role=role)
+            role=role,
+        )
         if role
         else URL(account=account, database=database)
     )
