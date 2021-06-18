@@ -257,7 +257,7 @@ def process_sobject(
     else:
         max_date_col = "SystemModstamp"
 
-    print(f"max_date_col is {max_date_col}")
+    print(f"🚩max_date_col is {max_date_col}")
 
     chunks: List[List[str]] = [sobject.fields]
     if len(sobject.fields) >= WIDE_THRESHOLD:
@@ -273,7 +273,7 @@ def process_sobject(
         try:
             ensure_stage_and_view(engine_, schema, destination_table)
         except Exception as exc:
-            print(f"snowflake connection failed with {exc}")
+            print(f"🚩snowflake connection failed with {exc}")
 
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
@@ -283,10 +283,14 @@ def process_sobject(
         max_date: Optional[datetime.datetime] = None
         try:
             with engine_.begin() as tx:
-                max_date = tx.execute(stmt).fetchall()[0][0]
+                max_date = (
+                    tx.execute(stmt)
+                    .fetchall()[0][0]
+                    .replace(tzinfo=datetime.timezone.utc)
+                )
 
             if max_date is not None:
-                max_date = max_date.replace(tzinfo=datetime.timezone.utc)
+                print(f"🚩max_date: {max_date}")
                 num_recs_to_load = salesforce.query(
                     f"select count(Id) from {sobject.name} "  # nosec
                     f"where {max_date_col} > {max_date.isoformat()}"  # nosec
@@ -300,7 +304,7 @@ def process_sobject(
                 f"and num_recs_to_load to sobject.count"
             )
             num_recs_to_load = sobject.count
-            print(num_recs_to_load)
+            print(f"🚩{num_recs_to_load}")  # need deletion
 
         if num_recs_to_load == 0:
             print(f"📝️Skipping {destination_table} because there are no new records")
