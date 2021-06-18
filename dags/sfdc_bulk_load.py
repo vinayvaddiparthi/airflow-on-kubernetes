@@ -257,6 +257,12 @@ def process_sobject(
     else:
         max_date_col = "SystemModstamp"
 
+    if "SystemModstamp" not in sobject.fields:
+        if "LastModifiedDate" in sobject.fields:
+            max_date_col = "LastModifiedDate"
+        else:
+            max_date_col = "CreatedDate"
+
     print(f"🚩max_date_col is {max_date_col}")
 
     chunks: List[List[str]] = [sobject.fields]
