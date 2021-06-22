@@ -415,6 +415,20 @@ def create_dag() -> DAG:
                         table="QUICKBOOKS_ACCOUNTING_TRANSACTIONS",
                         columns=["account", "split"],
                     ),
+                    DecryptionSpec(
+                        schema="CORE_PRODUCTION",
+                        table="LEADS",
+                        columns=[
+                            "encrypted_applicant_email",
+                            "encrypted_applicant_email",
+                            "encrypted_applicant_first_name",
+                            "encrypted_applicant_first_name_iv",
+                            "encrypted_applicant_last_name",
+                            "encrypted_applicant_last_name_iv",
+                            "encrypted_merchant_name",
+                            "encrypted_merchant_name_iv"
+                        ]
+                    )
                 ],
                 "target_schema": "PII_PRODUCTION",
             },
