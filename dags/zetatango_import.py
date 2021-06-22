@@ -427,8 +427,8 @@ def create_dag() -> DAG:
                             "encrypted_applicant_last_name_iv",
                             "encrypted_merchant_name",
                             "encrypted_merchant_name_iv",
-                        ]
-                    )
+                        ],
+                    ),
                 ],
                 "target_schema": "PII_PRODUCTION",
             },
