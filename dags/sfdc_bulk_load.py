@@ -190,7 +190,7 @@ def put_resps_on_snowflake(
 
                 print(
                     tx.execute(
-                        f"put file://{pq_filepath} @SALESFORCE2.{destination_schema}.{destination_table}"
+                        f"put file://{pq_filepath} @salesforce2.{destination_schema}.{destination_table}"
                     ).fetchall()
                 )
 
@@ -218,7 +218,7 @@ def ensure_stage_and_view(
 ) -> None:
     with engine_.begin() as tx:
         stmts = [
-            "use database SALESFORCE2",
+            "use database salesforce2",
             f"create stage if not exists {destination_schema}.{destination_table} "  # nosec
             f"  file_format=(type=parquet)",  # nosec
             f"create or replace view {destination_schema}.{destination_table} as "  # nosec
@@ -283,7 +283,7 @@ def process_sobject(
         max_date: Optional[datetime.datetime] = None
         try:
             with engine_.begin() as tx:
-                tx.execute("use database SALESFORCE2").fetchall()
+                tx.execute("use database salesforce2").fetchall()
                 max_date = (
                     tx.execute(stmt)
                     .fetchall()[0][0]
@@ -366,7 +366,7 @@ def create_dag(instances: List[str]) -> DAG:
         start_date=pendulum.datetime(
             2020, 6, 21, tzinfo=pendulum.timezone("America/Toronto")
         ),
-        schedule_interval=None,
+        schedule_interval="0 0 * * *",
         catchup=False,
         description="",
         on_failure_callback=slack_dag("slack_data_alerts"),
@@ -435,4 +435,4 @@ if __name__ == "__main__":
     ) as mock_engine:
         import_sfdc("snowflake_conn", "salesforce_conn", "sfztt")
 else:
-    globals()["salesforce_bulk_import_dag"] = create_dag(["ZETATANGO"])
+    globals()["salesforce_bulk_import_dag"] = create_dag(["zetatango"])
