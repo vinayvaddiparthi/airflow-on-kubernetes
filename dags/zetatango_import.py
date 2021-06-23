@@ -21,6 +21,11 @@ import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
 from json import dumps as json_dumps
+from pyporky.symmetric import SymmetricPorky
+from json import loads as json_loads
+from base64 import b64decode
+import yaml
+from rubymarshal.reader import loads as rubymarshal_loads
 
 from sqlalchemy import (
     text,
@@ -186,12 +191,6 @@ def decrypt_pii_columns(
     decryption_specs: List[DecryptionSpec],
     target_schema: str,
 ) -> None:
-    from pyporky.symmetric import SymmetricPorky
-    from json import loads as json_loads
-    from base64 import b64decode
-    import yaml
-    from rubymarshal.reader import loads as rubymarshal_loads
-
     yaml.add_constructor(
         "!ruby/object:BigDecimal",
         lambda loader, node: float(loader.construct_scalar(node).split(":")[1]),  # type: ignore
