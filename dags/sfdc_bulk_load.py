@@ -370,6 +370,7 @@ def create_dag(instances: List[str]) -> DAG:
         catchup=False,
         description="",
         on_failure_callback=slack_dag("slack_data_alerts"),
+        max_active_runs=1,
     ) as dag:
         for instance in instances:
             dag << PythonOperator(
@@ -380,6 +381,7 @@ def create_dag(instances: List[str]) -> DAG:
                     "salesforce_conn": f"salesforce_{instance}_sandbox",
                     "schema": instance,
                 },
+                pool="sfdc_pool",
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
                 executor_config={
