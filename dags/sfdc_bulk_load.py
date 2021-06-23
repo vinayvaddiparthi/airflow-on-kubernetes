@@ -17,6 +17,7 @@ from airflow import DAG
 
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
+from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from pyarrow._csv import ParseOptions
 from salesforce_bulk.bulk_states import NOT_PROCESSED
@@ -437,4 +438,4 @@ if __name__ == "__main__":
     ) as mock_engine:
         import_sfdc("snowflake_conn", "salesforce_conn", "sfztt")
 else:
-    globals()["salesforce_bulk_import_dag"] = create_dag(["zetatango"])
+    globals()["salesforce_bulk_import_dag"] = create_dag(Variable.get("salesforce_instances", deserialize_json=True))
