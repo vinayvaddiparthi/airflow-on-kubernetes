@@ -162,6 +162,7 @@ def get_resps_from_fields(
 
 
 def put_resps_on_snowflake(
+    destination_database: str,
     destination_schema: str,
     destination_table: str,
     engine_: Engine,
@@ -191,7 +192,7 @@ def put_resps_on_snowflake(
 
                 print(
                     tx.execute(
-                        f"put file://{pq_filepath} @salesforce2.{destination_schema}.{destination_table}"
+                        f"put file://{pq_filepath} @{destination_database}.{destination_schema}.{destination_table}"
                     ).fetchall()
                 )
 
@@ -215,11 +216,14 @@ def describe_sobject(
 
 
 def ensure_stage_and_view(
-    engine_: Engine, destination_schema: str, destination_table: str
+    engine_: Engine,
+    destination_database: str,
+    destination_schema: str,
+    destination_table: str,
 ) -> None:
     with engine_.begin() as tx:
         stmts = [
-            "use database salesforce2",
+            f"use database {destination_database}",
             f"create stage if not exists {destination_schema}.{destination_table} "  # nosec
             f"  file_format=(type=parquet)",  # nosec
             f"create or replace view {destination_schema}.{destination_table} as "  # nosec
@@ -234,6 +238,7 @@ def process_sobject(
     salesforce: Salesforce,
     bulk: SalesforceBulk,
     engine_: Engine,
+    database: str,
     schema: str,
 ) -> None:
     try:
@@ -274,7 +279,7 @@ def process_sobject(
 
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
-        ensure_stage_and_view(engine_, schema, destination_table)
+        ensure_stage_and_view(engine_, database, schema, destination_table)
 
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
@@ -284,7 +289,7 @@ def process_sobject(
         max_date: Optional[datetime.datetime] = None
         try:
             with engine_.begin() as tx:
-                tx.execute("use database salesforce2").fetchall()
+                tx.execute(f"use database {database}").fetchall()
                 max_date = (
                     tx.execute(stmt)
                     .fetchall()[0][0]
@@ -320,14 +325,16 @@ def process_sobject(
                 max_date_col=max_date_col,
                 max_date=max_date,
             )
-            put_resps_on_snowflake(schema, destination_table, engine_, resps)
+            put_resps_on_snowflake(database, schema, destination_table, engine_, resps)
         except Exception as exc:
             print(f"❌️put_resps_on_snowflake on {destination_table} raised \n{exc}")
 
         print(f"✨️Done processing {sobject.name}")
 
 
-def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str) -> None:
+def import_sfdc(
+    snowflake_conn: str, salesforce_conn: str, database: str, schema: str
+) -> None:
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     salesforce_connection = BaseHook.get_connection(salesforce_conn)
     salesforce = Salesforce(
@@ -351,6 +358,7 @@ def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str) -> None:
                 salesforce,
                 salesforce_bulk,
                 engine_,
+                database,
                 schema,
             )
             for sobject_name in (
@@ -380,6 +388,7 @@ def create_dag(instances: List[str]) -> DAG:
                 op_kwargs={
                     "snowflake_conn": "snowflake_zetatango_production",
                     "salesforce_conn": f"salesforce_{instance}_sandbox",
+                    "database": "salesforce2",
                     "schema": instance,
                 },
                 pool="sfdc_pool",
@@ -436,6 +445,8 @@ if __name__ == "__main__":
             },
         ),
     ) as mock_engine:
-        import_sfdc("snowflake_conn", "salesforce_conn", "sfztt")
+        import_sfdc("snowflake_conn", "salesforce_conn", database, "zetatango")
 else:
-    globals()["salesforce_bulk_import_dag"] = create_dag(Variable.get("salesforce_instances", deserialize_json=True))
+    globals()["salesforce_bulk_import_dag"] = create_dag(
+        Variable.get("salesforce_instances", deserialize_json=True)
+    )
