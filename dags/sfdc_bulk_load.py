@@ -277,6 +277,13 @@ def process_sobject(
             i = hash(field) % NUM_BUCKETS
             chunks[i].append(field)
 
+    with engine_.begin() as create_schema:
+        stmts = [
+            f"use database {database}",
+            f"create schema if not exists {schema}"
+        ]
+        print([create_schema.execute(stmt).fetchall() for stmt in stmts])
+
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
         ensure_stage_and_view(engine_, database, schema, destination_table)
@@ -386,7 +393,7 @@ def create_dag(instances: List[str]) -> DAG:
                 task_id=f"import_{instance}",
                 python_callable=import_sfdc,
                 op_kwargs={
-                    "snowflake_conn": "snowflake_zetatango_production",
+                    "snowflake_conn": "airflow_production",
                     "salesforce_conn": f"salesforce_{instance}_sandbox",
                     "database": "salesforce2",
                     "schema": instance,
