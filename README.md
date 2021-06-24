@@ -100,3 +100,49 @@ Now you can run ```airflow initdb``` to init your db.
 Run ```airflow scheduler``` to start scheduler. The scheduler will load dags and schedule dags to be run by executors.
 
 Run ```airflow webserver``` to enable GUI that you normally can use at localhost:8080.
+
+Here is an example of changes need to be made in `sfdc_bulk_load.py` for testing the DAG:
+
+#### Connect to source
+You need to add the `salesforce_conn` to your local airflow. To connect with Salesforce sandbox,
+you'll also need to add `domain='test'` to your `Salesforce()` call.
+
+#### Connect to destination
+1. If you already have the `snowflake_conn` in your local airflow, you can keep using the connection.
+2. If you don't have the `snowflake_conn`, you can change
+```python
+engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
+```
+to
+```python
+engine_ = create_engine(
+        URL(
+            account="thinkingcapital.ca-central-1.aws",
+            user="{your_username_usually_email_in_snowflake}",
+            password="{your_password}",
+            database="{destination_db}",
+            warehouse="{destination_wh}",
+            role="{your_role}",
+        ),
+        connect_args={
+            "authenticator": "externalbrowser",
+        },
+    )
+```
+(`database="{destination_db}"` is optional here because this DAG is using
+`f'use database {database}'` in every query, database in `URL()` won't affect the destination DB)
+
+For local tests, if you don't want to load data into production DBs,
+you will need to change the `database` and `schema` in `op_kwargs` to the destination DB you want. For example:
+```python
+       op_kwargs={
+                    "snowflake_conn": "",
+                    "salesforce_conn": "",
+                    "database": "{your_branch_db}"
+                    "schema": "{schema_in_your_db}",
+                }
+```
+
+#### Variables and Pools:
+Before testing, you should check if there are any airflow _Variables_ or _Pools_ being used in the DAG,
+if so, you may need to add them to your local.
