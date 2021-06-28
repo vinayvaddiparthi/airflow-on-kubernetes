@@ -278,10 +278,7 @@ def process_sobject(
             chunks[i].append(field)
 
     with engine_.begin() as create_schema:
-        stmts = [
-            f"use database {database}",
-            f"create schema if not exists {schema}"
-        ]
+        stmts = [f"use database {database}", f"create schema if not exists {schema}"]
         print([create_schema.execute(stmt).fetchall() for stmt in stmts])
 
     for i, fields in enumerate(chunks):
@@ -348,13 +345,11 @@ def import_sfdc(
         username=salesforce_connection.login,
         password=salesforce_connection.password,
         security_token=salesforce_connection.extra_dejson["security_token"],
-        domain="test",  # need to be removed for prod
     )
     salesforce_bulk = SalesforceBulk(
         username=salesforce_connection.login,
         password=salesforce_connection.password,
         security_token=salesforce_connection.extra_dejson["security_token"],
-        domain="test",  # need to be removed for prod
     )
 
     with ThreadPoolExecutor(max_workers=4) as processing_executor:
@@ -394,7 +389,7 @@ def create_dag(instances: List[str]) -> DAG:
                 python_callable=import_sfdc,
                 op_kwargs={
                     "snowflake_conn": "airflow_production",
-                    "salesforce_conn": f"salesforce_{instance}_sandbox",
+                    "salesforce_conn": f"salesforce_{instance}",
                     "database": "salesforce2",
                     "schema": instance,
                 },
