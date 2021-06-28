@@ -14,10 +14,8 @@ import requests
 import urllib.parse as urlparse
 
 from airflow import DAG
-
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
-from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from pyarrow._csv import ParseOptions
 from salesforce_bulk.bulk_states import NOT_PROCESSED
@@ -162,7 +160,6 @@ def get_resps_from_fields(
 
 
 def put_resps_on_snowflake(
-    destination_database: str,
     destination_schema: str,
     destination_table: str,
     engine_: Engine,
@@ -192,7 +189,7 @@ def put_resps_on_snowflake(
 
                 print(
                     tx.execute(
-                        f"put file://{pq_filepath} @{destination_database}.{destination_schema}.{destination_table}"
+                        f"put file://{pq_filepath} @{destination_schema}.{destination_table}"
                     ).fetchall()
                 )
 
@@ -209,21 +206,17 @@ def describe_sobject(
             for field in getattr(salesforce, sobject_name).describe()["fields"]
             if field["type"] != "address"
         ],
-        count=salesforce.query(f"select count(Id) from {sobject_name}")[  # nosec
+        count=salesforce.query(f"select count(id) from {sobject_name}")[  # nosec
             "records"
         ][0]["expr0"],
     )
 
 
 def ensure_stage_and_view(
-    engine_: Engine,
-    destination_database: str,
-    destination_schema: str,
-    destination_table: str,
+    engine_: Engine, destination_schema: str, destination_table: str
 ) -> None:
     with engine_.begin() as tx:
         stmts = [
-            f"use database {destination_database}",
             f"create stage if not exists {destination_schema}.{destination_table} "  # nosec
             f"  file_format=(type=parquet)",  # nosec
             f"create or replace view {destination_schema}.{destination_table} as "  # nosec
@@ -238,7 +231,6 @@ def process_sobject(
     salesforce: Salesforce,
     bulk: SalesforceBulk,
     engine_: Engine,
-    database: str,
     schema: str,
 ) -> None:
     try:
@@ -262,12 +254,6 @@ def process_sobject(
     else:
         max_date_col = "SystemModstamp"
 
-    if "SystemModstamp" not in sobject.fields:
-        if "LastModifiedDate" in sobject.fields:
-            max_date_col = "LastModifiedDate"
-        else:
-            max_date_col = "CreatedDate"
-
     chunks: List[List[str]] = [sobject.fields]
     if len(sobject.fields) >= WIDE_THRESHOLD:
         chunks = [["Id", max_date_col] for _ in range(NUM_BUCKETS)]
@@ -277,13 +263,9 @@ def process_sobject(
             i = hash(field) % NUM_BUCKETS
             chunks[i].append(field)
 
-    with engine_.begin() as create_schema:
-        stmts = [f"use database {database}", f"create schema if not exists {schema}"]
-        print([create_schema.execute(stmt).fetchall() for stmt in stmts])
-
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
-        ensure_stage_and_view(engine_, database, schema, destination_table)
+        ensure_stage_and_view(engine_, schema, destination_table)
 
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
@@ -293,14 +275,13 @@ def process_sobject(
         max_date: Optional[datetime.datetime] = None
         try:
             with engine_.begin() as tx:
-                tx.execute(f"use database {database}").fetchall()
                 max_date = (
                     tx.execute(stmt)
                     .fetchall()[0][0]
                     .replace(tzinfo=datetime.timezone.utc)
                 )
 
-            if max_date is not None:
+            if max_date:
                 num_recs_to_load = salesforce.query(
                     f"select count(Id) from {sobject.name} "  # nosec
                     f"where {max_date_col} > {max_date.isoformat()}"  # nosec
@@ -329,16 +310,14 @@ def process_sobject(
                 max_date_col=max_date_col,
                 max_date=max_date,
             )
-            put_resps_on_snowflake(database, schema, destination_table, engine_, resps)
+            put_resps_on_snowflake(schema, destination_table, engine_, resps)
         except Exception as exc:
-            print(f"❌️put_resps_on_snowflake on {destination_table} raised \n{exc}")
+            print(f"⚠️put_resps_on_snowflake on {destination_table} raised \n{exc}")
 
         print(f"✨️Done processing {sobject.name}")
 
 
-def import_sfdc(
-    snowflake_conn: str, salesforce_conn: str, database: str, schema: str
-) -> None:
+def import_sfdc(snowflake_conn: str, salesforce_conn: str, schema: str) -> None:
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     salesforce_connection = BaseHook.get_connection(salesforce_conn)
     salesforce = Salesforce(
@@ -360,7 +339,6 @@ def import_sfdc(
                 salesforce,
                 salesforce_bulk,
                 engine_,
-                database,
                 schema,
             )
             for sobject_name in (
@@ -381,19 +359,16 @@ def create_dag(instances: List[str]) -> DAG:
         catchup=False,
         description="",
         on_failure_callback=slack_dag("slack_data_alerts"),
-        max_active_runs=1,
     ) as dag:
         for instance in instances:
             dag << PythonOperator(
                 task_id=f"import_{instance}",
                 python_callable=import_sfdc,
                 op_kwargs={
-                    "snowflake_conn": "airflow_production",
+                    "snowflake_conn": "snowflake_salesforce2",
                     "salesforce_conn": f"salesforce_{instance}",
-                    "database": "salesforce2",
                     "schema": instance,
                 },
-                pool="sfdc_pool",
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
                 executor_config={
@@ -415,18 +390,9 @@ if __name__ == "__main__":
     account = os.environ.get("SNOWFLAKE_ACCOUNT", "thinkingcapital.ca-central-1.aws")
     database = os.environ.get("SNOWFLAKE_DATABASE", "SALESFORCE2")
     role = os.environ.get("SNOWFLAKE_ROLE", "SYSADMIN")
-    user = os.environ.get("SNOWFLAKE_USERNAME")
-    password = os.environ.get("SNOWFLAKE_PASSWORD")
 
     url = (
-        URL(
-            account=account,
-            user=user,
-            password=password,
-            database=database,
-            warehouse="ETL",
-            role=role,
-        )
+        URL(account=account, database=database, role=role)
         if role
         else URL(account=account, database=database)
     )
@@ -447,8 +413,6 @@ if __name__ == "__main__":
             },
         ),
     ) as mock_engine:
-        import_sfdc("snowflake_conn", "salesforce_conn", database, "zetatango")
+        import_sfdc("snowflake_conn", "salesforce_conn", "sftc")
 else:
-    globals()["salesforce_bulk_import_dag"] = create_dag(
-        Variable.get("salesforce_instances", deserialize_json=True)
-    )
+    globals()["salesforce_bulk_import_dag"] = create_dag(["sftc"])
