@@ -1,3 +1,10 @@
+# This dag process the result file back from Equifax
+# After we got the .out1 file from Risk, rename and upload to this bucket below
+# [advanceit] tc-datalake/equifax_automated_batch/response/consumer/
+# the dag will process it into a CSV file and upload it to
+# [advanceit] tc-datalake/equifax_automated_batch/output/consumer/
+# Then the CSV will be copied into snowflake Equifax.public.consumer_batch,
+# with a history table create on the side
 from datetime import datetime, timedelta
 import logging
 
@@ -1784,11 +1791,11 @@ task_end = PythonOperator(task_id="end", python_callable=end, dag=dag)
 task_check_output >> [task_get_file, task_end]
 task_get_file >> [task_convert_file, task_end]
 (
-    task_convert_file
-    >> task_insert_snowflake_raw
-    >> task_fix_date
-    >> task_insert_snowflake
-    >> task_insert_snowflake_public
+    task_convert_file #out1 -> csv -> s3
+    >> task_insert_snowflake_raw #copy from s3 to snowflake, table
+    >> task_fix_date #query table into dataframe, apply the format conversion, df-> csv, overwrite
+    >> task_insert_snowflake #csv -> snowflake's equifax.output
+    >> task_insert_snowflake_public # equifax.output-> equifax.public
 )
 
 environment = Variable.get("environment", "")

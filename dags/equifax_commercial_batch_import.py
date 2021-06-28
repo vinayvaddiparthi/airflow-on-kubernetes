@@ -1,3 +1,4 @@
+# This dag is the old half manual way to process output from Equifax, no longer in service
 from datetime import timedelta
 from typing import Any
 from equifax_extras.commercial_batch_data_type import dt_comm, dt_tcap
