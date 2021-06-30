@@ -22,13 +22,12 @@ from airflow.models import Variable
 
 from utils.failure_callbacks import slack_dag
 
-
+# Use first day of current month to determine last month name
 today = datetime.now().today()
 first = today.replace(day=1)
 last_month = first - timedelta(days=1)
 
-Variable.set("t_stamp", last_month.strftime("%Y%m"))
-t_stamp = Variable.get("t_stamp")  # '2021XX'
+t_stamp = last_month.strftime("%Y%m")  # '2021XX'
 base_file_name = f"tc_consumer_batch_{t_stamp}"
 bucket = "tc-datalake"
 prefix_path = "equifax_automated_batch"
@@ -38,11 +37,11 @@ consumer_path = "/consumer"
 full_response_path = prefix_path + response_path + consumer_path
 full_output_path = prefix_path + output_path + consumer_path
 
-table_name_raw = "EQUIFAX.OUTPUT.CONSUMER_BATCH_RAW"
-table_name_raw_history = f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_RAW_{t_stamp}"
-table_name = "EQUIFAX.OUTPUT.CONSUMER_BATCH"
-table_name_history = f"EQUIFAX.OUTPUT_HISTORY.CONSUMER_BATCH_{t_stamp}"
-table_name_public = "EQUIFAX.PUBLIC.CONSUMER_BATCH"
+table_name_raw = "equifax.output.consumer_batch_raw"
+table_name_raw_history = f"equifax.output_history.consumer_batch_raw_{t_stamp}"
+table_name = "equifax.output.consumer_batch"
+table_name_history = f"equifax.output_history.consumer_batch_{t_stamp}"
+table_name_public = "equifax.public.consumer_batch"
 
 personal_info = [37, 52, 62, 88, 94, 124, 144, 146, 152]
 
@@ -1482,7 +1481,7 @@ default_args = {
 }
 
 dag = DAG(
-    "equifax_consumer_batch_output_dag",
+    "equifax_consumer_s3_to_snowflake",
     schedule_interval="@daily",
     default_args=default_args,
     catchup=False,
@@ -1495,8 +1494,8 @@ aws_hook = AwsHook(aws_conn_id="s3_datalake")
 aws_credentials = aws_hook.get_credentials()
 
 
-def _convert_line_csv(line: str) -> str:
-    indices = _gen_arr(0, result_dict)
+def convert_line_csv(line: str) -> str:
+    indices = generate_index_list(0, result_dict)
     parts = []
     x = zip(indices, indices[1:] + [None])
     for i, j in x:
@@ -1507,7 +1506,7 @@ def _convert_line_csv(line: str) -> str:
     return ",".join(parts)
 
 
-def _gen_arr(start: int, dol: Dict) -> List:
+def generate_index_list(start: int, dol: Dict) -> List:
     result = [start]
     for l in dol:
         result.append(result[-1] + dol[l])
@@ -1558,7 +1557,7 @@ def _convert_date_format(value: str) -> Any:
     return None
 
 
-def _get_s3() -> Any:
+def get_s3_client() -> Any:
     hack_clear_aws_keys()
     return boto3.client(
         "s3",
@@ -1567,7 +1566,7 @@ def _get_s3() -> Any:
     )
 
 
-def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
+def insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
     d3: Dict[str, int] = result_dict
     logging.info(f"Size of dict: {len(d3)}")
 
@@ -1581,12 +1580,12 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
         if date_formatted:
             pass
             if "HISTORY" in table:
-                sfh.execute(f"CREATE OR REPLACE TABLE {table} CLONE {table_name}")
+                sfh.execute(f"create or replace table {table} clone {table_name}")
 
-            sql = f"CREATE OR REPLACE TABLE {table} ({','.join(cols)});"
+            sql = f"create or replace table {table} ({','.join(cols)});"
             sfh.execute(sql)
         else:
-            sql = f"CREATE OR REPLACE TABLE {table} ({','.join(cols)});"
+            sql = f"create or replace table {table} ({','.join(cols)});"
             sfh.execute(sql)
 
         file = f"S3://{bucket}/{full_output_path}/{file_name}"
@@ -1598,7 +1597,7 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
                 )
                 FILE_FORMAT = (
                     field_delimiter=',',
-                    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+                    field_optionally_enclosed_by = '"'
                     {', skip_header=1' if date_formatted else ''}
                 )
                 """
@@ -1606,8 +1605,13 @@ def _insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) 
 
 
 def fix_date_format() -> None:
+    """
+    Date format of listed field are SAS format,
+    and they are not valid to be converted into datetime directly with snowflake to_date()
+    Therefore, we fix the format string value to make them convertable
+    """
     with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
-        select = f"SELECT * FROM {table_name_raw}"  # nosec
+        select = f"select * from {table_name_raw}"  # nosec
         result = sfh.execute(select)
 
         df = pd.DataFrame(result.cursor.fetchall())
@@ -1644,7 +1648,10 @@ def fix_date_format() -> None:
 
 
 def check_output(**kwargs: Dict) -> str:
-    client = _get_s3()
+    """
+    Check if result csv has been created, if so, skip to the end. else proceed
+    """
+    client = get_s3_client()
     try:
         file = client.get_object(
             Bucket=bucket,
@@ -1653,11 +1660,14 @@ def check_output(**kwargs: Dict) -> str:
         logging.info(file)
         return "end"
     except:
-        return "get_input"
+        return "convert_file"
 
 
-def get_input(**kwargs: Dict) -> str:
-    client = _get_s3()
+def convert_file() -> None:
+    """
+    Convert out1 file to csv according to our field dictionary
+    """
+    client = get_s3_client()
     key = f"{full_response_path}/{base_file_name}.out1"
     try:
         logging.info(f"Getting object {key} from {bucket}")
@@ -1667,43 +1677,38 @@ def get_input(**kwargs: Dict) -> str:
         )
         body = file["Body"].read()
         content = body.decode("ISO-8859-1")
-        Variable.set("file_content", content)
-        return "convert_file"
+        with tempfile.TemporaryFile(
+            mode="w+", encoding="ISO-8859-1"
+        ) as raw, tempfile.NamedTemporaryFile(
+            mode="w+", encoding="ISO-8859-1"
+        ) as formatted:
+            raw.write(content)
+            raw.seek(0)
+            lines = []
+            for line in raw.readlines():
+                if (
+                    not line.startswith("BHDR-EQUIFAX")
+                    and not line.startswith("BTRL-EQUIFAX")
+                    and line
+                ):
+                    lines.append(convert_line_csv(line))
+                    formatted.write(convert_line_csv(line))
+                    formatted.write("\n")
+
+            upload_file_s3(
+                formatted,
+                f"{full_output_path}/{base_file_name}.csv",
+            )
     except Exception as e:
-        logging.warning(f"Unable to get object {key} from {bucket}: {e}")
-        return "end"
-
-
-def convert_file() -> None:
-    with tempfile.TemporaryFile(
-        mode="w+", encoding="ISO-8859-1"
-    ) as raw, tempfile.NamedTemporaryFile(
-        mode="w+", encoding="ISO-8859-1"
-    ) as formatted:
-        content = Variable.get("file_content")
-        raw.write(content)
-        raw.seek(0)
-        lines = []
-        for line in raw.readlines():
-            if (
-                not line.startswith("BHDR-EQUIFAX")
-                and not line.startswith("BTRL-EQUIFAX")
-                and line
-            ):
-                lines.append(_convert_line_csv(line))
-                formatted.write(_convert_line_csv(line))
-                formatted.write("\n")
-
-        upload_file_s3(
-            formatted,
-            f"{full_output_path}/{base_file_name}.csv",
+        raise Exception(
+            f"Unable to get object {key} from {bucket}: {e} or convert to csv"
         )
 
 
 def upload_file_s3(file: Any, path: str) -> None:
     file.seek(0)
     try:
-        client = _get_s3()
+        client = get_s3_client()
         client.upload_file(
             file.name,
             bucket,
@@ -1724,26 +1729,26 @@ def insert_snowflake_public() -> None:
     columns_string = ",".join(columns)
 
     sql = f"""
-            INSERT INTO {table_name_public}({columns_string})
-            SELECT '{t_stamp}' as import_month,
-                    NULL as accountid,
-                    NULL as contractid,
-                    NULL as business_name,
+            insert into {table_name_public}({columns_string})
+            select '{t_stamp}' as import_month,
+                    null as accountid,
+                    null as contractid,
+                    null as business_name,
                     u.*
-            FROM {table_name} u
+            from {table_name} u
             """
     with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
         sfh.execute(sql)
 
 
 def insert_snowflake_raw() -> None:
-    _insert_snowflake(table_name_raw, f"{base_file_name}.csv")
-    _insert_snowflake(table_name_raw_history, f"{base_file_name}.csv")
+    insert_snowflake(table_name_raw, f"{base_file_name}.csv")
+    insert_snowflake(table_name_raw_history, f"{base_file_name}.csv")
 
 
-def insert_snowflake() -> None:
-    _insert_snowflake(table_name, f"{base_file_name}.csv", True)
-    _insert_snowflake(table_name_history, f"{base_file_name}.csv", True)
+def insert_snowflake_stage() -> None:
+    insert_snowflake(table_name, f"{base_file_name}.csv", True)
+    insert_snowflake(table_name_history, f"{base_file_name}.csv", True)
 
 
 def end() -> None:
@@ -1753,13 +1758,6 @@ def end() -> None:
 task_check_output = BranchPythonOperator(
     task_id="check_output",
     python_callable=check_output,
-    provide_context=True,
-    dag=dag,
-)
-
-task_get_file = BranchPythonOperator(
-    task_id="get_input",
-    python_callable=get_input,
     provide_context=True,
     dag=dag,
 )
@@ -1778,8 +1776,8 @@ task_insert_snowflake_raw = PythonOperator(
     task_id="insert_snowflake_raw", python_callable=insert_snowflake_raw, dag=dag
 )
 
-task_insert_snowflake = PythonOperator(
-    task_id="insert_snowflake", python_callable=insert_snowflake, dag=dag
+task_insert_snowflake_stage = PythonOperator(
+    task_id="insert_snowflake_stage", python_callable=insert_snowflake_stage, dag=dag
 )
 
 task_insert_snowflake_public = PythonOperator(
@@ -1788,14 +1786,13 @@ task_insert_snowflake_public = PythonOperator(
 
 task_end = PythonOperator(task_id="end", python_callable=end, dag=dag)
 
-task_check_output >> [task_get_file, task_end]
-task_get_file >> [task_convert_file, task_end]
+task_check_output >> [task_convert_file, task_end]
 (
-    task_convert_file #out1 -> csv -> s3
-    >> task_insert_snowflake_raw #copy from s3 to snowflake, table
-    >> task_fix_date #query table into dataframe, apply the format conversion, df-> csv, overwrite
-    >> task_insert_snowflake #csv -> snowflake's equifax.output
-    >> task_insert_snowflake_public # equifax.output-> equifax.public
+    task_convert_file  # out1 -> csv -> s3
+    >> task_insert_snowflake_raw  # copy from s3 to snowflake, table
+    >> task_fix_date  # query table into dataframe, apply the format conversion, df-> csv, overwrite
+    >> task_insert_snowflake_stage  # csv -> snowflake's equifax.output
+    >> task_insert_snowflake_public  # equifax.output-> equifax.public
 )
 
 environment = Variable.get("environment", "")
@@ -1808,10 +1805,10 @@ if environment == "development":
 
 
 if __name__ == "__main__":
-    # pass
-    get_input()
-    convert_file()
-    insert_snowflake_raw()
-    fix_date_format()
-    insert_snowflake()
-    insert_snowflake_public()
+    pass
+    # get_input()
+    # convert_file()
+    # insert_snowflake_raw()
+    # fix_date_format()
+    # insert_snowflake()
+    # insert_snowflake_public()
