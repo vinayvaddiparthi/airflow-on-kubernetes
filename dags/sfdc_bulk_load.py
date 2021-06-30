@@ -207,7 +207,7 @@ def describe_sobject(
         fields=[
             field["name"]
             for field in getattr(salesforce, sobject_name).describe()["fields"]
-            if field["type"] != "address"
+            if field["type"] != "address" and field["name"] != "Language"
         ],
         count=salesforce.query(f"select count(Id) from {sobject_name}")[  # nosec
             "records"
