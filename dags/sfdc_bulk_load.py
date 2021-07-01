@@ -202,27 +202,28 @@ def describe_sobject(
     sobject_name: str,
 ) -> Union[SobjectDescriptor, SalesforceMalformedRequest]:
     print(f"Getting metadata for sobject {sobject_name}")
-    if sobject_name in ("Case", "Contact", "FeedComment", "Lead"):
-        return SobjectDescriptor(
-            name=sobject_name,
-            fields=[
+    return SobjectDescriptor(
+        name=sobject_name,
+        fields=(
+            [
                 field["name"]
                 for field in getattr(salesforce, sobject_name).describe()["fields"]
                 if field["type"] != "address"
                 and field["name"] not in ("Language", "IndividualId", "IsVerified")
-            ],
-            count=salesforce.query(f"select count(Id) from {sobject_name}")[  # nosec
-                "records"
-            ][0]["expr0"],
-        )
-
-    return SobjectDescriptor(
-        name=sobject_name,
-        fields=[
-            field["name"]
-            for field in getattr(salesforce, sobject_name).describe()["fields"]
-            if field["type"] != "address"
-        ],
+            ]
+            if sobject_name
+            in (
+                "Case",
+                "Contact",
+                "FeedComment",
+                "Lead",
+            )  # sobjects contain invalid fields
+            else [
+                field["name"]
+                for field in getattr(salesforce, sobject_name).describe()["fields"]
+                if field["type"] != "address"
+            ]
+        ),
         count=salesforce.query(f"select count(Id) from {sobject_name}")[  # nosec
             "records"
         ][0]["expr0"],
