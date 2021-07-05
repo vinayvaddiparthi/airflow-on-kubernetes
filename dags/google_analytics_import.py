@@ -121,10 +121,7 @@ reports: Dict[str, Any] = {
         },
     },
     "acquisition": {
-        "primary_keys": [
-            "fields:dimension6::string",
-            "fields:dateHourMinute::string"
-        ],
+        "primary_keys": ["fields:dimension6::string", "fields:dateHourMinute::string"],
         "payload": {
             "reportRequests": [
                 {
