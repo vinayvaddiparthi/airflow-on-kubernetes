@@ -52,6 +52,7 @@ reports: Dict[str, Any] = {
                         {"name": "ga:date"},
                         {"name": "ga:adwordsCampaignID"},
                         {"name": "ga:campaign"},
+                        {"name": "ga:keyword"},
                     ],
                     "pageToken": "0",
                     "pageSize": ROW_LIMIT,
