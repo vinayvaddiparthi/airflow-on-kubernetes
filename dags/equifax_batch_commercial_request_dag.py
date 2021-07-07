@@ -1,3 +1,6 @@
+# This dag generate request file to be sent to Equifax
+# Scheduled at mid-night UTC of each month, (only send on odd month)
+#
 import logging
 import tempfile
 from datetime import datetime, timedelta
@@ -20,7 +23,7 @@ from typing import Any
 
 from utils.failure_callbacks import slack_dag
 
-
+# Fetch eligible merchants with required fields from DWH
 statement = text(
     """
 with
@@ -179,6 +182,13 @@ def generate_file(
     folder: str,
     **context: Any,
 ) -> None:
+    """
+    Snowflake -> TempDir -> S3 bucket
+    Path: [advanceit] tc-datalake/equifax_automated_batch/request/commercial
+    As of June 22,
+    we still need to copy the latest CSV file to another s3 bucket under another
+    AWS account [tc-dataops] tc-data-airflow-production/equifax/commercial/outbox
+    """
     engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
     session = session_maker()
