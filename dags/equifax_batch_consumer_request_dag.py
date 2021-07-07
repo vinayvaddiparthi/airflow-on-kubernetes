@@ -1,3 +1,5 @@
+# This dag generates request file for monthly Equifax consumer request file(.txt)
+# encoded in [windows-1252] or [iso-8859-1]
 import logging
 import tempfile
 from datetime import datetime, timedelta
@@ -22,7 +24,7 @@ from jinja2 import Template
 
 from utils.failure_callbacks import slack_dag
 
-
+# Fetch eligible consumer with required fields from DWH
 statement_template = """
 with
     applicant as (
@@ -177,6 +179,12 @@ def generate_file(
     folder: str,
     **context: Any,
 ) -> str:
+    """
+    Snowflake -> TempDir -> S3 bucket
+    Path: [advanceit] tc-datalake/equifax_automated_batch/request/consumer
+    As of June 22,
+    we still need to send the txt file to Risk contact person, they will upload to Equifax
+    """
     manual_process = ""
     conf = context["dag_run"].conf
     if conf and "applicant_guids" in conf:
@@ -244,6 +252,7 @@ def validate_file(
         III: City/Province: all alphabet
         IV: Postal code: alphanumeric, regex match [a-zA-Z]\\d[a-zA-Z]\\d[a-zA-Z]\\d
     ]
+    If any of those above is wrong, tell the contact person in Risk let them decide if file is good to use
     """
     filename = context["task_instance"].xcom_pull(task_ids="generate_file")
     s3 = S3Hook(aws_conn_id=s3_connection)
