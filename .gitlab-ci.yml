@@ -118,7 +118,7 @@ deploy_production:
   tags:
     - k8s
   image:
-    name: pgag/kubectl-jsonnet
+    name: tcdata/kubectl-jsonnet
     entrypoint: [""]
   script:
     - |
@@ -147,7 +147,7 @@ deploy_production:
 #  tags:
 #    - k8s
 #  image:
-#    name: pgag/kubectl-jsonnet
+#    name: tcdata/kubectl-jsonnet
 #    entrypoint: [""]
 #  script:
 #    - |
@@ -181,7 +181,7 @@ deploy_production:
 #  variables:
 #    GIT_STRATEGY: none
 #  image:
-#    name: pgag/kubectl-jsonnet
+#    name: tcdata/kubectl-jsonnet
 #    entrypoint: [""]
 #  script:
 #    - |
