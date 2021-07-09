@@ -29,8 +29,8 @@ reports: Dict[str, Any] = {
                         {"expression": "ga:sessions"},
                     ],
                     "dimensions": [
-                        {"name": "ga:dimension6"},
-                        {"name": "ga:dimension5"},
+                        {"name": "ga:dimension6"},  # cid_ga
+                        {"name": "ga:dimension5"},  # cid_platform
                     ],
                     "pageToken": "0",
                     "pageSize": ROW_LIMIT,
@@ -64,7 +64,7 @@ reports: Dict[str, Any] = {
         "primary_keys": [
             "fields:dimension6::string",
             "fields:eventAction::string",
-            "fields:dateHourMinute::string",
+            "fields:dimension1::string",
         ],
         "payload": {
             "reportRequests": [
@@ -75,14 +75,12 @@ reports: Dict[str, Any] = {
                         {"expression": "ga:users"},
                     ],
                     "dimensions": [
-                        {"name": "ga:dimension6"},
+                        {"name": "ga:dimension6"},  # cid_ga
                         {"name": "ga:hostname"},
                         {"name": "ga:pagePath"},
                         {"name": "ga:eventAction"},
-                        {"name": "ga:date"},
-                        {"name": "ga:dateHourMinute"},
                         {"name": "ga:eventCategory"},
-                        {"name": "ga:dimension1"},
+                        {"name": "ga:dimension1"},  # millisecond timestamp
                     ],
                     "pageToken": "0",
                     "pageSize": ROW_LIMIT,
@@ -94,7 +92,7 @@ reports: Dict[str, Any] = {
         "primary_keys": [
             "fields:dimension5::string",
             "fields:eventAction::string",
-            "fields:dateHourMinute::string",
+            "fields:dimension1::string",
         ],
         "payload": {
             "reportRequests": [
@@ -105,14 +103,12 @@ reports: Dict[str, Any] = {
                         {"expression": "ga:users"},
                     ],
                     "dimensions": [
-                        {"name": "ga:dimension5"},
+                        {"name": "ga:dimension5"},  # cid_platform
                         {"name": "ga:hostname"},
                         {"name": "ga:pagePath"},
                         {"name": "ga:eventAction"},
-                        {"name": "ga:date"},
-                        {"name": "ga:dateHourMinute"},
                         {"name": "ga:eventCategory"},
-                        {"name": "ga:dimension1"},
+                        {"name": "ga:dimension1"},  # millisecond timestamp
                     ],
                     "pageToken": "0",
                     "pageSize": ROW_LIMIT,
@@ -121,7 +117,7 @@ reports: Dict[str, Any] = {
         },
     },
     "acquisition": {
-        "primary_keys": ["fields:dimension6::string", "fields:dateHourMinute::string"],
+        "primary_keys": ["fields:dimension6::string", "fields:dimension1::string"],
         "payload": {
             "reportRequests": [
                 {
@@ -131,13 +127,14 @@ reports: Dict[str, Any] = {
                         {"expression": "ga:newUsers"},
                     ],
                     "dimensions": [
-                        {"name": "ga:dimension6"},
+                        {"name": "ga:dimension6"},  # cid_ga
                         {"name": "ga:sourceMedium"},
                         {"name": "ga:landingPagePath"},
                         {"name": "ga:fullReferrer"},
                         {"name": "ga:campaign"},
-                        {"name": "ga:dateHourMinute"},
-                        {"name": "ga:dimension1"},
+                        {"name": "ga:adwordsCampaignID"},
+                        {"name": "ga:dimension1"},  # millisecond timestamp
+                        {"name": "ga:keyword"},
                     ],
                     "pageToken": "0",
                     "pageSize": ROW_LIMIT,
