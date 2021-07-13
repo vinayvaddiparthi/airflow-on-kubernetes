@@ -34,7 +34,28 @@ Resources:
         id: 97aeef69-5fdc-4266-a5d8-8ee002ed3a44
   MWAAE1COTH:
     Type: 'AWS::MWAA::Environment'
-    Properties: {}
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: KMS-KEY-ARN
+            BucketKeyEnabled: true
+      DeletionPolicy: Delete
+      BucketName: tc-staging-airflow
+      ObjectLockEnabled: false
+      PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+      Tags:
+        - Key: "CloudFormation-Created-Resource"
+          Value: "Do-Not-Delete-CloudFormation-Created-Resource"
+        - Key: "Name"
+          Value: "Airflow-Staging"
+        - Key: "Environment"
+          Value: "STAGING"
     Metadata:
       'AWS::CloudFormation::Designer':
         id: 5da9f2ad-148c-43e2-badc-3f87069ee05d
