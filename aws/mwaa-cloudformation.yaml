@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: 2010-09-09
+Metadata:
+  'AWS::CloudFormation::Designer':
+    97aeef69-5fdc-4266-a5d8-8ee002ed3a44:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 145
+        'y': 126
+      z: 0
+    5da9f2ad-148c-43e2-badc-3f87069ee05d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 130
+      z: 0
+      dependson:
+        - 97aeef69-5fdc-4266-a5d8-8ee002ed3a44
+    ece3e376-a1ce-417b-88c2-335fe9436bb4:
+      source:
+        id: 5da9f2ad-148c-43e2-badc-3f87069ee05d
+      target:
+        id: 97aeef69-5fdc-4266-a5d8-8ee002ed3a44
+      z: 1
+Resources:
+  S3B2AWOE:
+    Type: 'AWS::S3::Bucket'
+    Properties: {}
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 97aeef69-5fdc-4266-a5d8-8ee002ed3a44
+  MWAAE1COTH:
+    Type: 'AWS::MWAA::Environment'
+    Properties: {}
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 5da9f2ad-148c-43e2-badc-3f87069ee05d
+    DependsOn:
+      - S3B2AWOE
