@@ -497,6 +497,18 @@ def create_dag() -> DAG:
                             ["default_beacon_score"]
                         ),
                     ),
+                    DecryptionSpec(
+                        schema="KYC_PRODUCTION",
+                        table="ENTITIES_BANK_ACCOUNT_ATTRIBUTES",
+                        columns=["value"],
+                        whereclause=literal_column("$1:key").in_(
+                            [
+                                "transit_number",
+                                "institution_number",
+                                "account_number",
+                            ]
+                        ),
+                    ),
                 ],
                 "target_schema": "PII_PRODUCTION",
             },
