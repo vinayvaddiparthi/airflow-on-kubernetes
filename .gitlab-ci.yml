@@ -30,7 +30,7 @@ mypy:
     - k8s
   image: python:${PYTHON_VERSION}
   script:
-    - pip install -r requirements.txt
+    - pip install -r requirements.txt --use-deprecated=legacy-resolver
     - pip install pytest-mypy
     - pytest --mypy --junit-xml=mypy.xml dags
   artifacts:
@@ -47,7 +47,7 @@ flakes:
     - k8s
   image: python:${PYTHON_VERSION}
   script:
-    - pip install -r requirements.txt
+    - pip install -r requirements.txt --use-deprecated=legacy-resolver
     - pip install pytest-flakes
     - pytest --flakes --junitxml=flakes.xml --ignore=legacy_tests dags
   artifacts:
@@ -64,7 +64,7 @@ test:
     - docker
   image: python:${PYTHON_VERSION}
   script:
-    - pip install -r requirements.txt
+    - pip install -r requirements.txt --use-deprecated=legacy-resolver
     - pip install pytest-cov
     - python -m pytest --ignore=legacy_tests/ --cov=. --cov-report=xml:cov.xml --cov-report=term --junitxml=pytest.xml
   artifacts:
@@ -96,7 +96,7 @@ check_dependencies:
   image: python:${PYTHON_VERSION}
   script:
     - pip install safety
-    - safety check -r requirements.txt -i 38932 -i 40341
+    - safety check -r requirements.txt -i 39252 -i 39606 -i 38932 -i 40630 -i 40459 -i 39525
 
 build_image:
   stage: build

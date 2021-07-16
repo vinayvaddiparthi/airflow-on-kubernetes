@@ -15,8 +15,11 @@ And then install Airflow and its dependencies:
 pip install -r requirements.txt
 ```
 
-You should then have all the librairies required to run Airflow
-jobs in your local development environment.
+Note that the CI/CD pipeline adds the option `--use-deprecated legacy-resolver` to avoid installation errors as the new 
+pip resolver (released 20.3) is not compatible with Apache Airflow
+([reference](https://airflow.apache.org/docs/apache-airflow/1.10.15/installation.html)).
+
+You should then have all the libraries required to run Airflow jobs in your local development environment.
 
 ### Testing a PythonOperator task
 
