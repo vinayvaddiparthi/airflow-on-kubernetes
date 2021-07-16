@@ -50,6 +50,7 @@ certifi==2020.11.8
 pyarrow==0.17.1
 requests==2.23.0
 boto3==1.10.50
+docutils==0.15.2
 urllib3==1.25.11
 pyjwt==1.7.1
 pytz==2020.4
