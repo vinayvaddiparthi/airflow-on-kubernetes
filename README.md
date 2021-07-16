@@ -21,6 +21,23 @@ pip resolver (released 20.3) is not compatible with Apache Airflow
 
 You should then have all the libraries required to run Airflow jobs in your local development environment.
 
+#### Perform safety checks on packages
+First let's generate a list of all the installed packages and their versions.
+
+```bash
+pip freeze > pinned.txt
+```
+
+Run the following to see if there are any security vulnerabilities in the packages installed.
+
+```bash
+safety check -r pinned.txt
+```
+
+You should see a table that lists out any security vulnerabilities. You can try to address the
+issues by updating your packages. Sometimes this might not be possible due to dependency conflicts.
+In this case, please update the CI/CD pipeline to ignore specific security vulnerabilities.
+
 ### Testing a PythonOperator task
 
 When creating a DAG file, you may want to test Python code in a
