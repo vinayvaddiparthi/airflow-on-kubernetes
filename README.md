@@ -15,8 +15,28 @@ And then install Airflow and its dependencies:
 pip install -r requirements.txt
 ```
 
-You should then have all the librairies required to run Airflow
-jobs in your local development environment.
+Note that the CI/CD pipeline adds the option `--use-deprecated legacy-resolver` to avoid installation errors as the new 
+pip resolver (released 20.3) is not compatible with Apache Airflow
+([reference](https://airflow.apache.org/docs/apache-airflow/1.10.15/installation.html)).
+
+You should then have all the libraries required to run Airflow jobs in your local development environment.
+
+#### Perform safety checks on packages
+First let's generate a list of all the installed packages and their versions.
+
+```bash
+pip freeze > pinned.txt
+```
+
+Run the following to see if there are any security vulnerabilities in the packages installed.
+
+```bash
+safety check -r pinned.txt
+```
+
+You should see a table that lists out any security vulnerabilities. You can try to address the
+issues by updating your packages. Sometimes this might not be possible due to dependency conflicts.
+In this case, please update the CI/CD pipeline to ignore specific security vulnerabilities.
 
 ### Testing a PythonOperator task
 

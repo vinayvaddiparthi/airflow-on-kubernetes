@@ -96,7 +96,7 @@ check_dependencies:
   image: python:${PYTHON_VERSION}
   script:
     - pip install safety
-    - safety check -r requirements.txt -i 38932 -i 40341
+    - safety check -r requirements.txt -i 39252 -i 39606 -i 38932 -i 40630 -i 40459 -i 39525
 
 build_image:
   stage: build
