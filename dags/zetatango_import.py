@@ -506,6 +506,7 @@ def create_dag() -> DAG:
                                 "transit_number",
                                 "institution_number",
                                 "account_number",
+                                "flinks_account_type",
                             ]
                         ),
                     ),
