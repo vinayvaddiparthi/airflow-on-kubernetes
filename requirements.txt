@@ -22,7 +22,6 @@ pytest
 pytest-helpers-namespace
 requests-oauthlib
 authlib
-python-slugify
 pandas
 openpyxl
 pmdarima
@@ -36,6 +35,7 @@ heroku3
 google-api-python-client
 fs.sshfs
 python-gnupg
+pytz # unpinned as there are no longer any requirements
 
 fastparquet==0.5.0
 transliterate
@@ -46,9 +46,22 @@ types-PyYAML
 types-Jinja2
 
 certifi==2020.12.5  # pinned because of snowflake connector
-pyarrow<0.18.0  # pinned because of snowflake connector
-requests<2.24  # pinned because of snowflake connector
-boto3<1.16  # pinned because of snowflake connector
-urllib3<1.26  # pinned because of snowflake connector
-pyjwt<2.0 # pinned because of snowflake connector
-pytz<2021.0 # pinned because of snowflake connector
+pyarrow>=3.0.0,<3.1.0  # pinned because of snowflake connector
+requests<2.24  # pinned because of dbt-core 0.18.1 and apache-airflow 1.10.15
+boto3>=1.4.4,<2.0.0  # pinned because of snowflake connector
+urllib3<1.26  # pinned because of dbt-snowflake 0.18.1
+pyjwt<2.0  # pinned because of flask-jwt-extended 3.25.1 required by fab-oidc
+
+# fixing other existing dependency conflicts
+
+python-slugify>=3.0.0,<5.0  # pinned because of apache-airflow==1.10.15
+attrs>=20.0,<21.0  # pinned because of apache-airflow==1.10.15
+
+typing-extensions>=3.7.4,<3.8  # pinned because of dbt-core 0.18.1
+colorama>=0.3.9,<0.4.4  # pinned because of dbt-core 0.18.1
+Jinja2==2.11.2  # pinned because of dbt-core 0.18.1
+idna<2.10  # pinned because of dbt-core 0.18.1
+
+click>=6.7,<8  # pinned because of Flask-AppBuilder==2.3.4
+jsonschema>=3.0,<3.2  # pinned because of hologram 0.0.10 required by dbt-core 0.18.1
+numpy~=1.19.0  # pinned because of pmdarima 1.8.2
