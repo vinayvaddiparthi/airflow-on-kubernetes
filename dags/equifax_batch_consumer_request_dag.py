@@ -5,6 +5,7 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from fs import open_fs, copy
+from textwrap import dedent
 import pprint
 
 from airflow import DAG
@@ -199,6 +200,7 @@ def generate_file(
     bucket: str,
     folder: str,
     dag_run: DagRun,
+    ts_nodash: str,
     **_,
     # **context: Any,
 ) -> str:
@@ -231,8 +233,10 @@ def generate_file(
     query = session.query(models.Applicant, models.Address).from_statement(statement)
     results = query.all()
 
+    logging.info(results)
+
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "consumer"
-    file_name = f"equifax_batch_consumer_request_{dag_run.run_id}.txt"
+    file_name = f"eqxds.exthinkingpd.ds.{ts_nodash}.txt"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
