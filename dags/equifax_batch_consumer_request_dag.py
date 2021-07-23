@@ -34,6 +34,14 @@ default_args = {
     "retries": 3,
 }
 
+dag = DAG(
+    dag_id="equifax_batch_consumer_request",
+    catchup=False,
+    default_args=default_args,
+    schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
+    on_failure_callback=slack_dag("slack_data_alerts"),
+)
+
 output_bucket = "tc-data-airflow-production"
 output_folder = "equifax/consumer/request"
 
@@ -216,6 +224,9 @@ def generate_file(
                     applicant_guids=tuple(manual_list)
                 )
     statement = text(Template(statement_template).render(manual_process=manual_process))
+
+    pprint.pprint(statement)
+
     engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
     session = session_maker()
@@ -224,7 +235,7 @@ def generate_file(
     results = query.all()
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "consumer"
-    file_name = f"equifax_batch_consumer_request_{context['dag_run'].run_id}.txt"
+    file_name = f"equifax_batch_consumer_request_{dag_run.run_id}.txt"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
@@ -279,15 +290,6 @@ def validate_file(
     )
     with dest_fs.open(filename, mode="r", encoding="windows-1252") as file:
         validation.validate(file)
-
-
-dag = DAG(
-    dag_id="equifax_batch_consumer_request",
-    catchup=False,
-    default_args=default_args,
-    schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
-    on_failure_callback=slack_dag("slack_data_alerts"),
-)
 
 op_generate_file = PythonOperator(
     task_id="generate_file",
