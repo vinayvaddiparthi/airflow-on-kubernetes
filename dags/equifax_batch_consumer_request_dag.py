@@ -209,7 +209,6 @@ def generate_file(
     we still need to send the txt file to Risk contact person, they will upload to Equifax
     """
     manual_process = ""
-    pprint.pprint(dag_run)
     if dag_run:
         config = dag_run.conf
         if config and "applicant_guids" in config:
@@ -224,8 +223,6 @@ def generate_file(
                     applicant_guids=tuple(manual_list)
                 )
     statement = text(Template(statement_template).render(manual_process=manual_process))
-
-    pprint.pprint(statement)
 
     engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
@@ -290,6 +287,7 @@ def validate_file(
     )
     with dest_fs.open(filename, mode="r", encoding="windows-1252") as file:
         validation.validate(file)
+
 
 op_generate_file = PythonOperator(
     task_id="generate_file",
