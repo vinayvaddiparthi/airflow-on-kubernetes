@@ -5,8 +5,10 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from fs import open_fs, copy
+import pprint
 
 from airflow import DAG
+from airflow.models.dagrun import DagRun
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
@@ -188,7 +190,9 @@ def generate_file(
     s3_connection: str,
     bucket: str,
     folder: str,
-    **context: Any,
+    dag_run: DagRun,
+    **_,
+    # **context: Any,
 ) -> str:
     """
     Snowflake -> TempDir -> S3 bucket
@@ -197,19 +201,20 @@ def generate_file(
     we still need to send the txt file to Risk contact person, they will upload to Equifax
     """
     manual_process = ""
-    pprint.pprint(context)
-    conf = context["dag_run"].conf
-    if conf and "applicant_guids" in conf:
-        manual_list = conf["applicant_guids"]
-        if manual_list:
-            sub_query = """
-            union
-            select applicant.* 
-            from applicant where applicant.applicant_guid in {{applicant_guids}}
-            """
-            manual_process = Template(sub_query).render(
-                applicant_guids=tuple(manual_list)
-            )
+    pprint.pprint(dag_run)
+    if dag_run:
+        config = dag_run.conf
+        if config and "applicant_guids" in config:
+            manual_list = config["applicant_guids"]
+            if manual_list:
+                sub_query = """
+                union
+                select applicant.*
+                from applicant where applicant.applicant_guid in {{applicant_guids}}
+                """
+                manual_process = Template(sub_query).render(
+                    applicant_guids=tuple(manual_list)
+                )
     statement = text(Template(statement_template).render(manual_process=manual_process))
     engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
@@ -283,46 +288,47 @@ dag = DAG(
     schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
     on_failure_callback=slack_dag("slack_data_alerts"),
 )
-    op_generate_file = PythonOperator(
-        task_id="generate_file",
-        python_callable=generate_file,
-        op_kwargs={
-            "snowflake_connection": "airflow_production",
-            "s3_connection": "s3_dataops",
-            "bucket": output_bucket,
-            "folder": output_folder,
-        },
-        executor_config={
-            "KubernetesExecutor": {
-                "annotations": {
-                    "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                    "KubernetesAirflowProductionZetatangoPiiRole"
-                }
-            },
-            "resources": {
-                "requests": {"memory": "512Mi"},
-                "limits": {"memory": "1Gi"},
-            },
-        },
-        execution_timeout=timedelta(hours=3),
-        provide_context=True,
-        dag=dag,
-    )
 
-    op_validate_file = PythonOperator(
-        task_id="validate_file",
-        python_callable=validate_file,
-        op_kwargs={
-            "s3_connection": "s3_datalake",
-            "bucket": output_bucket,
-            "folder": output_folder,
+op_generate_file = PythonOperator(
+    task_id="generate_file",
+    python_callable=generate_file,
+    op_kwargs={
+        "snowflake_connection": "airflow_production",
+        "s3_connection": "s3_dataops",
+        "bucket": output_bucket,
+        "folder": output_folder,
+    },
+    executor_config={
+        "KubernetesExecutor": {
+            "annotations": {
+                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                "KubernetesAirflowProductionZetatangoPiiRole"
+            }
         },
-        execution_timeout=timedelta(hours=3),
-        provide_context=True,
-        dag=dag,
-    )
+        "resources": {
+            "requests": {"memory": "512Mi"},
+            "limits": {"memory": "1Gi"},
+        },
+    },
+    execution_timeout=timedelta(hours=3),
+    provide_context=True,
+    dag=dag,
+)
 
-    op_generate_file >> op_validate_file
+op_validate_file = PythonOperator(
+    task_id="validate_file",
+    python_callable=validate_file,
+    op_kwargs={
+        "s3_connection": "s3_datalake",
+        "bucket": output_bucket,
+        "folder": output_folder,
+    },
+    execution_timeout=timedelta(hours=3),
+    provide_context=True,
+    dag=dag,
+)
+
+op_generate_file >> op_validate_file
 
 # def create_dag(bucket: str, folder: str) -> DAG:
 #     default_args = {
