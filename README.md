@@ -1,4 +1,4 @@
-### Installing Airflow locally
+## Getting started
 
 First, ensure that `virtualenv` is installed and enter a 
 virtual environment:
@@ -21,24 +21,7 @@ pip resolver (released 20.3) is not compatible with Apache Airflow
 
 You should then have all the libraries required to run Airflow jobs in your local development environment.
 
-#### Perform safety checks on packages
-First let's generate a list of all the installed packages and their versions.
-
-```bash
-pip freeze > pinned.txt
-```
-
-Run the following to see if there are any security vulnerabilities in the packages installed.
-
-```bash
-safety check -r pinned.txt
-```
-
-You should see a table that lists out any security vulnerabilities. You can try to address the
-issues by updating your packages. Sometimes this might not be possible due to dependency conflicts.
-In this case, please update the CI/CD pipeline to ignore specific security vulnerabilities.
-
-### Testing a PythonOperator task
+## Testing a PythonOperator task
 
 When creating a DAG file, you may want to test Python code in a
 `PythonOperator`. This can be problematic because the Airflow
@@ -89,7 +72,8 @@ This will replace the return value of `SnowflakeHook.get_sqlalchemy_engine`
 with the provided `return_value`.
 
 
-### Section for running airflow locally
+## Running Airflow locally
+
 This is only in case you want to try running airflow without installing everything in requirements.txt.
 
 To install airflow, first you need to install `python` with `pip` ready to use. Please use Python3 and pip3 accordingly.
@@ -121,6 +105,8 @@ Run ```airflow scheduler``` to start scheduler. The scheduler will load dags and
 
 Run ```airflow webserver``` to enable GUI that you normally can use at localhost:8080.
 
+### Importing Salesforce data
+
 Here is an example of changes need to be made in `sfdc_bulk_load.py` for testing the DAG:
 
 #### Connect to source
@@ -130,10 +116,13 @@ you'll also need to add `domain='test'` to your `Salesforce()` call.
 #### Connect to destination
 1. If you already have the `snowflake_conn` in your local airflow, you can keep using the connection.
 2. If you don't have the `snowflake_conn`, you can change
+
 ```python
 engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
 ```
+
 to
+
 ```python
 engine_ = create_engine(
         URL(
@@ -149,20 +138,44 @@ engine_ = create_engine(
         },
     )
 ```
+
 (`database="{destination_db}"` is optional here because this DAG is using
 `f'use database {database}'` in every query, database in `URL()` won't affect the destination DB)
 
 For local tests, if you don't want to load data into production DBs,
 you will need to change the `database` and `schema` in `op_kwargs` to the destination DB you want. For example:
 ```python
-       op_kwargs={
-                    "snowflake_conn": "",
-                    "salesforce_conn": "",
-                    "database": "{your_branch_db}"
-                    "schema": "{schema_in_your_db}",
-                }
+op_kwargs={
+            "snowflake_conn": "",
+            "salesforce_conn": "",
+            "database": "{your_branch_db}"
+            "schema": "{schema_in_your_db}",
+}
 ```
 
-#### Variables and Pools:
+### Variables and Pools:
+
 Before testing, you should check if there are any airflow _Variables_ or _Pools_ being used in the DAG,
 if so, you may need to add them to your local.
+
+## Appendix
+
+### Perform safety checks on packages 
+
+Run the following to see if there are any security vulnerabilities in the packages installed.
+
+```bash
+safety check
+```
+
+You should see a table that lists out any security vulnerabilities. You can try to address the
+issues by updating your packages. Sometimes this might not be possible due to dependency conflicts.
+In this case, please update the CI/CD pipeline to ignore specific security vulnerabilities.
+
+### Visualize package dependency tree
+
+Run the following to see how the installed packages depend on each other.
+
+```bash
+pipdeptree
+```
