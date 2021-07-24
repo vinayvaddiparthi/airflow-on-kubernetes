@@ -289,7 +289,7 @@ def validate_file(
         validation.validate(file)
 
 
-op_generate_file = PythonOperator(
+generate_file = PythonOperator(
     task_id="generate_file",
     python_callable=generate_file,
     op_kwargs={
@@ -315,7 +315,7 @@ op_generate_file = PythonOperator(
     dag=dag,
 )
 
-op_validate_file = PythonOperator(
+validate_file = PythonOperator(
     task_id="validate_file",
     python_callable=validate_file,
     op_kwargs={
@@ -328,7 +328,7 @@ op_validate_file = PythonOperator(
     dag=dag,
 )
 
-op_generate_file >> op_validate_file
+generate_file >> validate_file
 
 # def create_dag(bucket: str, folder: str) -> DAG:
 #     default_args = {
