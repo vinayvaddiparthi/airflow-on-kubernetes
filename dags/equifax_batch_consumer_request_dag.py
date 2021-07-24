@@ -236,7 +236,9 @@ def generate_file(
     request_file.write_header()
     applicant_guids = set([result.Applicant.guid for result in results])
 
-    logging.info(f"Generating {len(results)} lines for {len(applicant_guids)} applicants...")
+    logging.info(
+        f"Generating {len(results)} lines for {len(applicant_guids)} applicants..."
+    )
 
     for result in results:
         applicant = result.Applicant
