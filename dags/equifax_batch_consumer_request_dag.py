@@ -5,6 +5,7 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from fs import open_fs, copy
+from typing import Any
 
 from airflow import DAG
 from airflow.models.dagrun import DagRun
@@ -198,7 +199,7 @@ def generate_file(
     folder: str,
     dag_run: DagRun,
     ts_nodash: str,
-    **_,
+    **_: Any,
 ) -> str:
     """
     Snowflake -> TempDir -> S3 bucket
@@ -267,7 +268,7 @@ def validate_file(
     bucket: str,
     folder: str,
     task_instance: TaskInstance,
-    **_,
+    **_: Any,
 ) -> None:
     """
     1. split file into header, footer, content lines
