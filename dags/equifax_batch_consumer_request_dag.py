@@ -9,6 +9,7 @@ from fs import open_fs, copy
 
 from airflow import DAG
 from airflow.models.dagrun import DagRun
+from airflow.models.taskinstance import TaskInstance
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
@@ -203,7 +204,6 @@ def generate_file(
     dag_run: DagRun,
     ts_nodash: str,
     **_,
-    # **context: Any,
 ) -> str:
     """
     Snowflake -> TempDir -> S3 bucket
@@ -266,7 +266,8 @@ def validate_file(
     s3_connection: str,
     bucket: str,
     folder: str,
-    **context: Any,
+    task_instance: TaskInstance,
+    **_,
 ) -> None:
     """
     1. split file into header, footer, content lines
@@ -281,7 +282,7 @@ def validate_file(
     ]
     If any of those above is wrong, tell the contact person in Risk let them decide if file is good to use
     """
-    filename = context["task_instance"].xcom_pull(task_ids="generate_file")
+    filename = task_instance.xcom_pull(task_ids="generate_file")
     s3 = S3Hook(aws_conn_id=s3_connection)
     credentials = s3.get_credentials()
     dest_fs = open_fs(
