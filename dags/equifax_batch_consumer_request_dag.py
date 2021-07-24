@@ -1,7 +1,6 @@
 # This dag generates request file for monthly Equifax consumer request file(.txt)
 # encoded in [windows-1252] or [iso-8859-1]
 import logging
-import pprint
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -11,20 +10,16 @@ from airflow import DAG
 from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.S3_hook import S3Hook
 
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
+from jinja2 import Template
 
 from equifax_extras.data import models
 from equifax_extras.consumer import validation
 from equifax_extras.consumer.request_file import RequestFile
-
-from typing import Any
-from jinja2 import Template
-
 from utils.failure_callbacks import slack_dag
 
 
@@ -197,8 +192,8 @@ from final
 
 
 def generate_file(
-    snowflake_connection: str,
-    s3_connection: str,
+    snowflake_conn: str,
+    s3_conn: str,
     bucket: str,
     folder: str,
     dag_run: DagRun,
@@ -227,7 +222,7 @@ def generate_file(
                 )
     statement = text(Template(statement_template).render(manual_process=manual_process))
 
-    engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
     session = session_maker()
 
@@ -240,6 +235,7 @@ def generate_file(
 
     request_file.write_header()
     applicant_guids = set([result.Applicant.guid for result in results])
+
     logging.info(f"Generating {len(results)} lines for {len(applicant_guids)} applicants...")
 
     for result in results:
@@ -247,23 +243,25 @@ def generate_file(
         address = result.Address
         request_file.append(applicant, address)
     request_file.write_footer()
+
     logging.info(f"File {file_name} generated successfully.")
 
     # Upload request file to S3
     src_fs = open_fs(str(local_dir))
-    s3 = S3Hook(aws_conn_id=s3_connection)
+    s3 = S3Hook(aws_conn_id=s3_conn)
     credentials = s3.get_credentials()
     dest_fs = open_fs(
         f"s3://{credentials.access_key}:{credentials.secret_key}@{bucket}/{folder}"
     )
 
     logging.info(f"Uploading {file_name} to {bucket}/{folder}.")
+
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
     return file_name
 
 
 def validate_file(
-    s3_connection: str,
+    s3_conn: str,
     bucket: str,
     folder: str,
     task_instance: TaskInstance,
@@ -283,7 +281,7 @@ def validate_file(
     If any of those above is wrong, tell the contact person in Risk let them decide if file is good to use
     """
     filename = task_instance.xcom_pull(task_ids="generate_file")
-    s3 = S3Hook(aws_conn_id=s3_connection)
+    s3 = S3Hook(aws_conn_id=s3_conn)
     credentials = s3.get_credentials()
     dest_fs = open_fs(
         f"s3://{credentials.access_key}:{credentials.secret_key}@{bucket}/{folder}"
@@ -296,8 +294,8 @@ generate_file = PythonOperator(
     task_id="generate_file",
     python_callable=generate_file,
     op_kwargs={
-        "snowflake_connection": snowflake_connection,
-        "s3_connection": s3_connection,
+        "snowflake_conn": snowflake_connection,
+        "s3_conn": s3_connection,
         "bucket": output_bucket,
         "folder": output_folder,
     },
@@ -322,7 +320,7 @@ validate_file = PythonOperator(
     task_id="validate_file",
     python_callable=validate_file,
     op_kwargs={
-        "s3_connection": s3_connection,
+        "s3_conn": s3_connection,
         "bucket": output_bucket,
         "folder": output_folder,
     },
@@ -332,94 +330,3 @@ validate_file = PythonOperator(
 )
 
 generate_file >> validate_file
-
-# def create_dag(bucket: str, folder: str) -> DAG:
-#     default_args = {
-#         "owner": "airflow",
-#         "start_date": datetime(2020, 1, 1, 00, 00, 00),
-#         "concurrency": 1,
-#         "retries": 3,
-#     }
-#
-#     with DAG(
-#         dag_id="equifax_batch_consumer_request",
-#         catchup=False,
-#         default_args=default_args,
-#         schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
-#         on_failure_callback=slack_dag("slack_data_alerts"),
-#     ) as dag:
-#         op_generate_file = PythonOperator(
-#             task_id="generate_file",
-#             python_callable=generate_file,
-#             op_kwargs={
-#                 "snowflake_connection": "airflow_production",
-#                 "s3_connection": "s3_dataops",
-#                 "bucket": bucket,
-#                 "folder": folder,
-#             },
-#             executor_config={
-#                 "KubernetesExecutor": {
-#                     "annotations": {
-#                         "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-#                         "KubernetesAirflowProductionZetatangoPiiRole"
-#                     }
-#                 },
-#                 "resources": {
-#                     "requests": {"memory": "512Mi"},
-#                     "limits": {"memory": "1Gi"},
-#                 },
-#             },
-#             execution_timeout=timedelta(hours=3),
-#             provide_context=True,
-#         )
-#
-#         op_validate_file = PythonOperator(
-#             task_id="validate_file",
-#             python_callable=validate_file,
-#             op_kwargs={
-#                 "s3_connection": "s3_datalake",
-#                 "bucket": bucket,
-#                 "folder": folder,
-#             },
-#             execution_timeout=timedelta(hours=3),
-#             provide_context=True,
-#         )
-#         dag << op_generate_file >> op_validate_file
-#
-#         return dag
-
-
-# environment = Variable.get("environment", "")
-# if environment == "development":
-#     from equifax_extras.utils.local_get_sqlalchemy_engine import (
-#         local_get_sqlalchemy_engine,
-#     )
-#
-#     SnowflakeHook.get_sqlalchemy_engine = local_get_sqlalchemy_engine
-#     # output_bucket = "tc-datalake"
-#     output_bucket = "tc-data-airflow-production"
-#     # output_folder = "equifax_automated_batch/request/consumer/test"
-#     output_folder = "equifax/consumer/request"
-# else:
-#     output_bucket = "tc-datalake"
-#     output_folder = "equifax_automated_batch/request/consumer"
-
-# if __name__ == "__main__":
-#     from collections import namedtuple
-#
-#     MockDagRun = namedtuple("MockDagRun", ["run_id", "conf"])
-#     timestamp = datetime.now()
-#     time_tag = timestamp.strftime("%Y-%m-%d_%H-%M-%S")
-#     mock_context = {"dag_run": MockDagRun(time_tag, {})}
-#
-#     generate_file(
-#         snowflake_connection="airflow_production",
-#         s3_connection="s3_datalake",
-#         bucket=output_bucket,
-#         folder=output_folder,
-#         **mock_context,
-#     )
-# else:
-#     globals()["equifax_batch_consumer_request"] = create_dag(
-#         output_bucket, output_folder
-#     )
