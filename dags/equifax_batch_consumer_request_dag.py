@@ -42,6 +42,8 @@ dag = DAG(
     on_failure_callback=slack_dag("slack_data_alerts"),
 )
 
+snowflake_connection = "airflow_production"
+s3_connection = "s3_dataops"
 output_bucket = "tc-data-airflow-production"
 output_folder = "equifax/consumer/request"
 
@@ -293,8 +295,8 @@ generate_file = PythonOperator(
     task_id="generate_file",
     python_callable=generate_file,
     op_kwargs={
-        "snowflake_connection": "airflow_production",
-        "s3_connection": "s3_dataops",
+        "snowflake_connection": snowflake_connection,
+        "s3_connection": s3_connection,
         "bucket": output_bucket,
         "folder": output_folder,
     },
@@ -319,7 +321,7 @@ validate_file = PythonOperator(
     task_id="validate_file",
     python_callable=validate_file,
     op_kwargs={
-        "s3_connection": "s3_datalake",
+        "s3_connection": s3_connection,
         "bucket": output_bucket,
         "folder": output_folder,
     },
