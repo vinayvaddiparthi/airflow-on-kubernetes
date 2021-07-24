@@ -125,18 +125,18 @@ to
 
 ```python
 engine_ = create_engine(
-        URL(
-            account="thinkingcapital.ca-central-1.aws",
-            user="{your_username_usually_email_in_snowflake}",
-            password="{your_password}",
-            database="{destination_db}",
-            warehouse="{destination_wh}",
-            role="{your_role}",
-        ),
-        connect_args={
-            "authenticator": "externalbrowser",
-        },
-    )
+    URL(
+        account="thinkingcapital.ca-central-1.aws",
+        user="{your_username_usually_email_in_snowflake}",
+        password="{your_password}",
+        database="{destination_db}",
+        warehouse="{destination_wh}",
+        role="{your_role}",
+    ),
+    connect_args={
+        "authenticator": "externalbrowser",
+    },
+)
 ```
 
 (`database="{destination_db}"` is optional here because this DAG is using
@@ -146,10 +146,10 @@ For local tests, if you don't want to load data into production DBs,
 you will need to change the `database` and `schema` in `op_kwargs` to the destination DB you want. For example:
 ```python
 op_kwargs={
-            "snowflake_conn": "",
-            "salesforce_conn": "",
-            "database": "{your_branch_db}"
-            "schema": "{schema_in_your_db}",
+    "snowflake_conn": "",
+    "salesforce_conn": "",
+    "database": "{your_branch_db}"
+    "schema": "{schema_in_your_db}",
 }
 ```
 
