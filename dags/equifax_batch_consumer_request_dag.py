@@ -1,12 +1,11 @@
 # This dag generates request file for monthly Equifax consumer request file(.txt)
 # encoded in [windows-1252] or [iso-8859-1]
 import logging
+import pprint
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from fs import open_fs, copy
-from textwrap import dedent
-import pprint
 
 from airflow import DAG
 from airflow.models.dagrun import DagRun
@@ -233,17 +232,14 @@ def generate_file(
     query = session.query(models.Applicant, models.Address).from_statement(statement)
     results = query.all()
 
-    logging.info(results)
-
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "consumer"
     file_name = f"eqxds.exthinkingpd.ds.{ts_nodash}.txt"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
     applicant_guids = set([result.Applicant.guid for result in results])
-    logging.info(
-        f"Generating {len(results)} lines for {len(applicant_guids)} applicants..."
-    )
+    logging.info(f"Generating {len(results)} lines for {len(applicant_guids)} applicants...")
+
     for result in results:
         applicant = result.Applicant
         address = result.Address
