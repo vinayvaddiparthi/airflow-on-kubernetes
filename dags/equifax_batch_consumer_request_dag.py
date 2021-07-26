@@ -293,7 +293,7 @@ def validate_file(
         validation.validate(file)
 
 
-generate_file = PythonOperator(
+task_generate_file = PythonOperator(
     task_id="generate_file",
     python_callable=generate_file,
     op_kwargs={
@@ -319,7 +319,7 @@ generate_file = PythonOperator(
     dag=dag,
 )
 
-validate_file = PythonOperator(
+task_validate_file = PythonOperator(
     task_id="validate_file",
     python_callable=validate_file,
     op_kwargs={
@@ -332,4 +332,4 @@ validate_file = PythonOperator(
     dag=dag,
 )
 
-generate_file >> validate_file
+task_generate_file >> task_validate_file
