@@ -212,6 +212,14 @@ connection. You can see the webhooks defined [here](https://api.slack.com/apps/A
 Instead of adding each Variable from production individually, you can download the `airflow-variables.json` file from
 `tc-data-airflow-production/local_setup/airflow-variables.json` in the AWS DataOps S3 bucket ([link](https://s3.console.aws.amazon.com/s3/object/tc-data-airflow-production?region=ca-central-1&prefix=local_setup/airflow-variables.json)).
 
+#### Testing tasks
+
+When possible try to use the following command to test each task locally.
+
+```python
+airflow tasks test <dag_id> <task_id> <execution_date>
+```
+
 
 ## Airflow Style Guide
 
