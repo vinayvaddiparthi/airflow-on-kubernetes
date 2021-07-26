@@ -220,10 +220,13 @@ When possible try to use the following command to test each task locally.
 airflow tasks test <dag_id> <task_id> <execution_date>
 ```
 
+### Airflow Style Guide
 
-## Airflow Style Guide
+The following are some guidelines to reference when writing your DAGs. Not every DAGs follows this guideline currently.
 
-### Explicitly pass DAG reference, following Python's design principle `Explicit is better than implicit`.
+---
+
+#### Explicitly pass DAG reference, following Python's design principle `Explicit is better than implicit`.
 
 ```python
 dag = DAG(...)
@@ -239,7 +242,25 @@ with DAG(...) as dag:
     t2 = DummyOperator(task_id="task2")
 ```
 
-### Readability counts, hence it is better to not mix directions in a single statement. Also, use downstream direction whenever possible since it is the natural way of reading from left to right for most people.
+---
+
+#### Be explicit in the context variable you are passing.
+
+```python
+def _print_exec_date(execution_date, **_):
+    print(execution_date)
+```
+
+vs.
+
+```python
+def _print_exec_date(execution_date, **context):
+    print(execution_date)
+```
+
+---
+
+#### Readability counts, hence it is better to not mix directions in a single statement. Also, use downstream direction whenever possible since it is the natural way of reading from left to right for most people.
 
 ```python
 task1 >> [task2, task3] >> task4
