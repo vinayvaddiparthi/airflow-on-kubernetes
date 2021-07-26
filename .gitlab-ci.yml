@@ -95,8 +95,8 @@ check_dependencies:
     - k8s
   image: python:${PYTHON_VERSION}
   script:
-    - pip install safety
-    - safety check -r requirements.txt -i 39252 -i 39606 -i 38932 -i 40630 -i 40459 -i 39525
+    - pip install -r requirements.txt
+    - safety check -i 39525 -i 40459 -i 40630 -i 39252 -i 39606 -i 38932
 
 build_image:
   stage: build

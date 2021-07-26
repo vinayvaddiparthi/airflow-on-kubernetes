@@ -5,6 +5,7 @@ pytest-mock
 black
 mypy
 pylint
+pipdeptree
 
 # runtime
 apache-airflow[crypto,postgres,ssh,kubernetes,s3,snowflake]==1.10.15
@@ -36,6 +37,7 @@ heroku3
 google-api-python-client
 fs.sshfs
 python-gnupg
+safety
 
 fastparquet==0.5.0
 transliterate
