@@ -20,6 +20,13 @@ from equifax_extras.commercial.request_file import RequestFile
 from utils.failure_callbacks import slack_dag
 
 
+default_args = {
+    "owner": "airflow",
+    "start_date": datetime(2020, 1, 1, 00, 00, 00),
+    "concurrency": 1,
+    "retries": 3,
+}
+
 # Fetch eligible merchants with required fields from DWH
 statement = text(
     """
