@@ -216,7 +216,7 @@ def generate_file(
     results = query.all()
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "commercial"
-    file_name = f"equifax_batch_commercial_request_{context['dag_run'].run_id}.csv"
+    file_name = f"eqxcom.exthinkingpd.TCAP.{context['dag_run'].run_id}.csv"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
