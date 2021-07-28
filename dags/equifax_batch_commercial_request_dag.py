@@ -52,7 +52,6 @@ with
         fields:guid::string as merchant_guid
       from "ZETATANGO"."KYC_PRODUCTION"."ENTITIES_MERCHANTS"
     ),
-    
     business_file_number as (
       select
         fields:entities_businesses_id::string as business_id,
@@ -62,14 +61,13 @@ with
         fields:key::string = 'file_number'
     ),
     merchant_with_attributes as (
-      select 
+      select
         merchant.merchant_guid,
         business_file_number.encrypted_value as encrypted_file_number
       from merchant
       left join business_file_number on
         merchant.business_id = business_file_number.business_id
     ),
-    
     eligible_loan as (
       select
         merchant_guid,
@@ -78,11 +76,9 @@ with
         datediff(day, repaid_date, current_date()) as days_since_repaid
       from "ANALYTICS_PRODUCTION"."DBT_ARIO"."DIM_LOAN"
       where
-        // Do not include Oppen loans
-        facility_code != 'O' and
+        facility_code != 'O' and // Do not include Oppen loans
         ((days_since_repaid <= 365 and state = 'closed') or outstanding_balance <> 0.0)
     ),
-    
     eligible_merchant as (
       select distinct
         merchant.name,
@@ -92,7 +88,6 @@ with
       inner join eligible_loan on
         merchant.merchant_guid = eligible_loan.merchant_guid
     ),
-    
     address_relationship as (
       select
         fields:address_id::integer as address_id,
@@ -128,7 +123,6 @@ with
       left join address on
         address_relationship.address_id = address.address_id
     ),
-
     phone_number_relationship as (
       select
         fields:phone_number_id::integer as phone_number_id,
@@ -156,8 +150,7 @@ with
         eligible_merchant.merchant_id = phone_number_relationship.merchant_id
       left join phone_number on
         phone_number_relationship.phone_number_id = phone_number.phone_number_id
-    ),
-    
+    ), 
     final as (
       select distinct
         eligible_merchant.merchant_guid,
