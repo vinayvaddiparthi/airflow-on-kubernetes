@@ -35,6 +35,10 @@ dag = DAG(
     on_failure_callback=slack_dag("slack_data_alerts"),
 )
 
+snowflake_connection = "airflow_production"
+s3_connection = "s3_dataops"
+output_bucket = "tc-data-airflow-production"
+output_folder = "equifax/commercial/request"
 
 # Fetch eligible merchants with required fields from DWH
 statement = text(
@@ -189,8 +193,8 @@ from final
 
 
 def generate_file(
-    snowflake_connection: str,
-    s3_connection: str,
+    snowflake_conn: str,
+    s3_conn: str,
     bucket: str,
     folder: str,
     **context: Any,
@@ -202,7 +206,7 @@ def generate_file(
     we still need to copy the latest CSV file to another s3 bucket under another
     AWS account [tc-dataops] tc-data-airflow-production/equifax/commercial/outbox
     """
-    engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
     session = session_maker()
 
@@ -230,7 +234,7 @@ def generate_file(
 
     # Upload request file to S3
     src_fs = open_fs(str(local_dir))
-    s3 = S3Hook(aws_conn_id=s3_connection)
+    s3 = S3Hook(aws_conn_id=s3_conn)
     credentials = s3.get_credentials()
     dest_fs = open_fs(
         f"s3://{credentials.access_key}:{credentials.secret_key}@{bucket}/{folder}"
@@ -244,10 +248,10 @@ task_generate_file = PythonOperator(
     task_id="generate_file",
     python_callable=generate_file,
     op_kwargs={
-        "snowflake_connection": "airflow_production",
-        "s3_connection": "s3_datalake",
-        "bucket": bucket,
-        "folder": folder,
+        "snowflake_conn": snowflake_connection,
+        "s3_conn": s3_connection,
+        "bucket": output_bucket,
+        "folder": output_folder,
     },
     executor_config={
         "resources": {
@@ -258,8 +262,6 @@ task_generate_file = PythonOperator(
     execution_timeout=timedelta(hours=3),
     provide_context=True,
 )
-
-task_generate_file
 
 
 
