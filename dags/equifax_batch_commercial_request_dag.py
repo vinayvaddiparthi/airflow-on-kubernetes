@@ -197,7 +197,8 @@ def generate_file(
     s3_conn: str,
     bucket: str,
     folder: str,
-    **context: Any,
+    ts_nodash: str,
+    **_: Any,
 ) -> None:
     """
     Snowflake -> TempDir -> S3 bucket
@@ -216,7 +217,7 @@ def generate_file(
     results = query.all()
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "commercial"
-    file_name = f"eqxcom.exthinkingpd.TCAP.{context['dag_run'].run_id}.csv"
+    file_name = f"eqxcom.exthinkingpd.TCAP.{ts_nodash}.csv"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
