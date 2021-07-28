@@ -261,4 +261,5 @@ task_generate_file = PythonOperator(
     },
     execution_timeout=timedelta(hours=3),
     provide_context=True,
+    dag=dag,
 )
