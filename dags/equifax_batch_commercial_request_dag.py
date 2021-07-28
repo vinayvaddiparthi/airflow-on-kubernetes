@@ -262,38 +262,3 @@ task_generate_file = PythonOperator(
     execution_timeout=timedelta(hours=3),
     provide_context=True,
 )
-
-
-
-environment = Variable.get("environment", "")
-if environment == "development":
-    from equifax_extras.utils.local_get_sqlalchemy_engine import (
-        local_get_sqlalchemy_engine,
-    )
-
-    SnowflakeHook.get_sqlalchemy_engine = local_get_sqlalchemy_engine
-    output_bucket = "tc-datalake"
-    output_folder = "equifax_automated_batch/request/commercial/test"
-else:
-    output_bucket = "tc-datalake"
-    output_folder = "equifax_automated_batch/request/commercial"
-
-if __name__ == "__main__":
-    from collections import namedtuple
-
-    MockDagRun = namedtuple("MockDagRun", ["run_id"])
-    timestamp = datetime.now()
-    time_tag = timestamp.strftime("%Y-%m-%d_%H-%M-%S")
-    mock_context = {"dag_run": MockDagRun(time_tag)}
-
-    generate_file(
-        snowflake_connection="airflow_production",
-        s3_connection="s3_datalake",
-        bucket=output_bucket,
-        folder=output_folder,
-        **mock_context,
-    )
-else:
-    globals()["equifax_batch_commercial_request"] = create_dag(
-        output_bucket, output_folder
-    )
