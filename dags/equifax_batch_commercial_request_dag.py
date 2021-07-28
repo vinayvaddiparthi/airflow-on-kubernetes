@@ -1,27 +1,24 @@
 # This dag generate request file to be sent to Equifax
 # Scheduled at mid-night UTC of each month, (only send on odd month)
-#
-import logging
-import tempfile
-from datetime import datetime, timedelta
-from pathlib import Path
-from fs import open_fs, copy
-
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.S3_hook import S3Hook
 
+import logging
+import tempfile
+from datetime import datetime, timedelta
+from pathlib import Path
+from fs import open_fs, copy
+from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from equifax_extras.data import models
 from equifax_extras.commercial.request_file import RequestFile
-
-from typing import Any
-
 from utils.failure_callbacks import slack_dag
+
 
 # Fetch eligible merchants with required fields from DWH
 statement = text(
