@@ -27,6 +27,15 @@ default_args = {
     "retries": 3,
 }
 
+dag = DAG(
+    dag_id="equifax_batch_commercial_request",
+    catchup=False,
+    default_args=default_args,
+    schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
+    on_failure_callback=slack_dag("slack_data_alerts"),
+)
+
+
 # Fetch eligible merchants with required fields from DWH
 statement = text(
     """
@@ -231,43 +240,27 @@ def generate_file(
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
 
 
-def create_dag(bucket: str, folder: str) -> DAG:
-    default_args = {
-        "owner": "airflow",
-        "start_date": datetime(2020, 1, 1, 00, 00, 00),
-        "concurrency": 1,
-        "retries": 3,
-    }
+task_generate_file = PythonOperator(
+    task_id="generate_file",
+    python_callable=generate_file,
+    op_kwargs={
+        "snowflake_connection": "airflow_production",
+        "s3_connection": "s3_datalake",
+        "bucket": bucket,
+        "folder": folder,
+    },
+    executor_config={
+        "resources": {
+            "requests": {"memory": "512Mi"},
+            "limits": {"memory": "1Gi"},
+        },
+    },
+    execution_timeout=timedelta(hours=3),
+    provide_context=True,
+)
 
-    with DAG(
-        dag_id="equifax_batch_commercial_request",
-        catchup=False,
-        default_args=default_args,
-        schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
-        on_failure_callback=slack_dag("slack_data_alerts"),
-    ) as dag:
-        op_generate_file = PythonOperator(
-            task_id="generate_file",
-            python_callable=generate_file,
-            op_kwargs={
-                "snowflake_connection": "airflow_production",
-                "s3_connection": "s3_datalake",
-                "bucket": bucket,
-                "folder": folder,
-            },
-            executor_config={
-                "resources": {
-                    "requests": {"memory": "512Mi"},
-                    "limits": {"memory": "1Gi"},
-                },
-            },
-            execution_timeout=timedelta(hours=3),
-            provide_context=True,
-        )
+task_generate_file
 
-        dag << op_generate_file
-
-        return dag
 
 
 environment = Variable.get("environment", "")
