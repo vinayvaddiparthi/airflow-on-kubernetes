@@ -40,7 +40,6 @@ s3_connection = "s3_dataops"
 output_bucket = "tc-data-airflow-production"
 output_folder = "equifax/commercial/request"
 
-# Fetch eligible merchants with required fields from DWH
 statement = text(
     """
 with
@@ -195,10 +194,8 @@ def generate_file(
 ) -> None:
     """
     Snowflake -> TempDir -> S3 bucket
-    Path: [advanceit] tc-datalake/equifax_automated_batch/request/commercial
-    As of June 22,
-    we still need to copy the latest CSV file to another s3 bucket under another
-    AWS account [tc-dataops] tc-data-airflow-production/equifax/commercial/outbox
+    As of June 22, we still need to copy the generated request file to another folder in the S3 bucket:
+    tc-data-airflow-production/equifax/commercial/outbox.
     """
     engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
