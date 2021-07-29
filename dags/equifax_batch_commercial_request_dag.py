@@ -1,29 +1,44 @@
 # This dag generate request file to be sent to Equifax
 # Scheduled at mid-night UTC of each month, (only send on odd month)
-#
+from airflow import DAG
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.operators.python_operator import PythonOperator
+from airflow.hooks.S3_hook import S3Hook
+
 import logging
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from fs import open_fs, copy
-
-from airflow import DAG
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
-from airflow.hooks.S3_hook import S3Hook
-
+from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from equifax_extras.data import models
 from equifax_extras.commercial.request_file import RequestFile
-
-from typing import Any
-
 from utils.failure_callbacks import slack_dag
 
-# Fetch eligible merchants with required fields from DWH
+
+default_args = {
+    "owner": "airflow",
+    "start_date": datetime(2020, 1, 1, 00, 00, 00),
+    "concurrency": 1,
+    "retries": 3,
+}
+
+dag = DAG(
+    dag_id="equifax_batch_commercial_request",
+    catchup=False,
+    default_args=default_args,
+    schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
+    on_failure_callback=slack_dag("slack_data_alerts"),
+)
+
+snowflake_connection = "airflow_production"
+s3_connection = "s3_dataops"
+output_bucket = "tc-data-airflow-production"
+output_folder = "equifax/commercial/request"
+
 statement = text(
     """
 with
@@ -35,7 +50,6 @@ with
         fields:guid::string as merchant_guid
       from "ZETATANGO"."KYC_PRODUCTION"."ENTITIES_MERCHANTS"
     ),
-    
     business_file_number as (
       select
         fields:entities_businesses_id::string as business_id,
@@ -45,14 +59,13 @@ with
         fields:key::string = 'file_number'
     ),
     merchant_with_attributes as (
-      select 
+      select
         merchant.merchant_guid,
         business_file_number.encrypted_value as encrypted_file_number
       from merchant
       left join business_file_number on
         merchant.business_id = business_file_number.business_id
     ),
-    
     eligible_loan as (
       select
         merchant_guid,
@@ -61,11 +74,9 @@ with
         datediff(day, repaid_date, current_date()) as days_since_repaid
       from "ANALYTICS_PRODUCTION"."DBT_ARIO"."DIM_LOAN"
       where
-        // Do not include Oppen loans
-        facility_code != 'O' and
+        facility_code != 'O' and // Do not include Oppen loans
         ((days_since_repaid <= 365 and state = 'closed') or outstanding_balance <> 0.0)
     ),
-    
     eligible_merchant as (
       select distinct
         merchant.name,
@@ -75,7 +86,6 @@ with
       inner join eligible_loan on
         merchant.merchant_guid = eligible_loan.merchant_guid
     ),
-    
     address_relationship as (
       select
         fields:address_id::integer as address_id,
@@ -111,7 +121,6 @@ with
       left join address on
         address_relationship.address_id = address.address_id
     ),
-
     phone_number_relationship as (
       select
         fields:phone_number_id::integer as phone_number_id,
@@ -139,8 +148,7 @@ with
         eligible_merchant.merchant_id = phone_number_relationship.merchant_id
       left join phone_number on
         phone_number_relationship.phone_number_id = phone_number.phone_number_id
-    ),
-    
+    ), 
     final as (
       select distinct
         eligible_merchant.merchant_guid,
@@ -176,20 +184,19 @@ from final
 
 
 def generate_file(
-    snowflake_connection: str,
-    s3_connection: str,
+    snowflake_conn: str,
+    s3_conn: str,
     bucket: str,
     folder: str,
-    **context: Any,
+    ts_nodash: str,
+    **_: Any,
 ) -> None:
     """
     Snowflake -> TempDir -> S3 bucket
-    Path: [advanceit] tc-datalake/equifax_automated_batch/request/commercial
-    As of June 22,
-    we still need to copy the latest CSV file to another s3 bucket under another
-    AWS account [tc-dataops] tc-data-airflow-production/equifax/commercial/outbox
+    As of June 22, we still need to copy the generated request file to another folder in the S3 bucket:
+    tc-data-airflow-production/equifax/commercial/outbox.
     """
-    engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
     session = session_maker()
 
@@ -199,7 +206,7 @@ def generate_file(
     results = query.all()
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "commercial"
-    file_name = f"equifax_batch_commercial_request_{context['dag_run'].run_id}.csv"
+    file_name = f"eqxcom.exthinkingpd.TCAP.{ts_nodash}.csv"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
@@ -217,7 +224,7 @@ def generate_file(
 
     # Upload request file to S3
     src_fs = open_fs(str(local_dir))
-    s3 = S3Hook(aws_conn_id=s3_connection)
+    s3 = S3Hook(aws_conn_id=s3_conn)
     credentials = s3.get_credentials()
     dest_fs = open_fs(
         f"s3://{credentials.access_key}:{credentials.secret_key}@{bucket}/{folder}"
@@ -227,74 +234,22 @@ def generate_file(
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
 
 
-def create_dag(bucket: str, folder: str) -> DAG:
-    default_args = {
-        "owner": "airflow",
-        "start_date": datetime(2020, 1, 1, 00, 00, 00),
-        "concurrency": 1,
-        "retries": 3,
-    }
-
-    with DAG(
-        dag_id="equifax_batch_commercial_request",
-        catchup=False,
-        default_args=default_args,
-        schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
-        on_failure_callback=slack_dag("slack_data_alerts"),
-    ) as dag:
-        op_generate_file = PythonOperator(
-            task_id="generate_file",
-            python_callable=generate_file,
-            op_kwargs={
-                "snowflake_connection": "airflow_production",
-                "s3_connection": "s3_datalake",
-                "bucket": bucket,
-                "folder": folder,
-            },
-            executor_config={
-                "resources": {
-                    "requests": {"memory": "512Mi"},
-                    "limits": {"memory": "1Gi"},
-                },
-            },
-            execution_timeout=timedelta(hours=3),
-            provide_context=True,
-        )
-
-        dag << op_generate_file
-
-        return dag
-
-
-environment = Variable.get("environment", "")
-if environment == "development":
-    from equifax_extras.utils.local_get_sqlalchemy_engine import (
-        local_get_sqlalchemy_engine,
-    )
-
-    SnowflakeHook.get_sqlalchemy_engine = local_get_sqlalchemy_engine
-    output_bucket = "tc-datalake"
-    output_folder = "equifax_automated_batch/request/commercial/test"
-else:
-    output_bucket = "tc-datalake"
-    output_folder = "equifax_automated_batch/request/commercial"
-
-if __name__ == "__main__":
-    from collections import namedtuple
-
-    MockDagRun = namedtuple("MockDagRun", ["run_id"])
-    timestamp = datetime.now()
-    time_tag = timestamp.strftime("%Y-%m-%d_%H-%M-%S")
-    mock_context = {"dag_run": MockDagRun(time_tag)}
-
-    generate_file(
-        snowflake_connection="airflow_production",
-        s3_connection="s3_datalake",
-        bucket=output_bucket,
-        folder=output_folder,
-        **mock_context,
-    )
-else:
-    globals()["equifax_batch_commercial_request"] = create_dag(
-        output_bucket, output_folder
-    )
+task_generate_file = PythonOperator(
+    task_id="generate_file",
+    python_callable=generate_file,
+    op_kwargs={
+        "snowflake_conn": snowflake_connection,
+        "s3_conn": s3_connection,
+        "bucket": output_bucket,
+        "folder": output_folder,
+    },
+    executor_config={
+        "resources": {
+            "requests": {"memory": "512Mi"},
+            "limits": {"memory": "1Gi"},
+        },
+    },
+    execution_timeout=timedelta(hours=3),
+    provide_context=True,
+    dag=dag,
+)
