@@ -2,7 +2,6 @@
 # Scheduled at mid-night UTC of each month, (only send on odd month)
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.S3_hook import S3Hook
 
