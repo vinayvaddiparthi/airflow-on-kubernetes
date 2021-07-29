@@ -30,7 +30,7 @@ pmdarima
 retrying
 fs-s3fs
 transitions
-dbt-snowflake==0.18.1
+dbt-snowflake==0.20.0
 pika
 scipy
 heroku3
