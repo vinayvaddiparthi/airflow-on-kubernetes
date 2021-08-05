@@ -82,7 +82,9 @@ airflow webserver
 airflow scheduler
 ```
 
-## Testing a PythonOperator task
+## Appendix
+
+### Testing a PythonOperator task
 
 When creating a DAG file, you may want to test Python code in a
 `PythonOperator`. This can be problematic because the Airflow
@@ -180,14 +182,6 @@ op_kwargs={
 }
 ```
 
-### Variables and Pools:
-
-Before testing, you should check if there are any airflow _Variables_ or _Pools_ being used in the DAG,
-if so, you may need to add them to your local.
-
-
-## Appendix
-
 ### Perform safety checks on packages 
 
 Run the following to see if there are any security vulnerabilities in the packages installed.
@@ -208,9 +202,7 @@ Run the following to see how the installed packages depend on each other.
 pipdeptree
 ```
 
-### Local setup tips
-
-#### Airflow configuration file
+### Remove example dags and default connections
 
 The airflow configuration (i.e., airflow.cfg) file is usually located in `~/airflow` directory. This file contains 
 important configurations for your local environment.
@@ -219,24 +211,27 @@ important configurations for your local environment.
 
 - Set `load_examples = False` to not load the example DAGs in your local Airflow environment.
 
-#### Slack alerts
+### Slack alerts
 
 Instead of sending alerts to the production `#slack_data_alerts` channel, use the `#slack_data_alerts_test` channel.
 This is achieved by using a different webhook_token in the Extra section when you add the `slack_data_alerts` 
 connection. You can see the webhooks defined [here](https://api.slack.com/apps/A024EU67G58/incoming-webhooks?).
 
-```text
-{
-    "webhook_token": "T0J256FV1/B0254NKRMG8/vhd4GRaEGIRzut5gF52Mqilh"
-}
+```json
+{"webhook_token":"T0J256FV1/B0254NKRMG8/vhd4GRaEGIRzut5gF52Mqilh"}
 ```
 
-#### Adding variables from json
+### Variables and Pools:
+
+Before testing, you should check if there are any airflow _Variables_ or _Pools_ being used in the DAG,
+if so, you may need to add them to your local.
+
+### Adding variables from json
 
 Instead of adding each Variable from production individually, you can download the `airflow-variables.json` file from
 `tc-data-airflow-production/local_setup/airflow-variables.json` in the AWS DataOps S3 bucket ([link](https://s3.console.aws.amazon.com/s3/object/tc-data-airflow-production?region=ca-central-1&prefix=local_setup/airflow-variables.json)).
 
-#### Testing tasks
+### Testing tasks
 
 When possible try to use the following command to test each task locally.
 
@@ -247,8 +242,6 @@ airflow tasks test <dag_id> <task_id> <execution_date>
 ### Airflow Style Guide
 
 The following are some guidelines to reference when writing your DAGs. Not every DAGs follows this guideline currently.
-
----
 
 #### Explicitly pass DAG reference, following Python's design principle `Explicit is better than implicit`.
 
@@ -266,8 +259,6 @@ with DAG(...) as dag:
     t2 = DummyOperator(task_id="task2")
 ```
 
----
-
 #### Be explicit in the context variable you are passing.
 
 ```python
@@ -281,8 +272,6 @@ vs.
 def _print_exec_date(execution_date, **context):
     print(execution_date)
 ```
-
----
 
 #### Readability counts, hence it is better to not mix directions in a single statement. Also, use downstream direction whenever possible since it is the natural way of reading from left to right for most people.
 
