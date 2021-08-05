@@ -23,7 +23,7 @@ from utils.failure_callbacks import slack_dag
 
 
 default_args = {
-    "owner": "tc",
+    "owner": "airflow",
     "depends_on_past": False,
     "start_date": datetime(2020, 9, 17, 2),
     "retries": 0,
