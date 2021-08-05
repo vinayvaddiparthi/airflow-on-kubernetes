@@ -1,6 +1,7 @@
 # Airflow On Kubernetes
 
-This is our Airflow project where we orchestrate various data workflows and pipelines, connecting multiple sources systems to our data warehouse (Snowflake).
+This is our Airflow project where we orchestrate various data workflows and pipelines,
+connecting multiple sources systems to our data warehouse (Snowflake).
 
 ## Getting Started
 
