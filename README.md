@@ -5,6 +5,8 @@ connecting multiple sources systems to our data warehouse (Snowflake).
 
 ## Getting Started
 
+### Install packages
+
 First, ensure that `virtualenv` is installed and enter a virtual environment:
 
 ```bash
@@ -25,6 +27,34 @@ pip resolver (released 20.3) is not compatible with the current version of Apach
 
 You should then have all the libraries required to run Airflow jobs in your local development environment.
 
+### Meta database setup
+
+When you install Airflow for the first time, you will be set up with sqlite as the meta database and the 
+SequentialExecutor. You can use this setup, but you will need to switch to a different database and an executor
+if you want to run parallel tasks.
+
+#### Install PostgreSQL
+
+```bash
+brew install postgresql
+postgres -V
+```
+
+#### Create database and user
+
+```bash
+psql postgres
+CREATE database airflow_db;
+CREATE USER airflow WITH PASSWORD 'airflow';
+GRANT ALL PRIVILEGES ON DATABASE airflow_db TO airflow;
+```
+
+#### Update airflow configuration (i.e., airflow.cfg)
+
+```buildoutcfg
+sql_alchemy_conn = postgresql+psycopg2://airflow:airflow@localhost/airflow_db
+executor = LocalExecutor
+```
 
 ## Testing a PythonOperator task
 
