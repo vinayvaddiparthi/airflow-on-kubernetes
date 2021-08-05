@@ -21,6 +21,26 @@ from typing import Dict, List, Any
 from helpers.aws_hack import hack_clear_aws_keys
 from utils.failure_callbacks import slack_dag
 
+
+default_args = {
+    "owner": "tc",
+    "depends_on_past": False,
+    "start_date": datetime(2020, 9, 17, 2),
+    "retries": 0,
+}
+
+dag = DAG(
+    "equifax_consumer_s3_to_snowflake",
+    schedule_interval="@daily",
+    default_args=default_args,
+    catchup=False,
+    on_failure_callback=slack_dag("slack_data_alerts"),
+)
+
+snowflake_conn = "airflow_production"
+aws_hook = AwsHook(aws_conn_id="s3_datalake")
+aws_credentials = aws_hook.get_credentials()
+
 # Use first day of current month to determine last month name
 today = datetime.now().today()
 first = today.replace(day=1)
@@ -1471,26 +1491,6 @@ result_dict = {
     "TCTT100": 5,
     "TCTT108": 5,
 }
-
-default_args = {
-    "owner": "tc",
-    "depends_on_past": False,
-    "start_date": datetime(2020, 9, 17, 2),
-    "retries": 0,
-}
-
-dag = DAG(
-    "equifax_consumer_s3_to_snowflake",
-    schedule_interval="@daily",
-    default_args=default_args,
-    catchup=False,
-    on_failure_callback=slack_dag("slack_data_alerts"),
-)
-
-snowflake_conn = "airflow_production"
-
-aws_hook = AwsHook(aws_conn_id="s3_datalake")
-aws_credentials = aws_hook.get_credentials()
 
 
 def convert_line_csv(line: str) -> str:
