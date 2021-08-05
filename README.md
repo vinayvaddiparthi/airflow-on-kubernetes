@@ -25,7 +25,9 @@ Note that the `--use-deprecated legacy-resolver` argument is used to avoid insta
 pip resolver (released 20.3) is not compatible with the current version of Apache Airflow used
 ([reference](https://airflow.apache.org/docs/apache-airflow/1.10.15/installation.html)).
 
-You should then have all the libraries required to run Airflow jobs in your local development environment.
+You should then have all the libraries required to run Airflow jobs in your local development environment. 
+If the airflow command is not getting recognized, add ```PATH=$PATH:~/.local/bin``` to your zshrc or bashrc file and 
+reload it.
 
 ### Meta database setup
 
@@ -52,8 +54,32 @@ GRANT ALL PRIVILEGES ON DATABASE airflow_db TO airflow;
 #### Update airflow configuration (i.e., airflow.cfg)
 
 ```buildoutcfg
-sql_alchemy_conn = postgresql+psycopg2://airflow:airflow@localhost/airflow_db
+sql_alchemy_conn = postgresql+psycopg2://airflow:airflow@localhost:5432/airflow_db
 executor = LocalExecutor
+```
+
+### Run the webserver and scheduler
+
+#### Set dags folder (in airflow.cfg)
+
+```buildoutcfg
+dags_folder = /Users/xzhang/PycharmProjects/airflow-on-kubernetes/dags
+```
+
+#### Initialize database
+
+```bash
+airflow initdb
+```
+
+#### Run webserver and scheduler (in separate terminals)
+
+```bash
+airflow webserver
+```
+
+```bash
+airflow scheduler
 ```
 
 ## Testing a PythonOperator task
@@ -105,40 +131,6 @@ if __name__ == "__main__":
 
 This will replace the return value of `SnowflakeHook.get_sqlalchemy_engine`
 with the provided `return_value`.
-
-
-## Running Airflow locally
-
-This is only in case you want to try running airflow without installing everything in requirements.txt.
-
-To install airflow, first you need to install `python` with `pip` ready to use. Please use Python3 and pip3 accordingly.
-Run 
-```pip install apache-airflow==1.10.12```
-to install newest version. 
-
-If you want to run airflow based on Postgres DB instead of SQLite, you can run this below:
-```pip install apache-airflow[postgres]==1.10.12```
-To figure out what you might also want airflow to run with, please check the doc on https://airflow.apache.org/docs/stable/installation.html
-
-Once airflow is installed, type ```airflow --version``` to check installation. 
-If the airflow command is not getting recognized, add ```PATH=$PATH:~/.local/bin``` to your zshrc or bashrc file and reload it.
-If you are using linux or mac, you should have an airflow folder created in your root directory. 
-In there, you will find an `airflow.cfg` file that contains all the config you need. 
-1. Normally you would just need to change the backend database setting:
-For example I'm using postgres as backend database and it uses port 5432(by default),
-around line 74 of `airflow.cfg`: 
-```sql_alchemy_conn = postgresql://<user>:<password>@localhost:5432/airflow```
-2. When you are running locally, you can change your executor to `SequentialExecutor`, or `LocalExecutor`.
-3. Last thing, there's setup for dags folder your airflow will fetch from, change that to your projects dags folder, or any folder you desired to use.
-For example: 
-```dags_folder = /Users/xzhang/PycharmProjects/airflow-on-kubernetes/dags```
-You can test out the dags from this repo, or write some of your own ones. Tutorial is here: https://airflow.apache.org/docs/stable/tutorial.html
-
-Now you can run ```airflow initdb``` to init your db.
-
-Run ```airflow scheduler``` to start scheduler. The scheduler will load dags and schedule dags to be run by executors.
-
-Run ```airflow webserver``` to enable GUI that you normally can use at localhost:8080.
 
 ### Importing Salesforce data
 
@@ -226,8 +218,6 @@ important configurations for your local environment.
 - Set `load_default_connections = False` to not load default connections to your local Airflow environment.
 
 - Set `load_examples = False` to not load the example DAGs in your local Airflow environment.
-
-- If you want to support parallel task runs, update the `executor` to `LocalExecutor` from `SequentialExecutor`.
 
 #### Slack alerts
 
