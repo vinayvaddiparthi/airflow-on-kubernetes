@@ -5,21 +5,20 @@
 # [advanceit] tc-datalake/equifax_automated_batch/output/consumer/
 # Then the CSV will be copied into snowflake Equifax.public.consumer_batch,
 # with a history table create on the side
-from datetime import datetime, timedelta
-import logging
-
-from helpers.aws_hack import hack_clear_aws_keys
-
-import boto3
-import pandas as pd
-import tempfile
-from typing import Dict, List, Any
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
 from airflow.models import Variable
 
+from datetime import datetime, timedelta
+import logging
+import boto3
+import pandas as pd
+import tempfile
+from typing import Dict, List, Any
+
+from helpers.aws_hack import hack_clear_aws_keys
 from utils.failure_callbacks import slack_dag
 
 # Use first day of current month to determine last month name
