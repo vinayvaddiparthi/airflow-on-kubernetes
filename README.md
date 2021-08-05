@@ -15,11 +15,11 @@ source venv/bin/activate
 And then install Airflow and its dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt --use-deprecated legacy-resolver
 ```
 
-Note that the CI/CD pipeline adds the option `--use-deprecated legacy-resolver` to avoid installation errors as the new 
-pip resolver (released 20.3) is not compatible with Apache Airflow
+Note that the `--use-deprecated legacy-resolver` argument is used to avoid installation errors as the new 
+pip resolver (released 20.3) is not compatible with the current version of Apache Airflow used
 ([reference](https://airflow.apache.org/docs/apache-airflow/1.10.15/installation.html)).
 
 You should then have all the libraries required to run Airflow jobs in your local development environment.
