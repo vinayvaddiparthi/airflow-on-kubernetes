@@ -4,8 +4,7 @@ This is our Airflow project where we orchestrate various data workflows and pipe
 
 ## Getting Started
 
-First, ensure that `virtualenv` is installed and enter a 
-virtual environment:
+First, ensure that `virtualenv` is installed and enter a virtual environment:
 
 ```bash
 pip install virtualenv
