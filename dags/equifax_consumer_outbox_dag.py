@@ -48,5 +48,6 @@ task_create_s3_to_sftp_job = S3ToSFTPOperator(
     s3_conn_id=s3_connection,
     s3_bucket=S3_BUCKET,
     s3_key=S3_KEY,
+    dag=dag,
 )
 # task 2b - if the request file for this month does not exist, then proceed to Dummy Operator
