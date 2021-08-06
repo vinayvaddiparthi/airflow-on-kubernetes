@@ -27,8 +27,13 @@ dag = DAG(
     description="A workflow to send the consumer batch request file to Equifax",
     schedule_interval="@daily",
     start_date=datetime(2021, 8, 15),
+    catchup=False,
     tags=['equifax'],
 )
 dag.doc_md = __doc__
 
-# task 1 - check if s3 folder (/output) contains
+# task 1 - check if s3 folder (/outbox) contains request file for this month
+
+# task 2a - if the request file for this month exists, then send the file to Equifax
+
+# task 2b - if the request file for this month does not exist, then proceed to Dummy Operator
