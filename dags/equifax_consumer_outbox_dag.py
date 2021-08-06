@@ -8,7 +8,7 @@ from airflow import DAG
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.ssh.hooks.ssh import SSHHook
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators import PythonOperator, DummyOperator
 from airflow.models import Variable
 
 from datetime import datetime, timedelta
@@ -106,9 +106,13 @@ def sync_s3fs_to_sshfs(aws_conn: str, sshfs_conn: str) -> None:
                 s3fs.remove(f"outbox/{file}")
 
 
-# task 1 - check if s3 folder (/outbox) contains request file for this month
+# task: check if s3 folder (/outbox) contains request file for this month
 
-# task 2a - if the request file for this month exists, then send the file to Equifax
+# task: if the request file for this month exists, then encrypt the file
+
+
+
+# task: if the request file for this month exists, then send the file to Equifax
 task_create_s3_to_sftp_job = S3ToSFTPOperator(
     task_id='create_s3_to_sftp_job',
     sftp_conn_id=sftp_connection,
@@ -130,4 +134,4 @@ task_sync_s3fs_to_sshfs = PythonOperator(
 )
 
 
-# task 2b - if the request file for this month does not exist, then proceed to Dummy Operator
+# task: if the request file for this month does not exist, then proceed to Dummy Operator
