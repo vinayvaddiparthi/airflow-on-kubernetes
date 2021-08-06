@@ -1,5 +1,5 @@
 """
-# Equifax Consumer Outbound DAG
+# Equifax Consumer Outbox DAG
 
 This workflow sends the Equifax consumer request file (i.e. eligible applicant information) to
 Equifax on a monthly basis for recertification purposes.
@@ -22,15 +22,18 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id='equifax_consumer_outbound',
+    dag_id='equifax_consumer_outbox',
     default_args=default_args,
     description="A workflow to send the consumer batch request file to Equifax",
     schedule_interval="@daily",
-    start_date=datetime(2021, 8, 15),
+    start_date=datetime(2021, 1, 1),
     catchup=False,
     tags=['equifax'],
 )
 dag.doc_md = __doc__
+
+s3_connection = 's3_dataops'
+sshfs_connection = 'equifax_sftp'
 
 # task 1 - check if s3 folder (/outbox) contains request file for this month
 
