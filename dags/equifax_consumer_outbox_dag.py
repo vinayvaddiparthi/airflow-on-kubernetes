@@ -36,7 +36,7 @@ dag.doc_md = __doc__
 s3_connection = 's3_dataops'
 sftp_connection = 'equifax_sftp'
 S3_BUCKET = 'tc-data-airflow-production'
-S3_KEY = '/consumer/outbox/eqxds.exthinkingpd.ds.20210801.txt'
+S3_KEY = 'equifax/consumer/outbox/eqxds.exthinkingpd.ds.20210801.txt'
 
 # task 1 - check if s3 folder (/outbox) contains request file for this month
 
@@ -50,4 +50,20 @@ task_create_s3_to_sftp_job = S3ToSFTPOperator(
     s3_key=S3_KEY,
     dag=dag,
 )
+
+
+def sync_s3fs_to_sshfs(aws_conn: str, sshfs_conn: str) -> None:
+    with SuspendAwsEnvVar():
+        s3fs, sshfs = _get_s3fs_from_conn(aws_conn), _get_sshfs_from_conn(sshfs_conn)
+
+        local_files = s3fs.listdir("outbox")
+
+        for file in local_files:
+            with s3fs.open(f"outbox/{file}", "rb") as origin_file, sshfs.open(
+                f"inbox/{file}.pgp", "wb"
+            ) as remote_file:
+                encrypted = encrypt(origin_file)
+                copy_file_data(encrypted, remote_file)
+                s3fs.remove(f"outbox/{file}")
+
 # task 2b - if the request file for this month does not exist, then proceed to Dummy Operator
