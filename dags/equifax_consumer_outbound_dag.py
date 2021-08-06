@@ -30,3 +30,5 @@ dag = DAG(
     tags=['equifax'],
 )
 dag.doc_md = __doc__
+
+# task 1 - check if s3 folder (/output) contains

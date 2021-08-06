@@ -82,6 +82,18 @@ airflow webserver
 airflow scheduler
 ```
 
+If you'd like you can run the scheduler in the background instead of in the foreground.
+
+```bash
+airflow scheduler -D
+```
+
+To terminate the scheduler running in the background, run the following command.
+
+```bash
+kill $(cat ~/airflow/airflow-scheduler.pid)
+```
+
 ## Appendix
 
 ### Testing a PythonOperator task
