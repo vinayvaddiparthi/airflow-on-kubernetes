@@ -209,7 +209,8 @@ def describe_sobject(
                 field["name"]
                 for field in getattr(salesforce, sobject_name).describe()["fields"]
                 if field["type"] != "address"
-                and field["name"] not in ("Language", "IndividualId", "IsVerified")
+                and field["name"]
+                not in ("Language", "IndividualId", "IsVerified", "OutOfOfficeMessage")
             ]
             if sobject_name
             in (
@@ -217,6 +218,7 @@ def describe_sobject(
                 "Contact",
                 "FeedComment",
                 "Lead",
+                "User",
             )  # sobjects contain invalid fields
             else [
                 field["name"]
