@@ -4,6 +4,9 @@ stages:
   - build
   - deploy
   - cleanup
+  - infrastructure-build
+  - infrastructure-test
+  - infrastructure-deploy
 
 variables:
   PYTHON_VERSION: "3.8"

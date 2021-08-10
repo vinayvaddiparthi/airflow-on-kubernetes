@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: 2010-09-09
+Metadata:
+  'AWS::CloudFormation::Designer':
+    97aeef69-5fdc-4266-a5d8-8ee002ed3a44:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 145
+        'y': 126
+      z: 0
+    5da9f2ad-148c-43e2-badc-3f87069ee05d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 130
+      z: 0
+      dependson:
+        - 97aeef69-5fdc-4266-a5d8-8ee002ed3a44
+    ece3e376-a1ce-417b-88c2-335fe9436bb4:
+      source:
+        id: 5da9f2ad-148c-43e2-badc-3f87069ee05d
+      target:
+        id: 97aeef69-5fdc-4266-a5d8-8ee002ed3a44
+      z: 1
+Resources:
+  S3B2AWOE:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Delete
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: KMS-KEY-ARN
+            BucketKeyEnabled: true
+      BucketName: tc-staging-airflow
+      ObjectLockEnabled: false
+      PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+      Tags:
+        - Key: "CloudFormation-Created-Resource"
+          Value: "Do-Not-Delete-CloudFormation-Created-Resource"
+        - Key: "Name"
+          Value: "Airflow-Staging"
+        - Key: "Environment"
+          Value: "STAGING"
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 97aeef69-5fdc-4266-a5d8-8ee002ed3a44
+  MWAAE1COTH:
+    Type: 'AWS::MWAA::Environment'
+    Properties:
+      AirflowConfigurationOptions:
+        core.default_timezone: utc
+        webserver.default_ui_timezone: "America/Toronto"
+        core.default_task_retries: 10
+        logging.logging_level: INFO
+      AirflowVersion: 'v2.0.2'
+      DagS3Path: "s3://tc-staging-airflow"
+      # Valid values: mw1.small, mw1.medium, mw1.large
+      EnvironmentClass: mw1.small
+      KmsKey: String
+      LoggingConfiguration:
+        DagProcessingLogs:
+          Enabled: true
+          LogLevel: INFO
+        SchedulerLogs:
+          Enabled: true
+          LogLevel: INFO
+        TaskLogs:
+          Enabled: true
+          LogLevel: INFO
+        WebserverLogs:
+          Enabled: true
+          LogLevel: INFO
+        WorkerLogs:
+          Enabled: true
+          LogLevel: INFO
+      MaxWorkers: 20
+      MinWorkers: 1
+      Name: staging-airflow
+      NetworkConfiguration:
+        SecurityGroupIds:
+          - sg-0101010
+        SubnetIds:
+          - subnet-123456
+          - subnet-789011
+      SourceBucketArn: "arn:aws:s3:::my-dags-bucket"
+      Tags:
+        Environment: Staging
+        Team: Analytics
+      PluginsS3ObjectVersion: String
+      PluginsS3Path: String
+      RequirementsS3ObjectVersion: String
+      RequirementsS3Path: String
+      Schedulers: Integer
+      SourceBucketArn: String
+      Tags:
+        TagMap
+      WebserverAccessMode: String
+      WeeklyMaintenanceWindowStart: String
+
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 5da9f2ad-148c-43e2-badc-3f87069ee05d
+    DependsOn:
+      - S3B2AWOE
