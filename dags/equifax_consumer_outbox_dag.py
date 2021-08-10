@@ -4,6 +4,8 @@
 This workflow sends the Equifax consumer request file (i.e. eligible applicant information) to
 Equifax on a monthly basis for recertification purposes.
 """
+import logging
+
 from airflow import DAG
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
@@ -17,7 +19,7 @@ from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 import gnupg
-from typing import IO, List
+from typing import IO, List, Any
 from fs.sshfs import SSHFS
 from fs.tools import copy_file_data
 from fs_s3fs import S3FS
@@ -51,12 +53,20 @@ dag.doc_md = __doc__
 s3_connection = 's3_dataops'
 sftp_connection = 'equifax_sftp'
 S3_BUCKET = 'tc-data-airflow-production'
-S3_KEY = 'equifax/consumer/outbox/eqxds.exthinkingpd.ds.20210801.txt'
+# S3_KEY = 'equifax/consumer/outbox/eqxds.exthinkingpd.ds.20210801.txt'
+S3_KEY = 'equifax/consumer/outbox/eqxds.exthinkingpd.ds.20210801.test.txt'
 
 
-def download_file_from_s3(key: str, bucket_name: str) -> str:
-    s3 = S3Hook(aws_conn_id=s3_connection)
-    filename = s3.download_file(key=key, bucket_name=bucket_name)
+def download_file_from_s3(s3_conn: str, bucket_name: str, prefix: str, ds_nodash: str, **_: Any) -> List[str]:
+    s3 = S3Hook(aws_conn_id=s3_conn)
+    keys = s3.list_keys(bucket_name=bucket_name, prefix=prefix)
+    recert_date = datetime.strftime(datetime.strptime(ds_nodash, '%Y%m%d').replace(day=1), '%Y%m%d')
+    matches = [key for key in keys if key == f'{prefix}/eqxds.exthinkingpd.ds.{recert_date}.txt']
+    if len(matches) > 1:
+        logging.error('More than one request file found for this month', matches)
+    if len(matches) == 0:
+        logging.error('No matching request file found for this month', matches)
+    filename = s3.download_file(key=matches[0], bucket_name=bucket_name)
     return filename
 
 
@@ -115,18 +125,24 @@ task_download_request_file = PythonOperator(
     task_id='download_request_file',
     python_callable=download_file_from_s3,
     op_kwargs={
-        'key': S3_KEY,
+        's3_conn': s3_connection,
         'bucket_name': S3_BUCKET,
+        'prefix': 'equifax/consumer/request',
     },
+    provide_context=True,
     dag=dag,
 )
 
 # task: if the request file for this month exists, then encrypt the file and upload to s3
-task_decrypt_request_file = PythonOperator(
-    task_id='decrypt_request_file',
+task_upload_request_file = PythonOperator(
+    task_id='upload_request_file',
     python_callable=upload_file_to_s3,
-
-
+    op_kwargs={
+        'filename': '/Users/jimkim/Documents/equifax/recert-august2021/eqxds.exthinkingpd.ds.20210801.test.txt',
+        'key': S3_KEY,
+        'bucket_name': S3_BUCKET,
+    },
+    dag=dag,
 )
 
 
