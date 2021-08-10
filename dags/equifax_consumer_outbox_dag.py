@@ -9,7 +9,8 @@ from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.ssh.hooks.ssh import SSHHook
-from airflow.operators import PythonOperator, DummyOperator
+from airflow.operators.python_operator import PythonOperator
+from airflow.operators.dummy_operator import DummyOperator
 from airflow.models import Variable
 
 from datetime import datetime, timedelta
@@ -52,9 +53,16 @@ S3_BUCKET = 'tc-data-airflow-production'
 S3_KEY = 'equifax/consumer/outbox/eqxds.exthinkingpd.ds.20210801.txt'
 
 
+def download_file_from_s3(key: str, bucket_name: str) -> str:
+    s3 = S3Hook(aws_conn_id=s3_connection)
+    filename = s3.download_file(key=key, bucket_name=bucket_name)
+    return filename
+
+
 def upload_file_to_s3(filename: str, key: str, bucket_name: str):
     s3 = S3Hook(aws_conn_id=s3_connection)
     s3.load_file(filename=filename, key=key, bucket_name=bucket_name, replace=False, encrypt=True)
+
 
 def _init_gnupg() -> gnupg.GPG:
     path_ = Path("~/.gnupg")
@@ -112,6 +120,17 @@ def sync_s3fs_to_sshfs(aws_conn: str, sshfs_conn: str) -> None:
 
 
 # task: check if s3 folder (/outbox) contains request file for this month
+
+# task: download request file from s3
+task_download_request_file = PythonOperator(
+    task_id='download_request_file',
+    python_callable=download_file_from_s3,
+    op_kwargs={
+        'key': S3_KEY,
+        'bucket_name': S3_BUCKET,
+    },
+    dag=dag,
+)
 
 # task: if the request file for this month exists, then encrypt the file and upload to s3
 task_decrypt_request_file = PythonOperator(
