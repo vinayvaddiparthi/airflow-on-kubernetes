@@ -24,6 +24,7 @@ from fs_s3fs import S3FS
 
 from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils.failure_callbacks import slack_dag
+from utils.gpg import _init_gnupg
 
 default_args = {
     'owner': 'airflow',
@@ -62,18 +63,6 @@ def download_file_from_s3(key: str, bucket_name: str) -> str:
 def upload_file_to_s3(filename: str, key: str, bucket_name: str):
     s3 = S3Hook(aws_conn_id=s3_connection)
     s3.load_file(filename=filename, key=key, bucket_name=bucket_name, replace=False, encrypt=True)
-
-
-def _init_gnupg() -> gnupg.GPG:
-    path_ = Path("~/.gnupg")
-    path_.mkdir(parents=True, exist_ok=True)
-    gpg = gnupg.GPG(gnupghome=path_)
-
-    keys: List[str] = Variable.get("equifax_pgp_keys", deserialize_json=True)
-    for key in keys:
-        gpg.import_keys(key)
-
-    return gpg
 
 
 def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
