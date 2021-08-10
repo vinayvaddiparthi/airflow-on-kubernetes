@@ -508,6 +508,7 @@ def create_dag() -> DAG:
                                 "account_number",
                                 "flinks_account_type",
                                 "flinks_account_id",
+                                "stale",
                             ]
                         ),
                     ),
