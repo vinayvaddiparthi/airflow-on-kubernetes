@@ -1,5 +1,12 @@
 # This dag generates request file for monthly Equifax consumer request file(.txt)
 # encoded in [windows-1252] or [iso-8859-1]
+import logging
+import tempfile
+from datetime import datetime, timedelta
+from pathlib import Path
+from fs import open_fs, copy
+from typing import Any
+
 from airflow import DAG
 from airflow.models import Variable
 from airflow.models.dagrun import DagRun
@@ -8,12 +15,6 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.S3_hook import S3Hook
 
-import logging
-import tempfile
-from datetime import datetime, timedelta
-from pathlib import Path
-from fs import open_fs, copy
-from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 from jinja2 import Template
