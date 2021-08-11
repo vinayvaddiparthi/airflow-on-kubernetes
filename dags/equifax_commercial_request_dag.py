@@ -27,7 +27,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id="equifax_batch_commercial_request",
+    dag_id="equifax_commercial_request",
     catchup=False,
     default_args=default_args,
     schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
