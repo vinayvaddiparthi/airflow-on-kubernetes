@@ -57,22 +57,21 @@ S3_BUCKET = 'tc-data-airflow-production'
 S3_KEY = 'equifax/consumer/outbox/eqxds.exthinkingpd.ds.20210801.test.txt'
 
 # task: check if s3 folder (/request) contains request file for this month
-# task: if the request file for this month does not exist, then proceed to Dummy Operator
-# task: download request file from s3
+# task: download request file from s3 and encrypt
 # task: if the request file for this month exists, then encrypt the file and upload to s3
 # task: if the request file for this month exists, then send the file to Equifax
 
 
-def download_file_from_s3(s3_conn: str, bucket_name: str, prefix: str, ds_nodash: str, **_: Any) -> List[str]:
+def download_file_from_s3(s3_conn: str, bucket_name: str, key: str, **_: Any) -> List[str]:
     s3 = S3Hook(aws_conn_id=s3_conn)
-    keys = s3.list_keys(bucket_name=bucket_name, prefix=prefix)
-    recert_date = datetime.strftime(datetime.strptime(ds_nodash, '%Y%m%d').replace(day=1), '%Y%m%d')
-    matches = [key for key in keys if key == f'{prefix}/eqxds.exthinkingpd.ds.{recert_date}.txt']
-    if len(matches) > 1:
-        logging.error('More than one request file found for this month', matches)
-    if len(matches) == 0:
-        logging.error('No matching request file found for this month', matches)
-    filename = s3.download_file(key=matches[0], bucket_name=bucket_name)
+    # keys = s3.list_keys(bucket_name=bucket_name, prefix=prefix)
+    # recert_date = datetime.strftime(datetime.strptime(ds_nodash, '%Y%m%d').replace(day=1), '%Y%m%d')
+    # matches = [key for key in keys if key == f'{prefix}/eqxds.exthinkingpd.ds.{recert_date}.txt']
+    # if len(matches) > 1:
+    #     logging.error('More than one request file found for this month', matches)
+    # if len(matches) == 0:
+    #     logging.error('No matching request file found for this month', matches)
+    filename = s3.download_file(key=key, bucket_name=bucket_name)
     return filename
 
 
@@ -139,7 +138,7 @@ task_download_request_file = PythonOperator(
     op_kwargs={
         's3_conn': s3_connection,
         'bucket_name': S3_BUCKET,
-        'prefix': 'equifax/consumer/request',
+        'key': 'equifax/consumer/request/{{ var.value.equifax_consumer_request_filename }}'
     },
     provide_context=True,
     dag=dag,
