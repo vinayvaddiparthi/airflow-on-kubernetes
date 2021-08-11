@@ -198,15 +198,9 @@ def generate_file(
     bucket: str,
     folder: str,
     dag_run: DagRun,
-    ts_nodash: str,
+    ds_nodash: str,
     **_: Any,
 ) -> str:
-    """
-    Snowflake -> TempDir -> S3 bucket
-    Path: [advanceit] tc-datalake/equifax_automated_batch/request/consumer
-    As of June 22,
-    we still need to send the txt file to Risk contact person, they will upload to Equifax
-    """
     manual_process = ""
     if dag_run:
         config = dag_run.conf
@@ -231,7 +225,7 @@ def generate_file(
     results = query.all()
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "consumer"
-    file_name = f"eqxds.exthinkingpd.ds.{ts_nodash}.txt"
+    file_name = f"eqxds.exthinkingpd.ds.{ds_nodash}.txt"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
