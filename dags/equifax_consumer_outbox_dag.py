@@ -175,19 +175,29 @@ task_upload_request_file = PythonOperator(
     python_callable=upload_file_to_s3,
     op_kwargs={
         'bucket_name': S3_BUCKET,
-        'key': 'equifax/consumer/request_encrypted/{{ var.value.equifax_consumer_request_filename }}.pgp',
+        'key': 'equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp',
     },
     provide_context=True,
+    dag=dag,
+)
+
+task_is_outbox_file_available = S3KeySensor(
+    task_id='is_outbox_file_available',
+    bucket_key='s3://tc-data-airflow-production/equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp',
+    aws_conn_id=s3_connection,
+    poke_interval=5,
+    timeout=20,
+    on_failure_callback=_failure_callback,
     dag=dag,
 )
 
 task_create_s3_to_sftp_job = S3ToSFTPOperator(
     task_id='create_s3_to_sftp_job',
     sftp_conn_id=sftp_connection,
-    sftp_path='inbox/',
+    sftp_path='inbox/{{ var.value.equifax_consumer_request_filename }}.pgp',
     s3_conn_id=s3_connection,
     s3_bucket=S3_BUCKET,
-    s3_key=S3_KEY,
+    s3_key='equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp',
     dag=dag,
 )
 
