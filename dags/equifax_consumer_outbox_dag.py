@@ -6,6 +6,7 @@ Equifax on a monthly basis for recertification purposes.
 """
 from airflow import DAG
 from airflow.models import Variable
+from airflow.models.taskinstance import TaskInstance
 from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
@@ -69,7 +70,7 @@ def _failure_callback(context):
         print("Sensor timed out")
 
 
-def download_file_from_s3(s3_conn: str, bucket_name: str, key: str, **_: Any) -> List[str]:
+def download_file_from_s3(s3_conn: str, bucket_name: str, key: str, **_: None) -> List[str]:
     s3 = S3Hook(aws_conn_id=s3_conn)
     # keys = s3.list_keys(bucket_name=bucket_name, prefix=prefix)
     # recert_date = datetime.strftime(datetime.strptime(ds_nodash, '%Y%m%d').replace(day=1), '%Y%m%d')
@@ -81,39 +82,47 @@ def download_file_from_s3(s3_conn: str, bucket_name: str, key: str, **_: Any) ->
     filename = s3.download_file(key=key, bucket_name=bucket_name)
     return filename
 
-def encrypt_request_file()
-    filepath = xcom.
+
+def encrypt_request_file(task_instance: TaskInstance, **_: None,) -> str:
+    gpg = _init_gnupg()
+    filename = task_instance.xcom_pull('download_request_file')
+    with open(filename, 'rb+') as file:
+        encrypted_message = gpg.encrypt_file(file, "sts@equifax.com", always_trust=True)
+        file.write(encrypted_message.data)
+        return filename
 
 
 def upload_file_to_s3(filename: str, key: str, bucket_name: str):
     s3 = S3Hook(aws_conn_id=s3_connection)
     s3.load_file(filename=filename, key=key, bucket_name=bucket_name, replace=False, encrypt=True)
 
+
 def encrypt(fd: IO[bytes]) -> IO[bytes]:
     gpg = _init_gnupg()
     encrypted_message = gpg.encrypt_file(fd, "sts@equifax.com", always_trust=True)
     return BytesIO(encrypted_message.data)
 
-# def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
-#     ssh_connection = SSHHook.get_connection(ssh_conn)
-#
-#     return SSHFS(
-#         host=ssh_connection.host,
-#         user=ssh_connection.login,
-#         passwd=ssh_connection.password,
-#     )
+
+def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
+    ssh_connection = SSHHook.get_connection(ssh_conn)
+
+    return SSHFS(
+        host=ssh_connection.host,
+        user=ssh_connection.login,
+        passwd=ssh_connection.password,
+    )
 
 
-# def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
-#     aws_connection = AwsBaseHook.get_connection(aws_conn)
-#
-#     return S3FS(
-#         bucket_name=aws_connection.extra_dejson["bucket"],
-#         region=aws_connection.extra_dejson["region"],
-#         dir_path=aws_connection.extra_dejson["dir_path"],
-#         aws_access_key_id=aws_connection.extra_dejson["aws_access_key_id"],
-#         aws_secret_access_key=aws_connection.extra_dejson["aws_secret_access_key"],
-#     )
+def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
+    aws_connection = AwsBaseHook.get_connection(aws_conn)
+
+    return S3FS(
+        bucket_name=aws_connection.extra_dejson["bucket"],
+        region=aws_connection.extra_dejson["region"],
+        dir_path=aws_connection.extra_dejson["dir_path"],
+        aws_access_key_id=aws_connection.extra_dejson["aws_access_key_id"],
+        aws_secret_access_key=aws_connection.extra_dejson["aws_secret_access_key"],
+    )
 
 
 def sync_s3fs_to_sshfs(aws_conn: str, sshfs_conn: str) -> None:
@@ -127,8 +136,8 @@ def sync_s3fs_to_sshfs(aws_conn: str, sshfs_conn: str) -> None:
                 f"inbox/{file}.pgp", "wb"
             ) as remote_file:
                 encrypted = encrypt(origin_file)
-                copy_file_data(encrypted, remote_file)
-                s3fs.remove(f"outbox/{file}")
+                # copy_file_data(encrypted, remote_file)
+                # s3fs.remove(f"outbox/{file}")
 
 
 task_is_request_file_available = S3KeySensor(
@@ -137,7 +146,7 @@ task_is_request_file_available = S3KeySensor(
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
-    on_failure_callback=_failure_callback
+    on_failure_callback=_failure_callback,
     dag=dag,
 )
 
@@ -149,6 +158,13 @@ task_download_request_file = PythonOperator(
         'bucket_name': S3_BUCKET,
         'key': 'equifax/consumer/request/{{ var.value.equifax_consumer_request_filename }}'
     },
+    provide_context=True,
+    dag=dag,
+)
+
+task_encrypt_request_file = PythonOperator(
+    task_id='encrypt_request_file',
+    python_callable=encrypt_request_file,
     provide_context=True,
     dag=dag,
 )
