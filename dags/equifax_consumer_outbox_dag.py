@@ -13,6 +13,7 @@ from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.ssh.hooks.ssh import SSHHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.dummy_operator import DummyOperator
+from airflow.exceptions import AirflowSensorTimeout
 
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -62,6 +63,12 @@ S3_KEY = 'equifax/consumer/outbox/eqxds.exthinkingpd.ds.20210801.test.txt'
 # task: if the request file for this month exists, then send the file to Equifax
 
 
+def _failure_callback(context):
+    if isinstance(context['exception'], AirflowSensorTimeout):
+        print(context)
+        print("Sensor timed out")
+
+
 def download_file_from_s3(s3_conn: str, bucket_name: str, key: str, **_: Any) -> List[str]:
     s3 = S3Hook(aws_conn_id=s3_conn)
     # keys = s3.list_keys(bucket_name=bucket_name, prefix=prefix)
@@ -74,38 +81,39 @@ def download_file_from_s3(s3_conn: str, bucket_name: str, key: str, **_: Any) ->
     filename = s3.download_file(key=key, bucket_name=bucket_name)
     return filename
 
+def encrypt_request_file()
+    filepath = xcom.
+
 
 def upload_file_to_s3(filename: str, key: str, bucket_name: str):
     s3 = S3Hook(aws_conn_id=s3_connection)
     s3.load_file(filename=filename, key=key, bucket_name=bucket_name, replace=False, encrypt=True)
 
-
-def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
-    ssh_connection = SSHHook.get_connection(ssh_conn)
-
-    return SSHFS(
-        host=ssh_connection.host,
-        user=ssh_connection.login,
-        passwd=ssh_connection.password,
-    )
-
-
-def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
-    aws_connection = AwsBaseHook.get_connection(aws_conn)
-
-    return S3FS(
-        bucket_name=aws_connection.extra_dejson["bucket"],
-        region=aws_connection.extra_dejson["region"],
-        dir_path=aws_connection.extra_dejson["dir_path"],
-        aws_access_key_id=aws_connection.extra_dejson["aws_access_key_id"],
-        aws_secret_access_key=aws_connection.extra_dejson["aws_secret_access_key"],
-    )
-
-
 def encrypt(fd: IO[bytes]) -> IO[bytes]:
     gpg = _init_gnupg()
     encrypted_message = gpg.encrypt_file(fd, "sts@equifax.com", always_trust=True)
     return BytesIO(encrypted_message.data)
+
+# def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
+#     ssh_connection = SSHHook.get_connection(ssh_conn)
+#
+#     return SSHFS(
+#         host=ssh_connection.host,
+#         user=ssh_connection.login,
+#         passwd=ssh_connection.password,
+#     )
+
+
+# def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
+#     aws_connection = AwsBaseHook.get_connection(aws_conn)
+#
+#     return S3FS(
+#         bucket_name=aws_connection.extra_dejson["bucket"],
+#         region=aws_connection.extra_dejson["region"],
+#         dir_path=aws_connection.extra_dejson["dir_path"],
+#         aws_access_key_id=aws_connection.extra_dejson["aws_access_key_id"],
+#         aws_secret_access_key=aws_connection.extra_dejson["aws_secret_access_key"],
+#     )
 
 
 def sync_s3fs_to_sshfs(aws_conn: str, sshfs_conn: str) -> None:
@@ -129,6 +137,7 @@ task_is_request_file_available = S3KeySensor(
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
+    on_failure_callback=_failure_callback
     dag=dag,
 )
 
