@@ -32,7 +32,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id="equifax_batch_consumer_request",
+    dag_id="equifax_consumer_request",
     catchup=False,
     default_args=default_args,
     schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
@@ -226,6 +226,9 @@ def generate_file(
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "consumer"
     file_name = f"eqxds.exthinkingpd.ds.{ds_nodash}.txt"
+
+    print(f'FILENAME: {file_name}')
+
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
