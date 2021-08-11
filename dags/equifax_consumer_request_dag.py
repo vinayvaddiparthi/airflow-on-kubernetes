@@ -1,6 +1,7 @@
 # This dag generates request file for monthly Equifax consumer request file(.txt)
 # encoded in [windows-1252] or [iso-8859-1]
 from airflow import DAG
+from airflow.models import Variable
 from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -253,6 +254,7 @@ def generate_file(
     logging.info(f"Uploading {file_name} to {bucket}/{folder}.")
 
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
+    Variable.set('equifax_consumer_request_filename', file_name)
     return file_name
 
 
