@@ -41,7 +41,7 @@ def encrypt(filename: str) -> Any:
 
 def decrypt_file(filename: str) -> Any:
     output = filename.replace(".pgp", "")
-    equifax_hook = BaseHook.get_connection("equifax_pgp_keys")
+    equifax_hook = BaseHook.get_connection("equifax_pgp_secret")
     pgp_private_key = equifax_hook.password
     passphrase = equifax_hook.extra_dejson.get("passphrase")
 
