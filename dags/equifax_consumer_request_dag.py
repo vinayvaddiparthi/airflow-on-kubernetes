@@ -226,9 +226,6 @@ def generate_file(
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "consumer"
     file_name = f"eqxds.exthinkingpd.ds.{ds_nodash}.txt"
-
-    print(f'FILENAME: {file_name}')
-
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
