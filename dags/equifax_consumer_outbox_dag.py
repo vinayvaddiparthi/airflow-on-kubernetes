@@ -56,6 +56,12 @@ S3_BUCKET = 'tc-data-airflow-production'
 # S3_KEY = 'equifax/consumer/outbox/eqxds.exthinkingpd.ds.20210801.txt'
 S3_KEY = 'equifax/consumer/outbox/eqxds.exthinkingpd.ds.20210801.test.txt'
 
+# task: check if s3 folder (/request) contains request file for this month
+# task: if the request file for this month does not exist, then proceed to Dummy Operator
+# task: download request file from s3
+# task: if the request file for this month exists, then encrypt the file and upload to s3
+# task: if the request file for this month exists, then send the file to Equifax
+
 
 def download_file_from_s3(s3_conn: str, bucket_name: str, prefix: str, ds_nodash: str, **_: Any) -> List[str]:
     s3 = S3Hook(aws_conn_id=s3_conn)
@@ -118,9 +124,6 @@ def sync_s3fs_to_sshfs(aws_conn: str, sshfs_conn: str) -> None:
                 s3fs.remove(f"outbox/{file}")
 
 
-# task: check if s3 folder (/outbox) contains request file for this month
-
-# task: download request file from s3
 task_download_request_file = PythonOperator(
     task_id='download_request_file',
     python_callable=download_file_from_s3,
@@ -133,7 +136,6 @@ task_download_request_file = PythonOperator(
     dag=dag,
 )
 
-# task: if the request file for this month exists, then encrypt the file and upload to s3
 task_upload_request_file = PythonOperator(
     task_id='upload_request_file',
     python_callable=upload_file_to_s3,
@@ -145,8 +147,6 @@ task_upload_request_file = PythonOperator(
     dag=dag,
 )
 
-
-# task: if the request file for this month exists, then send the file to Equifax
 task_create_s3_to_sftp_job = S3ToSFTPOperator(
     task_id='create_s3_to_sftp_job',
     sftp_conn_id=sftp_connection,
@@ -166,6 +166,3 @@ task_sync_s3fs_to_sshfs = PythonOperator(
     },
     dag=dag,
 )
-
-
-# task: if the request file for this month does not exist, then proceed to Dummy Operator
