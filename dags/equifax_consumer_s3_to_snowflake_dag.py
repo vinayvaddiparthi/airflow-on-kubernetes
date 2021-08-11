@@ -5,41 +5,22 @@
 # [advanceit] tc-datalake/equifax_automated_batch/output/consumer/
 # Then the CSV will be copied into snowflake Equifax.public.consumer_batch,
 # with a history table create on the side
+from datetime import datetime, timedelta
+import logging
+
+from helpers.aws_hack import hack_clear_aws_keys
+
+import boto3
+import pandas as pd
+import tempfile
+from typing import Dict, List, Any
 from airflow import DAG
 from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
 from airflow.models import Variable
 
-from datetime import datetime, timedelta
-import logging
-import boto3
-import pandas as pd
-import tempfile
-from typing import Dict, List, Any
-
-from helpers.aws_hack import hack_clear_aws_keys
 from utils.failure_callbacks import slack_dag
-
-
-default_args = {
-    "owner": "airflow",
-    "depends_on_past": False,
-    "start_date": datetime(2020, 9, 17, 2),
-    "retries": 0,
-}
-
-dag = DAG(
-    "equifax_consumer_s3_to_snowflake",
-    schedule_interval="@daily",
-    default_args=default_args,
-    catchup=False,
-    on_failure_callback=slack_dag("slack_data_alerts"),
-)
-
-snowflake_conn = "airflow_production"
-aws_hook = AwsHook(aws_conn_id="s3_dataops")
-aws_credentials = aws_hook.get_credentials()
 
 # Use first day of current month to determine last month name
 today = datetime.now().today()
@@ -48,9 +29,13 @@ last_month = first - timedelta(days=1)
 
 t_stamp = last_month.strftime("%Y%m")  # '2021XX'
 base_file_name = f"tc_consumer_batch_{t_stamp}"
-bucket = "tc-data-airflow-production"
-response_path = "equifax/consumer/response"
-output_path = "equifax/consumer/output"
+bucket = "tc-datalake"
+prefix_path = "equifax_automated_batch"
+response_path = "/response"
+output_path = "/output"
+consumer_path = "/consumer"
+full_response_path = prefix_path + response_path + consumer_path
+full_output_path = prefix_path + output_path + consumer_path
 
 table_name_raw = "equifax.output.consumer_batch_raw"
 table_name_raw_history = f"equifax.output_history.consumer_batch_raw_{t_stamp}"
@@ -1488,6 +1473,26 @@ result_dict = {
     "TCTT108": 5,
 }
 
+default_args = {
+    "owner": "tc",
+    "depends_on_past": False,
+    "start_date": datetime(2020, 9, 17, 2),
+    "retries": 0,
+}
+
+dag = DAG(
+    "equifax_consumer_s3_to_snowflake",
+    schedule_interval="@daily",
+    default_args=default_args,
+    catchup=False,
+    on_failure_callback=slack_dag("slack_data_alerts"),
+)
+
+snowflake_conn = "airflow_production"
+
+aws_hook = AwsHook(aws_conn_id="s3_datalake")
+aws_credentials = aws_hook.get_credentials()
+
 
 def convert_line_csv(line: str) -> str:
     indices = generate_index_list(0, result_dict)
@@ -1583,7 +1588,7 @@ def insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -
             sql = f"create or replace table {table} ({','.join(cols)});"
             sfh.execute(sql)
 
-        file = f"S3://{bucket}/{output_path}/{file_name}"
+        file = f"S3://{bucket}/{full_output_path}/{file_name}"
         copy = f"""
                 COPY INTO {table} FROM {file} 
                 CREDENTIALS = (
@@ -1638,7 +1643,7 @@ def fix_date_format() -> None:
             with open(file_in.name, "rb") as file:
                 upload_file_s3(
                     file,
-                    f"{output_path}/{base_file_name}.csv",
+                    f"{full_output_path}/{base_file_name}.csv",
                 )
 
 
@@ -1650,7 +1655,7 @@ def check_output(**kwargs: Dict) -> str:
     try:
         file = client.get_object(
             Bucket=bucket,
-            Key=f"{output_path}/{base_file_name}.csv",
+            Key=f"{full_output_path}/{base_file_name}.csv",
         )
         logging.info(file)
         return "end"
@@ -1663,7 +1668,7 @@ def convert_file() -> None:
     Convert out1 file to csv according to our field dictionary
     """
     client = get_s3_client()
-    key = f"{response_path}/{base_file_name}.out1"
+    key = f"{full_response_path}/{base_file_name}.out1"
     try:
         logging.info(f"Getting object {key} from {bucket}")
         file = client.get_object(
@@ -1692,7 +1697,7 @@ def convert_file() -> None:
 
             upload_file_s3(
                 formatted,
-                f"{output_path}/{base_file_name}.csv",
+                f"{full_output_path}/{base_file_name}.csv",
             )
     except Exception as e:
         raise Exception(
