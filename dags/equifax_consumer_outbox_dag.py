@@ -12,7 +12,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.exceptions import AirflowSensorTimeout
 
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Any
 
 from utils.failure_callbacks import slack_dag
 from utils.gpg import _init_gnupg
@@ -44,7 +44,7 @@ sftp_connection = "equifax_sftp"
 S3_BUCKET = "tc-data-airflow-production"
 
 
-def _failure_callback(context):
+def _failure_callback(context: Any) -> None:
     if isinstance(context["exception"], AirflowSensorTimeout):
         print(context)
         print("Sensor timed out")
@@ -75,7 +75,7 @@ def upload_file_to_s3(
     key: str,
     task_instance: TaskInstance,
     **_: None,
-):
+) -> None:
     filename = task_instance.xcom_pull("encrypt_request_file")
     s3 = S3Hook(aws_conn_id=s3_connection)
     s3.load_file(
