@@ -4,21 +4,21 @@
 This workflow sends the Equifax consumer request file (i.e. eligible applicant information) to
 Equifax on a monthly basis for recertification purposes.
 """
-import logging
-
 from airflow import DAG
+from airflow.models import Variable
+from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.ssh.hooks.ssh import SSHHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.models import Variable
 
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 import gnupg
+import logging
 from typing import IO, List, Any
 from fs.sshfs import SSHFS
 from fs.tools import copy_file_data
@@ -123,6 +123,15 @@ def sync_s3fs_to_sshfs(aws_conn: str, sshfs_conn: str) -> None:
                 copy_file_data(encrypted, remote_file)
                 s3fs.remove(f"outbox/{file}")
 
+
+task_is_request_file_available = S3KeySensor(
+    task_id='is_request_file_available',
+    bucket_key='s3://tc-data-airflow-production/equifax/consumer/request/{{ var.value.equifax_consumer_request_filename }}',
+    aws_conn_id=s3_connection,
+    poke_interval=5,
+    timeout=20,
+    dag=dag,
+)
 
 task_download_request_file = PythonOperator(
     task_id='download_request_file',
