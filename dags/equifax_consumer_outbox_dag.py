@@ -84,15 +84,16 @@ def download_file_from_s3(s3_conn: str, bucket_name: str, key: str, **_: None) -
 
 
 def encrypt_request_file(task_instance: TaskInstance, **_: None,) -> str:
-    gpg = _init_gnupg()
     filename = task_instance.xcom_pull('download_request_file')
+    gpg = _init_gnupg()
     with open(filename, 'rb+') as file:
         encrypted_message = gpg.encrypt_file(file, "sts@equifax.com", always_trust=True)
         file.write(encrypted_message.data)
         return filename
 
 
-def upload_file_to_s3(filename: str, key: str, bucket_name: str):
+def upload_file_to_s3(bucket_name: str, key: str, task_instance: TaskInstance, **_: None,):
+    filename = task_instance.xcom_pull('encrypt_request_file')
     s3 = S3Hook(aws_conn_id=s3_connection)
     s3.load_file(filename=filename, key=key, bucket_name=bucket_name, replace=False, encrypt=True)
 
@@ -173,10 +174,10 @@ task_upload_request_file = PythonOperator(
     task_id='upload_request_file',
     python_callable=upload_file_to_s3,
     op_kwargs={
-        'filename': '/Users/jimkim/Documents/equifax/recert-august2021/eqxds.exthinkingpd.ds.20210801.test.txt',
-        'key': S3_KEY,
         'bucket_name': S3_BUCKET,
+        'key': 'equifax/consumer/request_encrypted/{{ var.value.equifax_consumer_request_filename }}.pgp',
     },
+    provide_context=True,
     dag=dag,
 )
 
