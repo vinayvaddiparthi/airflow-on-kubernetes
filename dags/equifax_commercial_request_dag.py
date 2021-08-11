@@ -1,6 +1,7 @@
 # This dag generate request file to be sent to Equifax
 # Scheduled at mid-night UTC of each month, (only send on odd month)
 from airflow import DAG
+from airflow.models import Variable
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.S3_hook import S3Hook
@@ -227,6 +228,7 @@ def generate_file(
 
     logging.info(f"Uploading {file_name} to {bucket}/{folder}.")
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
+    Variable.set("equifax_commercial_request_filename", file_name)
 
 
 task_generate_file = PythonOperator(
