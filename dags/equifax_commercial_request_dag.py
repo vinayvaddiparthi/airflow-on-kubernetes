@@ -1,6 +1,7 @@
 # This dag generate request file to be sent to Equifax
 # Scheduled at mid-night UTC of each month, (only send on odd month)
 from airflow import DAG
+from airflow.models import Variable
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.S3_hook import S3Hook
@@ -27,7 +28,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id="equifax_batch_commercial_request",
+    dag_id="equifax_commercial_request",
     catchup=False,
     default_args=default_args,
     schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
@@ -188,14 +189,9 @@ def generate_file(
     s3_conn: str,
     bucket: str,
     folder: str,
-    ts_nodash: str,
+    ds_nodash: str,
     **_: Any,
 ) -> None:
-    """
-    Snowflake -> TempDir -> S3 bucket
-    As of June 22, we still need to copy the generated request file to another folder in the S3 bucket:
-    tc-data-airflow-production/equifax/commercial/outbox.
-    """
     engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
     session = session_maker()
@@ -206,7 +202,7 @@ def generate_file(
     results = query.all()
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "commercial"
-    file_name = f"eqxcom.exthinkingpd.TCAP.{ts_nodash}.csv"
+    file_name = f"eqxcom.exthinkingpd.TCAP.{ds_nodash}.csv"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
@@ -232,6 +228,7 @@ def generate_file(
 
     logging.info(f"Uploading {file_name} to {bucket}/{folder}.")
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
+    Variable.set("equifax_commercial_request_filename", file_name)
 
 
 task_generate_file = PythonOperator(
