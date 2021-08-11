@@ -254,7 +254,7 @@ def generate_file(
     logging.info(f"Uploading {file_name} to {bucket}/{folder}.")
 
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
-    Variable.set('equifax_consumer_request_filename', file_name)
+    Variable.set("equifax_consumer_request_filename", file_name)
     return file_name
 
 
