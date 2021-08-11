@@ -191,11 +191,6 @@ def generate_file(
     ds_nodash: str,
     **_: Any,
 ) -> None:
-    """
-    Snowflake -> TempDir -> S3 bucket
-    As of June 22, we still need to copy the generated request file to another folder in the S3 bucket:
-    tc-data-airflow-production/equifax/commercial/outbox.
-    """
     engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
     session = session_maker()

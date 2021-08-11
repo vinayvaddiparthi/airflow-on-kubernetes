@@ -44,7 +44,6 @@ s3_connection = "s3_dataops"
 output_bucket = "tc-data-airflow-production"
 output_folder = "equifax/consumer/request"
 
-# Fetch eligible consumer with required fields from DWH
 statement_template = """
 with
     applicant as (
