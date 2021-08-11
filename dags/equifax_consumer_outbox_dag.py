@@ -1,6 +1,5 @@
 """
-# Equifax Consumer Outbox DAG
-
+#### Description
 This workflow sends the Equifax consumer request file (i.e. eligible applicant information) to
 Equifax on a monthly basis for recertification purposes.
 """
@@ -132,3 +131,7 @@ task_create_s3_to_sftp_job = S3ToSFTPOperator(
     s3_key='equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp',
     dag=dag,
 )
+
+task_is_request_file_available >> task_download_request_file >> task_encrypt_request_file
+task_encrypt_request_file >> task_upload_request_file >> task_is_outbox_file_available
+task_is_outbox_file_available >> task_create_s3_to_sftp_job
