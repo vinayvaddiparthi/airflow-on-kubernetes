@@ -188,7 +188,7 @@ def generate_file(
     s3_conn: str,
     bucket: str,
     folder: str,
-    ts_nodash: str,
+    ds_nodash: str,
     **_: Any,
 ) -> None:
     """
@@ -206,7 +206,7 @@ def generate_file(
     results = query.all()
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "commercial"
-    file_name = f"eqxcom.exthinkingpd.TCAP.{ts_nodash}.csv"
+    file_name = f"eqxcom.exthinkingpd.TCAP.{ds_nodash}.csv"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
