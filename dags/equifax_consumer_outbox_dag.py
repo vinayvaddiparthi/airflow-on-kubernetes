@@ -78,9 +78,7 @@ def upload_file_to_s3(
 ) -> None:
     filename = task_instance.xcom_pull("encrypt_request_file")
     s3 = S3Hook(aws_conn_id=s3_connection)
-    s3.load_file(
-        filename=filename, key=key, bucket_name=bucket_name, replace=False, encrypt=True
-    )
+    s3.load_file(filename=filename, key=key, bucket_name=bucket_name, replace=False)
 
 
 task_is_request_file_available = S3KeySensor(
