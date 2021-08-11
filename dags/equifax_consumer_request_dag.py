@@ -1,19 +1,19 @@
 # This dag generates request file for monthly Equifax consumer request file(.txt)
 # encoded in [windows-1252] or [iso-8859-1]
-import logging
-import tempfile
-from datetime import datetime, timedelta
-from pathlib import Path
-from fs import open_fs, copy
-from typing import Any
-
 from airflow import DAG
+from airflow.models import Variable
 from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.S3_hook import S3Hook
 
+import logging
+import tempfile
+from datetime import datetime, timedelta
+from pathlib import Path
+from fs import open_fs, copy
+from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 from jinja2 import Template
@@ -32,7 +32,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id="equifax_batch_consumer_request",
+    dag_id="equifax_consumer_request",
     catchup=False,
     default_args=default_args,
     schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
@@ -44,7 +44,6 @@ s3_connection = "s3_dataops"
 output_bucket = "tc-data-airflow-production"
 output_folder = "equifax/consumer/request"
 
-# Fetch eligible consumer with required fields from DWH
 statement_template = """
 with
     applicant as (
@@ -198,15 +197,9 @@ def generate_file(
     bucket: str,
     folder: str,
     dag_run: DagRun,
-    ts_nodash: str,
+    ds_nodash: str,
     **_: Any,
 ) -> str:
-    """
-    Snowflake -> TempDir -> S3 bucket
-    Path: [advanceit] tc-datalake/equifax_automated_batch/request/consumer
-    As of June 22,
-    we still need to send the txt file to Risk contact person, they will upload to Equifax
-    """
     manual_process = ""
     if dag_run:
         config = dag_run.conf
@@ -231,7 +224,7 @@ def generate_file(
     results = query.all()
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "consumer"
-    file_name = f"eqxds.exthinkingpd.ds.{ts_nodash}.txt"
+    file_name = f"eqxds.exthinkingpd.ds.{ds_nodash}.txt"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
@@ -260,6 +253,7 @@ def generate_file(
     logging.info(f"Uploading {file_name} to {bucket}/{folder}.")
 
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
+    Variable.set("equifax_consumer_request_filename", file_name)
     return file_name
 
 
