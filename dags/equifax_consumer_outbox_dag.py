@@ -4,18 +4,20 @@ This workflow sends the Equifax consumer request file (i.e. eligible applicant i
 Equifax on a monthly basis for recertification purposes.
 """
 from airflow import DAG
-from airflow.models.taskinstance import TaskInstance
+from airflow.models import Variable
+from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python_operator import ShortCircuitOperator
 from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.operators.python_operator import PythonOperator
 from airflow.exceptions import AirflowSensorTimeout
 
 from datetime import datetime, timedelta
-from typing import List, Any
+from typing import Dict
+from pprint import pprint
 
 from utils.failure_callbacks import slack_dag
-from utils.gpg import _init_gnupg
+from utils.gpg import init_gnupg
 
 default_args = {
     "owner": "airflow",
@@ -44,42 +46,47 @@ sftp_connection = "equifax_sftp"
 S3_BUCKET = "tc-data-airflow-production"
 
 
-def _failure_callback(context: Any) -> None:
+def _failure_callback(context: Dict) -> None:
     if isinstance(context["exception"], AirflowSensorTimeout):
-        print(context)
+        pprint(context)
         print("Sensor timed out")
 
 
-def download_file_from_s3(
-    s3_conn: str, bucket_name: str, key: str, **_: None
-) -> List[str]:
-    s3 = S3Hook(aws_conn_id=s3_conn)
-    filename = s3.download_file(key=key, bucket_name=bucket_name)
-    return filename
-
-
 def encrypt_request_file(
-    task_instance: TaskInstance,
-    **_: None,
-) -> str:
-    filename = task_instance.xcom_pull("download_request_file")
-    gpg = _init_gnupg()
-    with open(filename, "rb+") as file:
-        encrypted_message = gpg.encrypt_file(file, "sts@equifax.com", always_trust=True)
-        file.write(encrypted_message.data)
-        return filename
-
-
-def upload_file_to_s3(
+    s3_conn: str,
     bucket_name: str,
-    key: str,
-    task_instance: TaskInstance,
-    **_: None,
+    download_key: str,
+    upload_key: str,
 ) -> None:
-    filename = task_instance.xcom_pull("encrypt_request_file")
-    s3 = S3Hook(aws_conn_id=s3_connection)
-    s3.load_file(filename=filename, key=key, bucket_name=bucket_name, replace=False)
+    s3 = S3Hook(aws_conn_id=s3_conn)
+    filename = s3.download_file(key=download_key, bucket_name=bucket_name)
+    with open(filename, "rb") as reader:
+        gpg = init_gnupg()
+        encrypted_message = gpg.encrypt_file(
+            reader, "sts@equifax.com", always_trust=True
+        )
+    with open(filename, "wb") as writer:
+        writer.write(encrypted_message.data)
+        s3.load_file(
+            filename=filename, key=upload_key, bucket_name=bucket_name, replace=True
+        )
 
+
+def _mark_request_as_sent(context: Dict) -> None:
+    Variable.set("equifax_consumer_request_sent", True)
+    pprint(context)
+    print("Request file successfully sent to Equifax")
+
+
+def _check_if_file_sent() -> bool:
+    return not Variable.get("equifax_consumer_request_sent")
+
+
+task_check_if_file_sent = ShortCircuitOperator(
+    task_id="check_if_file_sent",
+    python_callable=_check_if_file_sent,
+    dag=dag,
+)
 
 task_is_request_file_available = S3KeySensor(
     task_id="is_request_file_available",
@@ -91,33 +98,15 @@ task_is_request_file_available = S3KeySensor(
     dag=dag,
 )
 
-task_download_request_file = PythonOperator(
-    task_id="download_request_file",
-    python_callable=download_file_from_s3,
-    op_kwargs={
-        "s3_conn": s3_connection,
-        "bucket_name": S3_BUCKET,
-        "key": "equifax/consumer/request/{{ var.value.equifax_consumer_request_filename }}",
-    },
-    provide_context=True,
-    dag=dag,
-)
-
 task_encrypt_request_file = PythonOperator(
     task_id="encrypt_request_file",
     python_callable=encrypt_request_file,
-    provide_context=True,
-    dag=dag,
-)
-
-task_upload_request_file = PythonOperator(
-    task_id="upload_request_file",
-    python_callable=upload_file_to_s3,
     op_kwargs={
+        "s3_conn": s3_connection,
         "bucket_name": S3_BUCKET,
-        "key": "equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
+        "download_key": "equifax/consumer/request/{{ var.value.equifax_consumer_request_filename }}",
+        "upload_key": "equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
     },
-    provide_context=True,
     dag=dag,
 )
 
@@ -138,14 +127,14 @@ task_create_s3_to_sftp_job = S3ToSFTPOperator(
     s3_conn_id=s3_connection,
     s3_bucket=S3_BUCKET,
     s3_key="equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
+    on_success_callback=_mark_request_as_sent,
     dag=dag,
 )
 
 (
-    task_is_request_file_available
-    >> task_download_request_file
+    task_check_if_file_sent
+    >> task_is_request_file_available
     >> task_encrypt_request_file
-    >> task_upload_request_file
     >> task_is_outbox_file_available
     >> task_create_s3_to_sftp_job
 )
