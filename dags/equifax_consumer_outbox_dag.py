@@ -6,6 +6,7 @@ Equifax on a monthly basis for recertification purposes.
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python_operator import ShortCircuitOperator
 from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
@@ -72,6 +73,17 @@ def _mark_request_as_sent(context: Dict) -> None:
     pprint(context)
     print("Request file successfully sent to Equifax")
 
+
+def _check_if_file_sent() -> bool:
+    return not Variable.get('equifax_consumer_request_sent')
+
+
+task_check_if_file_sent = ShortCircuitOperator(
+    task_id='check_if_file_sent',
+    python_callable=_check_if_file_sent,
+    dag=dag,
+)
+
 task_is_request_file_available = S3KeySensor(
     task_id="is_request_file_available",
     bucket_key="s3://tc-data-airflow-production/equifax/consumer/request/{{ var.value.equifax_consumer_request_filename }}",
@@ -116,7 +128,8 @@ task_create_s3_to_sftp_job = S3ToSFTPOperator(
 )
 
 (
-    task_is_request_file_available
+    task_check_if_file_sent
+    >> task_is_request_file_available
     >> task_encrypt_request_file
     >> task_is_outbox_file_available
     >> task_create_s3_to_sftp_job
