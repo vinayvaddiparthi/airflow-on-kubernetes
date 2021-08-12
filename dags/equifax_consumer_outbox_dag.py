@@ -5,10 +5,10 @@ Equifax on a monthly basis for recertification purposes.
 """
 from airflow import DAG
 from airflow.models import Variable
+from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.operators.python_operator import PythonOperator
 from airflow.exceptions import AirflowSensorTimeout
 
 from datetime import datetime, timedelta
@@ -59,18 +59,18 @@ def encrypt_request_file(
 ) -> None:
     s3 = S3Hook(aws_conn_id=s3_conn)
     filename = s3.download_file(key=download_key, bucket_name=bucket_name)
-    gpg = _init_gnupg()
-    with open(filename, "rb+") as file:
-        encrypted_message = gpg.encrypt_file(file, "sts@equifax.com", always_trust=True)
-        file.write(encrypted_message.data)
-        s3.load_file(filename=filename, key=upload_key, bucket_name=bucket_name, replace=False)
+    with open(filename, "rb") as reader:
+        gpg = _init_gnupg()
+        encrypted_message = gpg.encrypt_file(reader, "sts@equifax.com", always_trust=True)
+    with open(filename, "wb") as writer:
+        writer.write(encrypted_message.data)
+        s3.load_file(filename=filename, key=upload_key, bucket_name=bucket_name, replace=True)
 
 
 def _mark_request_as_sent(context: Dict) -> None:
     Variable.set("equifax_consumer_request_sent", True)
     pprint(context)
     print("Request file successfully sent to Equifax")
-
 
 task_is_request_file_available = S3KeySensor(
     task_id="is_request_file_available",
