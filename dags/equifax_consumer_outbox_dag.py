@@ -62,10 +62,14 @@ def encrypt_request_file(
     filename = s3.download_file(key=download_key, bucket_name=bucket_name)
     with open(filename, "rb") as reader:
         gpg = init_gnupg()
-        encrypted_message = gpg.encrypt_file(reader, "sts@equifax.com", always_trust=True)
+        encrypted_message = gpg.encrypt_file(
+            reader, "sts@equifax.com", always_trust=True
+        )
     with open(filename, "wb") as writer:
         writer.write(encrypted_message.data)
-        s3.load_file(filename=filename, key=upload_key, bucket_name=bucket_name, replace=True)
+        s3.load_file(
+            filename=filename, key=upload_key, bucket_name=bucket_name, replace=True
+        )
 
 
 def _mark_request_as_sent(context: Dict) -> None:
@@ -75,11 +79,11 @@ def _mark_request_as_sent(context: Dict) -> None:
 
 
 def _check_if_file_sent() -> bool:
-    return not Variable.get('equifax_consumer_request_sent')
+    return not Variable.get("equifax_consumer_request_sent")
 
 
 task_check_if_file_sent = ShortCircuitOperator(
-    task_id='check_if_file_sent',
+    task_id="check_if_file_sent",
     python_callable=_check_if_file_sent,
     dag=dag,
 )
