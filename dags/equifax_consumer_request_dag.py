@@ -5,7 +5,6 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from fs import open_fs, copy
-from typing import Any
 
 from airflow import DAG
 from airflow.models import Variable
@@ -199,7 +198,7 @@ def generate_file(
     folder: str,
     dag_run: DagRun,
     ds_nodash: str,
-    **_: Any,
+    **_: None,
 ) -> str:
     manual_process = ""
     if dag_run:
@@ -255,6 +254,7 @@ def generate_file(
 
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
     Variable.set("equifax_consumer_request_filename", file_name)
+    Variable.set("equifax_consumer_request_sent", False)
     return file_name
 
 
@@ -263,7 +263,7 @@ def validate_file(
     bucket: str,
     folder: str,
     task_instance: TaskInstance,
-    **_: Any,
+    **_: None,
 ) -> None:
     """
     1. split file into header, footer, content lines
