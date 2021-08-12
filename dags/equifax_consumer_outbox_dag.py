@@ -17,7 +17,7 @@ from typing import Dict
 from pprint import pprint
 
 from utils.failure_callbacks import slack_dag
-from utils.gpg import _init_gnupg
+from utils.gpg import init_gnupg
 
 default_args = {
     "owner": "airflow",
@@ -61,7 +61,7 @@ def encrypt_request_file(
     s3 = S3Hook(aws_conn_id=s3_conn)
     filename = s3.download_file(key=download_key, bucket_name=bucket_name)
     with open(filename, "rb") as reader:
-        gpg = _init_gnupg()
+        gpg = init_gnupg()
         encrypted_message = gpg.encrypt_file(reader, "sts@equifax.com", always_trust=True)
     with open(filename, "wb") as writer:
         writer.write(encrypted_message.data)
