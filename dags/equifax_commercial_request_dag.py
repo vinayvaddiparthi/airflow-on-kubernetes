@@ -11,7 +11,6 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from fs import open_fs, copy
-from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
@@ -190,7 +189,7 @@ def generate_file(
     bucket: str,
     folder: str,
     ds_nodash: str,
-    **_: Any,
+    **_: None,
 ) -> None:
     engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     session_maker = sessionmaker(bind=engine)
@@ -229,6 +228,7 @@ def generate_file(
     logging.info(f"Uploading {file_name} to {bucket}/{folder}.")
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
     Variable.set("equifax_commercial_request_filename", file_name)
+    Variable.set("equifax_commercial_request_sent", False)
 
 
 task_generate_file = PythonOperator(

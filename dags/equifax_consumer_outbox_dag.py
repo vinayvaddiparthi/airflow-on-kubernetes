@@ -4,6 +4,7 @@ This workflow sends the Equifax consumer request file (i.e. eligible applicant i
 Equifax on a monthly basis for recertification purposes.
 """
 from airflow import DAG
+from airflow.models import Variable
 from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
@@ -11,7 +12,8 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.exceptions import AirflowSensorTimeout
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Dict
+from pprint import pprint
 
 from utils.failure_callbacks import slack_dag
 from utils.gpg import _init_gnupg
@@ -43,9 +45,9 @@ sftp_connection = "equifax_sftp"
 S3_BUCKET = "tc-data-airflow-production"
 
 
-def _failure_callback(context: Any) -> None:
+def _failure_callback(context: Dict) -> None:
     if isinstance(context["exception"], AirflowSensorTimeout):
-        print(context)
+        pprint(context)
         print("Sensor timed out")
 
 
@@ -62,6 +64,12 @@ def encrypt_request_file(
         encrypted_message = gpg.encrypt_file(file, "sts@equifax.com", always_trust=True)
         file.write(encrypted_message.data)
         s3.load_file(filename=filename, key=upload_key, bucket_name=bucket_name, replace=False)
+
+
+def _mark_request_as_sent(context: Dict) -> None:
+    Variable.set("equifax_consumer_request_sent", True)
+    pprint(context)
+    print("Request file successfully sent to Equifax")
 
 
 task_is_request_file_available = S3KeySensor(
@@ -103,6 +111,7 @@ task_create_s3_to_sftp_job = S3ToSFTPOperator(
     s3_conn_id=s3_connection,
     s3_bucket=S3_BUCKET,
     s3_key="equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
+    on_success_callback=_mark_request_as_sent,
     dag=dag,
 )
 
