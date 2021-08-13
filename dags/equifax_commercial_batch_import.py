@@ -16,7 +16,7 @@ from utils.failure_callbacks import slack_dag
 bucket = "tc-datalake"
 commercial_prefix = "equifax_offline_batch/commercial/output/"
 
-aws_hook = AwsBaseHook(aws_conn_id="s3_equifax")
+aws_hook = AwsBaseHook(aws_conn_id="s3_equifax", client_type="s3")
 aws_credentials = aws_hook.get_credentials()
 ssh_hook = SSHHook(ssh_conn_id="equifax_sftp")
 

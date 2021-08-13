@@ -1490,7 +1490,7 @@ dag = DAG(
 
 snowflake_conn = "airflow_production"
 
-aws_hook = AwsBaseHook(aws_conn_id="s3_datalake")
+aws_hook = AwsBaseHook(aws_conn_id="s3_datalake", client_type="s3")
 aws_credentials = aws_hook.get_credentials()
 
 
