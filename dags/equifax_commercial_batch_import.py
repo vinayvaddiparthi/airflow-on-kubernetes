@@ -6,9 +6,9 @@ import boto3
 import pandas as pd
 import pendulum
 from airflow import DAG
-from airflow.contrib.hooks.aws_hook import AwsHook
+from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.contrib.hooks.ssh_hook import SSHHook
+from airflow.providers.ssh.hooks.ssh import SSHHook
 from airflow.operators.python_operator import PythonOperator
 from utils.failure_callbacks import slack_dag
 
@@ -16,7 +16,7 @@ from utils.failure_callbacks import slack_dag
 bucket = "tc-datalake"
 commercial_prefix = "equifax_offline_batch/commercial/output/"
 
-aws_hook = AwsHook(aws_conn_id="s3_equifax")
+aws_hook = AwsBaseHook(aws_conn_id="s3_equifax", client_type="s3")
 aws_credentials = aws_hook.get_credentials()
 ssh_hook = SSHHook(ssh_conn_id="equifax_sftp")
 
