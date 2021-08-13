@@ -9,9 +9,9 @@ from unittest.mock import patch, MagicMock
 
 import pendulum
 from airflow import DAG
-from airflow.contrib.hooks.aws_hook import AwsHook
+from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.contrib.hooks.ssh_hook import SSHHook
+from airflow.providers.ssh.hooks.ssh import SSHHook
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from fs.sshfs import SSHFS
@@ -66,7 +66,7 @@ def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
 
 
 def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
-    aws_connection = AwsHook.get_connection(aws_conn)
+    aws_connection = AwsBaseHook.get_connection(aws_conn)
 
     return S3FS(
         bucket_name=aws_connection.extra_dejson["bucket"],
@@ -274,7 +274,7 @@ if __name__ == "__main__":
     ssh_hook_mock.password = os.environ["SSHFS_PASSWORD"]
 
     with patch(
-        "dags.equifax_commercial.AwsHook.get_connection", return_value=aws_hook_mock
+        "dags.equifax_commercial.AwsBaseHook.get_connection", return_value=aws_hook_mock
     ), patch(
         "dags.equifax_commercial.SSHHook.get_connection", return_value=ssh_hook_mock
     ), patch(

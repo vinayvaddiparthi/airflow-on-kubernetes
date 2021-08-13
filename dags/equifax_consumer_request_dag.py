@@ -12,7 +12,7 @@ from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
-from airflow.hooks.S3_hook import S3Hook
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
