@@ -15,7 +15,7 @@ import pandas as pd
 import tempfile
 from typing import Dict, List, Any
 from airflow import DAG
-from airflow.contrib.hooks.aws_hook import AwsHook
+from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
 from airflow.models import Variable
@@ -1490,7 +1490,7 @@ dag = DAG(
 
 snowflake_conn = "airflow_production"
 
-aws_hook = AwsHook(aws_conn_id="s3_datalake")
+aws_hook = AwsBaseHook(aws_conn_id="s3_datalake")
 aws_credentials = aws_hook.get_credentials()
 
 

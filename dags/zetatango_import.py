@@ -11,8 +11,8 @@ import pandas as pd
 import pendulum
 import psycopg2
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.hooks.http_hook import HttpHook
-from airflow.hooks.postgres_hook import PostgresHook
+from airflow.providers.http.hooks.http import HttpHook
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
 from psycopg2._psycopg import connection
