@@ -9,11 +9,13 @@ pipdeptree
 
 # runtime
 apache-airflow[crypto,postgres,ssh,kubernetes,s3,snowflake]==1.10.15
+apache-airflow-providers-amazon
+apache-airflow-providers-sftp
+apache-airflow-backport-providers-amazon
+apache-airflow-backport-providers-sftp
+apache-airflow-backport-providers-ssh
 apache-airflow-backport-providers-http
 apache-airflow-backport-providers-postgres
-apache-airflow-providers-amazon
-apache-airflow-backport-providers-amazon
-apache-airflow-backport-providers-ssh
 flask-bcrypt  # required by airflow
 fab-oidc
 salesforce-bulk
