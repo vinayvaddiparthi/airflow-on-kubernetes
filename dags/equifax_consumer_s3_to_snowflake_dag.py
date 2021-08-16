@@ -27,14 +27,14 @@ default_args = {
     "depends_on_past": False,
     "start_date": datetime(2020, 9, 17, 2),
     "retries": 0,
+    "catchup": False,
+    "on_failure_callback": slack_dag("slack_data_alerts"),
 }
 
 dag = DAG(
     "equifax_consumer_s3_to_snowflake",
     schedule_interval="@daily",
     default_args=default_args,
-    catchup=False,
-    on_failure_callback=slack_dag("slack_data_alerts"),
 )
 
 snowflake_conn = "airflow_production"
