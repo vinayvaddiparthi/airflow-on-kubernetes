@@ -32,7 +32,7 @@ default_args = {
 }
 
 dag = DAG(
-    "equifax_consumer_s3_to_snowflake",
+    dag_id="equifax_consumer_inbox",
     schedule_interval="@daily",
     default_args=default_args,
 )
