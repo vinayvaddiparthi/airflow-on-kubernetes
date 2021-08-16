@@ -1,10 +1,11 @@
-# This dag process the result file back from Equifax
-# After we got the .out1 file from Risk, rename and upload to this bucket below
-# [advanceit] tc-datalake/equifax_automated_batch/response/consumer/
-# the dag will process it into a CSV file and upload it to
-# [advanceit] tc-datalake/equifax_automated_batch/output/consumer/
-# Then the CSV will be copied into snowflake Equifax.public.consumer_batch,
-# with a history table create on the side
+"""
+#### Description
+This workflow processes the response file from Equifax. Currently, we manually rename and upload the .out1 file provided
+by Risk to the S3 bucket [advanceit] tc-datalake/equifax_automated_batch/response/consumer/. Once the response file is
+downloaded, the DAG will process the file into a CSV format and upload it to
+[advanceit] tc-datalake/equifax_automated_batch/output/consumer/.
+Then the CSV will be copied into Snowflake table EQUIFAX.PUBLIC.CONSUMER_BATCH as well as a history table.
+"""
 from datetime import datetime, timedelta
 import logging
 
