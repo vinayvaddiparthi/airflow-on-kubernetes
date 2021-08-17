@@ -7,10 +7,11 @@ downloaded, the DAG will process the file into a CSV format and upload it to
 Then the CSV will be copied into Snowflake table EQUIFAX.PUBLIC.CONSUMER_BATCH as well as a history table.
 """
 from airflow import DAG
+from airflow.models import Variable
+from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
-from airflow.models import Variable
+from airflow.providers.sftp.sensors.sftp import SFTPSensor
 
 from datetime import datetime, timedelta
 import logging
@@ -1753,6 +1754,15 @@ def insert_snowflake_stage() -> None:
 def end() -> None:
     pass
 
+
+task_is_response_file_available = SFTPSensor(
+    task_id="is_response_file_available",
+    path="outbox/exthinkingpd.eqxcan.ds.20210701.pgp",  # TODO: make the path dynamic
+    sftp_conn_id="equifax_sftp",
+    poke_interval=5,
+    timeout=5,
+    dag=dag,
+)
 
 task_check_output = BranchPythonOperator(
     task_id="check_output",
