@@ -1797,12 +1797,13 @@ task_get_filename_from_remote = PythonOperator(
 
 task_is_response_file_available = SFTPSensor(
     task_id="is_response_file_available",
-    path="outbox/exthinkingpd.eqxcan.ds.20210701.pgp",  # TODO: make the path dynamic
+    path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
     sftp_conn_id="equifax_sftp",
     poke_interval=5,
     timeout=5,
     dag=dag,
 )
+
 
 task_check_output = BranchPythonOperator(
     task_id="check_output",
