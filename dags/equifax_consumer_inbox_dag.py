@@ -1822,21 +1822,3 @@ task_check_output >> [task_convert_file, task_end]
     >> task_insert_snowflake_stage  # csv -> snowflake's equifax.output
     >> task_insert_snowflake_public  # equifax.output-> equifax.public
 )
-
-environment = Variable.get("environment", "")
-if environment == "development":
-    from equifax_extras.utils.local_get_sqlalchemy_engine import (
-        local_get_sqlalchemy_engine,
-    )
-
-    SnowflakeHook.get_sqlalchemy_engine = local_get_sqlalchemy_engine
-
-
-if __name__ == "__main__":
-    pass
-    # get_input()
-    # convert_file()
-    # insert_snowflake_raw()
-    # fix_date_format()
-    # insert_snowflake()
-    # insert_snowflake_public()
