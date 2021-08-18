@@ -8,10 +8,15 @@ Then the CSV will be copied into Snowflake table EQUIFAX.PUBLIC.CONSUMER_BATCH a
 """
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator, BranchPythonOperator, ShortCircuitOperator
+from airflow.operators.python_operator import (
+    PythonOperator,
+    BranchPythonOperator,
+    ShortCircuitOperator,
+)
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.providers.sftp.sensors.sftp import SFTPSensor
+from airflow.providers.sftp.hooks.sftp import SFTPHook
 
 from datetime import datetime, timedelta
 import logging
@@ -1496,7 +1501,18 @@ result_dict = {
 
 
 def _check_if_file_downloaded() -> bool:
-    return False if Variable.get("equifax_consumer_response_downloaded") == "True" else True
+    return (
+        False
+        if Variable.get("equifax_consumer_response_downloaded") == "True"
+        else True
+    )
+
+
+def _get_filename_from_remote() -> str:
+    hook = SFTPHook(ftp_conn_id="equifax_sftp")
+    # can safely assume only 1 file will be available every month as Equifax clears the directory after 7 days
+    filename = hook.list_directory(path="outbox/")[0]
+    return filename
 
 
 def convert_line_csv(line: str) -> str:
@@ -1773,6 +1789,11 @@ task_check_if_file_downloaded = ShortCircuitOperator(
     dag=dag,
 )
 
+task_get_filename_from_remote = PythonOperator(
+    task_id="get_filename_from_remote",
+    python_callable=_get_filename_from_remote,
+    dag=dag,
+)
 
 task_is_response_file_available = SFTPSensor(
     task_id="is_response_file_available",
