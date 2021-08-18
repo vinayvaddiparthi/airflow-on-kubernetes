@@ -59,12 +59,8 @@ last_month = first - timedelta(days=1)
 t_stamp = last_month.strftime("%Y%m")  # '2021XX'
 base_file_name = f"tc_consumer_batch_{t_stamp}"
 bucket = "tc-datalake"
-prefix_path = "equifax_automated_batch"
-response_path = "/response"
-output_path = "/output"
-consumer_path = "/consumer"
-full_response_path = prefix_path + response_path + consumer_path
-full_output_path = prefix_path + output_path + consumer_path
+full_response_path = "equifax_automated_batch/response/consumer"
+full_output_path = "equifax_automated_batch/output/consumer"
 
 table_name_raw = "equifax.output.consumer_batch_raw"
 table_name_raw_history = f"equifax.output_history.consumer_batch_raw_{t_stamp}"
@@ -1546,8 +1542,50 @@ def _decrypt_response_file(
         )
 
 
-def convert_line_csv(line: str) -> str:
-    indices = generate_index_list(0, result_dict)
+def get_s3_client() -> Any:
+    hack_clear_aws_keys()
+    return boto3.client(
+        "s3",
+        aws_access_key_id=aws_credentials.access_key,
+        aws_secret_access_key=aws_credentials.secret_key,
+    )
+
+
+def check_output(**kwargs: Dict) -> str:
+    """
+    Check if result csv has been created, if so, skip to the end. else proceed
+    """
+    client = get_s3_client()
+    try:
+        file = client.get_object(
+            Bucket=bucket,
+            Key=f"{full_output_path}/{base_file_name}.csv",
+        )
+        logging.info(file)
+        return "end"
+    except:
+        return "convert_file"
+
+
+def end() -> None:
+    pass
+
+
+def upload_file_s3(file: Any, path: str) -> None:
+    file.seek(0)
+    try:
+        client = get_s3_client()
+        client.upload_file(
+            file.name,
+            bucket,
+            path,
+        )
+    except:
+        logging.error("Error when uploading file to s3")
+
+
+def _convert_line_csv(line: str) -> str:
+    indices = _generate_index_list(0, result_dict)
     parts = []
     x = zip(indices, indices[1:] + [None])
     for i, j in x:
@@ -1558,11 +1596,53 @@ def convert_line_csv(line: str) -> str:
     return ",".join(parts)
 
 
-def generate_index_list(start: int, dol: Dict) -> List:
+def _generate_index_list(start: int, dol: Dict) -> List:
     result = [start]
     for l in dol:
         result.append(result[-1] + dol[l])
     return result[:-1]
+
+
+def convert_file() -> None:
+    """
+    Convert out1 file to csv according to our field dictionary
+    """
+    client = get_s3_client()
+    key = f"{full_response_path}/{base_file_name}.out1"
+    try:
+        logging.info(f"Getting object {key} from {bucket}")
+        file = client.get_object(
+            Bucket=bucket,
+            Key=key,
+        )
+        body = file["Body"].read()
+        content = body.decode("ISO-8859-1")
+        with tempfile.TemporaryFile(
+            mode="w+", encoding="ISO-8859-1"
+        ) as raw, tempfile.NamedTemporaryFile(
+            mode="w+", encoding="ISO-8859-1"
+        ) as formatted:
+            raw.write(content)
+            raw.seek(0)
+            lines = []
+            for line in raw.readlines():
+                if (
+                    not line.startswith("BHDR-EQUIFAX")
+                    and not line.startswith("BTRL-EQUIFAX")
+                    and line
+                ):
+                    lines.append(_convert_line_csv(line))
+                    formatted.write(_convert_line_csv(line))
+                    formatted.write("\n")
+
+            upload_file_s3(
+                formatted,
+                f"{full_output_path}/{base_file_name}.csv",
+            )
+    except Exception as e:
+        raise Exception(
+            f"Unable to get object {key} from {bucket}: {e} or convert to csv"
+        )
 
 
 def _get_col_def(n: str, l: int, date_formatted: bool) -> str:
@@ -1589,33 +1669,6 @@ def _get_col_def(n: str, l: int, date_formatted: bool) -> str:
     ):
         return f"{n} date"
     return f"{n} varchar({l})"
-
-
-def _convert_date_format(value: str) -> Any:
-    t = datetime.now()
-    if value is not None and "-" not in value and not value.isspace():
-        try:
-            m = value[:2]
-            d = value[2:4]
-            y = value[4:]
-            if int(y) == t.year % 100 and int(m) <= t.month or int(y) < t.year % 100:
-                yy = f"20{y}"
-            else:
-                yy = f"19{y}"
-            dt = datetime.strptime(f"{yy}-{m}-{d}", "%Y-%m-%d")
-            return dt
-        except Exception as e:
-            logging.error(e)
-    return None
-
-
-def get_s3_client() -> Any:
-    hack_clear_aws_keys()
-    return boto3.client(
-        "s3",
-        aws_access_key_id=aws_credentials.access_key,
-        aws_secret_access_key=aws_credentials.secret_key,
-    )
 
 
 def insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
@@ -1654,6 +1707,29 @@ def insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -
                 )
                 """
         sfh.execute(copy)
+
+
+def insert_snowflake_raw() -> None:
+    insert_snowflake(table_name_raw, f"{base_file_name}.csv")
+    insert_snowflake(table_name_raw_history, f"{base_file_name}.csv")
+
+
+def _convert_date_format(value: str) -> Any:
+    t = datetime.now()
+    if value is not None and "-" not in value and not value.isspace():
+        try:
+            m = value[:2]
+            d = value[2:4]
+            y = value[4:]
+            if int(y) == t.year % 100 and int(m) <= t.month or int(y) < t.year % 100:
+                yy = f"20{y}"
+            else:
+                yy = f"19{y}"
+            dt = datetime.strptime(f"{yy}-{m}-{d}", "%Y-%m-%d")
+            return dt
+        except Exception as e:
+            logging.error(e)
+    return None
 
 
 def fix_date_format() -> None:
@@ -1699,75 +1775,9 @@ def fix_date_format() -> None:
                 )
 
 
-def check_output(**kwargs: Dict) -> str:
-    """
-    Check if result csv has been created, if so, skip to the end. else proceed
-    """
-    client = get_s3_client()
-    try:
-        file = client.get_object(
-            Bucket=bucket,
-            Key=f"{full_output_path}/{base_file_name}.csv",
-        )
-        logging.info(file)
-        return "end"
-    except:
-        return "convert_file"
-
-
-def convert_file() -> None:
-    """
-    Convert out1 file to csv according to our field dictionary
-    """
-    client = get_s3_client()
-    key = f"{full_response_path}/{base_file_name}.out1"
-    try:
-        logging.info(f"Getting object {key} from {bucket}")
-        file = client.get_object(
-            Bucket=bucket,
-            Key=key,
-        )
-        body = file["Body"].read()
-        content = body.decode("ISO-8859-1")
-        with tempfile.TemporaryFile(
-            mode="w+", encoding="ISO-8859-1"
-        ) as raw, tempfile.NamedTemporaryFile(
-            mode="w+", encoding="ISO-8859-1"
-        ) as formatted:
-            raw.write(content)
-            raw.seek(0)
-            lines = []
-            for line in raw.readlines():
-                if (
-                    not line.startswith("BHDR-EQUIFAX")
-                    and not line.startswith("BTRL-EQUIFAX")
-                    and line
-                ):
-                    lines.append(convert_line_csv(line))
-                    formatted.write(convert_line_csv(line))
-                    formatted.write("\n")
-
-            upload_file_s3(
-                formatted,
-                f"{full_output_path}/{base_file_name}.csv",
-            )
-    except Exception as e:
-        raise Exception(
-            f"Unable to get object {key} from {bucket}: {e} or convert to csv"
-        )
-
-
-def upload_file_s3(file: Any, path: str) -> None:
-    file.seek(0)
-    try:
-        client = get_s3_client()
-        client.upload_file(
-            file.name,
-            bucket,
-            path,
-        )
-    except:
-        logging.error("Error when uploading file to s3")
+def insert_snowflake_stage() -> None:
+    insert_snowflake(table_name, f"{base_file_name}.csv", True)
+    insert_snowflake(table_name_history, f"{base_file_name}.csv", True)
 
 
 def insert_snowflake_public() -> None:
@@ -1791,20 +1801,6 @@ def insert_snowflake_public() -> None:
             """
     with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
         sfh.execute(sql)
-
-
-def insert_snowflake_raw() -> None:
-    insert_snowflake(table_name_raw, f"{base_file_name}.csv")
-    insert_snowflake(table_name_raw_history, f"{base_file_name}.csv")
-
-
-def insert_snowflake_stage() -> None:
-    insert_snowflake(table_name, f"{base_file_name}.csv", True)
-    insert_snowflake(table_name_history, f"{base_file_name}.csv", True)
-
-
-def end() -> None:
-    pass
 
 
 # short circuit if response file has already been downloaded for the month (file available for 7 days on server)
@@ -1865,8 +1861,22 @@ task_check_output = BranchPythonOperator(
     dag=dag,
 )
 
+task_end = PythonOperator(
+    task_id="end",
+    python_callable=end,
+    dag=dag,
+)
+
 task_convert_file = PythonOperator(
-    task_id="convert_file", python_callable=convert_file, dag=dag
+    task_id="convert_file",
+    python_callable=convert_file,
+    dag=dag,
+)
+
+task_insert_snowflake_raw = PythonOperator(
+    task_id="insert_snowflake_raw",
+    python_callable=insert_snowflake_raw,
+    dag=dag,
 )
 
 task_fix_date = PythonOperator(
@@ -1875,19 +1885,17 @@ task_fix_date = PythonOperator(
     dag=dag,
 )
 
-task_insert_snowflake_raw = PythonOperator(
-    task_id="insert_snowflake_raw", python_callable=insert_snowflake_raw, dag=dag
-)
-
 task_insert_snowflake_stage = PythonOperator(
-    task_id="insert_snowflake_stage", python_callable=insert_snowflake_stage, dag=dag
+    task_id="insert_snowflake_stage",
+    python_callable=insert_snowflake_stage,
+    dag=dag,
 )
 
 task_insert_snowflake_public = PythonOperator(
-    task_id="insert_snowflake_public", python_callable=insert_snowflake_public, dag=dag
+    task_id="insert_snowflake_public",
+    python_callable=insert_snowflake_public,
+    dag=dag,
 )
-
-task_end = PythonOperator(task_id="end", python_callable=end, dag=dag)
 
 task_check_output >> [task_convert_file, task_end]
 (
