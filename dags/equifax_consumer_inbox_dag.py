@@ -8,7 +8,7 @@ Then the CSV will be copied into Snowflake table EQUIFAX.PUBLIC.CONSUMER_BATCH a
 """
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
+from airflow.operators.python_operator import PythonOperator, BranchPythonOperator, ShortCircuitOperator
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.providers.sftp.sensors.sftp import SFTPSensor
@@ -1494,6 +1494,11 @@ result_dict = {
     "TCTT108": 5,
 }
 
+
+def _check_if_file_downloaded() -> bool:
+    return False if Variable.get("equifax_consumer_response_downloaded") == "True" else True
+
+
 def convert_line_csv(line: str) -> str:
     indices = generate_index_list(0, result_dict)
     parts = []
@@ -1753,6 +1758,20 @@ def insert_snowflake_stage() -> None:
 
 def end() -> None:
     pass
+
+
+# short circuit if response file has already been downloaded for the month (file available for 7 days on server)
+# list all directories on the remote system + pass filename via Xcoms
+# check if response file is available for download on the sftp server (unnecessary?)
+# download response file from sftp server to inbox/ folder
+# check if the response file is available in the inbox/ folder
+# decrypt the response file and upload to decrypted/ folder
+
+task_check_if_file_downloaded = ShortCircuitOperator(
+    task_id="check_if_file_downloaded",
+    python_callable=_check_if_file_downloaded,
+    dag=dag,
+)
 
 
 task_is_response_file_available = SFTPSensor(
