@@ -13,7 +13,7 @@ from airflow.exceptions import AirflowSensorTimeout
 
 from datetime import datetime, timedelta
 from typing import Dict
-from pprint import pprint
+import logging
 
 from utils.failure_callbacks import slack_dag
 from utils.gpg import init_gnupg
@@ -47,8 +47,8 @@ S3_BUCKET = "tc-data-airflow-production"
 
 def _failure_callback(context: Dict) -> None:
     if isinstance(context["exception"], AirflowSensorTimeout):
-        pprint(context)
-        print("Sensor timed out")
+        logging.info(context["task_instance"].log_url)
+        logging.info("Sensor timed out")
 
 
 def encrypt_request_file(
@@ -73,8 +73,8 @@ def encrypt_request_file(
 
 def _mark_request_as_sent(context: Dict) -> None:
     Variable.set("equifax_consumer_request_sent", True)
-    pprint(context)
-    print("Request file successfully sent to Equifax")
+    logging.info(context["task_instance"].log_url)
+    logging.info("Request file successfully sent to Equifax")
 
 
 def _check_if_file_sent() -> bool:
