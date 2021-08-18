@@ -78,7 +78,7 @@ def _mark_request_as_sent(context: Dict) -> None:
 
 
 def _check_if_file_sent() -> bool:
-    return not Variable.get("equifax_consumer_request_sent")
+    return False if Variable.get("equifax_consumer_request_sent") == "True" else True
 
 
 task_check_if_file_sent = ShortCircuitOperator(
