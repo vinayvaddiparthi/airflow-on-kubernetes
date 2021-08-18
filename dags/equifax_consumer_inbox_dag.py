@@ -13,9 +13,10 @@ from airflow.operators.python_operator import (
     BranchPythonOperator,
     ShortCircuitOperator,
 )
+from airflow.providers.amazon.aws.transfers.sftp_to_s3 import SFTPToS3Operator
+from airflow.providers.sftp.sensors.sftp import SFTPSensor
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.providers.sftp.sensors.sftp import SFTPSensor
 from airflow.providers.sftp.hooks.sftp import SFTPHook
 
 from datetime import datetime, timedelta
@@ -1515,6 +1516,11 @@ def _get_filename_from_remote() -> str:
     return filename
 
 
+def _mark_response_as_downloaded(context: Dict) -> None:
+    Variable.set("equifax_consumer_response_downloaded", True)
+    logging.info(context["task_instance"].log_url)
+    logging.info("Response file successfully downloaded.")
+
 def convert_line_csv(line: str) -> str:
     indices = generate_index_list(0, result_dict)
     parts = []
@@ -1804,6 +1810,16 @@ task_is_response_file_available = SFTPSensor(
     dag=dag,
 )
 
+task_create_sftp_to_s3_job = SFTPToS3Operator(
+    task_id="create_sftp_to_s3_job",
+    sftp_conn_id="equifax_sftp",
+    sftp_path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+    s3_conn_id="s3_dataops",
+    s3_bucket="tc-data-airflow-production",
+    s3_key="equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+    on_success_callback=_mark_response_as_downloaded,
+    dag=dag,
+)
 
 task_check_output = BranchPythonOperator(
     task_id="check_output",
