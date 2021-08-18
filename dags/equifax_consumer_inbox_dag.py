@@ -18,6 +18,7 @@ from airflow.providers.sftp.sensors.sftp import SFTPSensor
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.providers.sftp.hooks.sftp import SFTPHook
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from datetime import datetime, timedelta
 import logging
@@ -28,6 +29,7 @@ from typing import Dict, List, Any
 
 from helpers.aws_hack import hack_clear_aws_keys
 from utils.failure_callbacks import slack_dag
+from utils.gpg import init_gnupg
 
 default_args = {
     "owner": "airflow",
@@ -1513,13 +1515,36 @@ def _get_filename_from_remote() -> str:
     hook = SFTPHook(ftp_conn_id="equifax_sftp")
     # can safely assume only 1 file will be available every month as Equifax clears the directory after 7 days
     filename = hook.list_directory(path="outbox/")[0]
-    return filename
+    filename_list = filename.split(".")
+    filename_list.pop()
+    filename_root = ".".join(filename_list)
+    logging.info(filename_root)
+    return filename_root
 
 
 def _mark_response_as_downloaded(context: Dict) -> None:
     Variable.set("equifax_consumer_response_downloaded", True)
     logging.info(context["task_instance"].log_url)
     logging.info("Response file successfully downloaded.")
+
+
+def _decrypt_response_file(
+    s3_conn: str, bucket_name: str, download_key: str, upload_key: str
+) -> None:
+    hook = S3Hook(aws_conn_id=s3_conn)
+    filename = hook.download_file(key=download_key, bucket_name=bucket_name)
+    with open(filename, "rb") as reader:
+        gpg = init_gnupg()
+        passphrase = Variable.get("equifax_pgp_passphrase", deserialize_json=False)
+        decrypted_message = gpg.decrypt_file(
+            reader, always_trust=True, passphrase=passphrase
+        )
+    with open(filename, "wb") as writer:
+        writer.write(decrypted_message.data)
+        hook.load_file(
+            filename=filename, key=upload_key, bucket_name=bucket_name, replace=True
+        )
+
 
 def convert_line_csv(line: str) -> str:
     indices = generate_index_list(0, result_dict)
@@ -1786,7 +1811,7 @@ def end() -> None:
 # list all directories on the remote system + pass filename via Xcoms
 # check if response file is available for download on the sftp server (unnecessary?)
 # download response file from sftp server to inbox/ folder
-# check if the response file is available in the inbox/ folder
+# check if the response file is available in the inbox/ folder (unnecessary?)
 # decrypt the response file and upload to decrypted/ folder
 
 task_check_if_file_downloaded = ShortCircuitOperator(
@@ -1803,7 +1828,7 @@ task_get_filename_from_remote = PythonOperator(
 
 task_is_response_file_available = SFTPSensor(
     task_id="is_response_file_available",
-    path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+    path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.pgp",
     sftp_conn_id="equifax_sftp",
     poke_interval=5,
     timeout=5,
@@ -1813,11 +1838,23 @@ task_is_response_file_available = SFTPSensor(
 task_create_sftp_to_s3_job = SFTPToS3Operator(
     task_id="create_sftp_to_s3_job",
     sftp_conn_id="equifax_sftp",
-    sftp_path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+    sftp_path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.pgp",
     s3_conn_id="s3_dataops",
     s3_bucket="tc-data-airflow-production",
-    s3_key="equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+    s3_key="equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.pgp",
     on_success_callback=_mark_response_as_downloaded,
+    dag=dag,
+)
+
+task_decrypt_response_file = PythonOperator(
+    task_id="decrypt_response_file",
+    python_callable=_decrypt_response_file,
+    op_kwargs={
+        "s3_conn": "s3_dataops",
+        "bucket_name": "tc-data-airflow-production",
+        "download_key": "equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.pgp",
+        "upload_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+    },
     dag=dag,
 )
 
