@@ -1,6 +1,8 @@
-from typing import Dict, Callable
-
 from airflow.contrib.operators.slack_webhook_operator import SlackWebhookOperator
+from airflow.exceptions import AirflowSensorTimeout
+
+from typing import Dict, Callable
+import logging
 
 
 def slack_ti(conn_id: str) -> Callable:
@@ -27,3 +29,9 @@ def slack_dag(conn_id: str) -> Callable:
         ).execute(context=context)
 
     return func
+
+
+def sensor_timeout(context: Dict) -> None:
+    if isinstance(context["exception"], AirflowSensorTimeout):
+        logging.info(context["task_instance"].log_url)
+        logging.info("Sensor timed out")

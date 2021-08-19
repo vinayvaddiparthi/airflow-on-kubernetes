@@ -19,6 +19,7 @@ from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.providers.sftp.hooks.sftp import SFTPHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 
 from datetime import datetime, timedelta
 import logging
@@ -28,7 +29,7 @@ import tempfile
 from typing import Dict, List, Any
 
 from helpers.aws_hack import hack_clear_aws_keys
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_dag, sensor_timeout
 from utils.gpg import init_gnupg
 
 default_args = {
@@ -1809,6 +1810,7 @@ def insert_snowflake_public() -> None:
 # download response file from sftp server to inbox/ folder
 # check if the response file is available in the inbox/ folder (unnecessary?)
 # decrypt the response file and upload to decrypted/ folder
+# check if the decrypted response file is available
 
 task_check_if_file_downloaded = ShortCircuitOperator(
     task_id="check_if_file_downloaded",
@@ -1851,6 +1853,16 @@ task_decrypt_response_file = PythonOperator(
         "download_key": "equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.pgp",
         "upload_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
     },
+    dag=dag,
+)
+
+task_is_decrypted_response_file_available = S3KeySensor(
+    task_id="is_decrypted_response_file_available",
+    bucket_key="s3://tc-data-airflow-production/equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.test",
+    aws_conn_id="s3_dataops",
+    poke_interval=5,
+    timeout=20,
+    on_failure_callback=sensor_timeout,
     dag=dag,
 )
 

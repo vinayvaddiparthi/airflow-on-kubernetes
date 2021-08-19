@@ -9,13 +9,12 @@ from airflow.operators.python_operator import PythonOperator, ShortCircuitOperat
 from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.exceptions import AirflowSensorTimeout
 
 from datetime import datetime, timedelta
 from typing import Dict
 import logging
 
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_dag, sensor_timeout
 from utils.gpg import init_gnupg
 
 default_args = {
@@ -43,12 +42,6 @@ dag.doc_md = __doc__
 s3_connection = "s3_dataops"
 sftp_connection = "equifax_sftp"
 S3_BUCKET = "tc-data-airflow-production"
-
-
-def _failure_callback(context: Dict) -> None:
-    if isinstance(context["exception"], AirflowSensorTimeout):
-        logging.info(context["task_instance"].log_url)
-        logging.info("Sensor timed out")
 
 
 def encrypt_request_file(
@@ -93,7 +86,7 @@ task_is_request_file_available = S3KeySensor(
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
-    on_failure_callback=_failure_callback,
+    on_failure_callback=sensor_timeout,
     dag=dag,
 )
 
@@ -115,7 +108,7 @@ task_is_outbox_file_available = S3KeySensor(
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
-    on_failure_callback=_failure_callback,
+    on_failure_callback=sensor_timeout,
     dag=dag,
 )
 
