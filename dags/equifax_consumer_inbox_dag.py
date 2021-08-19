@@ -1875,7 +1875,15 @@ task_insert_snowflake_public = PythonOperator(
     dag=dag,
 )
 
-task_check_output >> [task_convert_file, task_end]
+(
+    task_check_if_file_downloaded
+    >> task_get_filename_from_remote
+    >> task_is_response_file_available
+    >> task_create_sftp_to_s3_job
+    >> task_decrypt_response_file
+    >> task_is_decrypted_response_file_available
+)
+
 (
     task_convert_file  # out1 -> csv -> s3
     >> task_insert_snowflake_raw  # copy from s3 to snowflake, table
