@@ -10,7 +10,6 @@ from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import (
     PythonOperator,
-    BranchPythonOperator,
     ShortCircuitOperator,
 )
 from airflow.providers.amazon.aws.transfers.sftp_to_s3 import SFTPToS3Operator
@@ -1552,26 +1551,6 @@ def get_s3_client() -> Any:
     )
 
 
-def check_output(**kwargs: Dict) -> str:
-    """
-    Check if result csv has been created, if so, skip to the end. else proceed
-    """
-    client = get_s3_client()
-    try:
-        file = client.get_object(
-            Bucket=bucket,
-            Key=f"{full_output_path}/{base_file_name}.csv",
-        )
-        logging.info(file)
-        return "end"
-    except:
-        return "convert_file"
-
-
-def end() -> None:
-    pass
-
-
 def upload_file_s3(file: Any, path: str) -> None:
     file.seek(0)
     try:
@@ -1863,19 +1842,6 @@ task_is_decrypted_response_file_available = S3KeySensor(
     poke_interval=5,
     timeout=20,
     on_failure_callback=sensor_timeout,
-    dag=dag,
-)
-
-task_check_output = BranchPythonOperator(
-    task_id="check_output",
-    python_callable=check_output,
-    provide_context=True,
-    dag=dag,
-)
-
-task_end = PythonOperator(
-    task_id="end",
-    python_callable=end,
     dag=dag,
 )
 
