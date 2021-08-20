@@ -6,7 +6,6 @@ import boto3
 import sqlalchemy
 
 from airflow import DAG
-from airflow.models.dagrun import DagRun
 from typing import Any
 from helpers.aws_hack import hack_clear_aws_keys
 from sqlalchemy import Table, MetaData, VARCHAR
@@ -15,13 +14,11 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from utils.failure_callbacks import slack_dag
 from datetime import timedelta
 from airflow.operators.python_operator import PythonOperator
-from airflow.models import Variable
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from pyporky.symmetric import SymmetricPorky
 from base64 import b64decode
-from helpers.rabbit_mq_helper import notify_subscribers
 
 
 def store_flinks_response(
@@ -110,152 +107,131 @@ def copy_transactions(
     snowflake_connection: str,
     schema: str,
     bucket_name: str,
-    dag_run: DagRun,
     num_threads: int = 4,
     **kwargs: Any,
 ) -> None:
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     metadata = MetaData(bind=snowflake_engine)
 
-    if "merchant_guid" in dag_run.conf and "raw_files" in dag_run.conf:
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            merchant_guid = dag_run.conf["merchant_guid"]
-            raw_files = dag_run.conf["raw_files"]
+    merchants = Table(
+        "merchants",
+        metadata,
+        autoload=True,
+        schema=schema,
+    )
 
-            logging.info(
-                f"Executing cash flow projections for merchant {merchant_guid}"
+    merchant_documents = Table(
+        "merchant_documents",
+        metadata,
+        autoload=True,
+        schema=schema,
+    )
+
+    flinks_raw_responses = Table(
+        "flinks_raw_responses",
+        metadata,
+        autoload=True,
+        schema=schema,
+    )
+
+    merchants_merchant_documents_join = join(
+        merchant_documents,
+        merchants,
+        func.get(merchants.c.fields, "id")
+        == func.get(merchant_documents.c.fields, "merchant_id"),
+    )
+    merchant_documents_select = (
+        select(
+            columns=[
+                sqlalchemy.cast(
+                    func.get(merchants.c.fields, "guid"), VARCHAR
+                ).label("merchant_guid"),
+                sqlalchemy.cast(
+                    func.get(merchant_documents.c.fields, "cloud_file_path"),
+                    VARCHAR,
+                ).label("file_path"),
+                text("1"),
+            ],
+            from_obj=merchant_documents,
+        )
+        .where(
+            sqlalchemy.cast(
+                func.get(merchant_documents.c.fields, "doc_type"), VARCHAR
             )
-            logging.info(f"Processing transactions: {raw_files}")
+            == literal("flinks_raw_response")
+        )
+        .select_from(merchants_merchant_documents_join)
+    )
 
-            for raw_file in raw_files:
+    logging.info(
+        merchant_documents_select.compile(compile_kwargs={"literal_binds": True})
+    )
+
+    flinks_raw_responses_select = select(
+        columns=[
+            flinks_raw_responses.c.merchant_guid,
+            flinks_raw_responses.c.file_path,
+            text("1"),
+        ],
+        from_obj=flinks_raw_responses,
+    )
+
+    logging.info(
+        flinks_raw_responses_select.compile(compile_kwargs={"literal_binds": True})
+    )
+
+    # Get the set of all the raw flinks responses
+    all_flinks_responses = pd.read_sql_query(
+        merchant_documents_select,
+        snowflake_engine,
+        index_col=[
+            "merchant_guid",
+            "file_path",
+        ],
+    )
+
+    # Get the set of downloaded flinks responses
+    downloaded_flinks_responses = pd.read_sql_query(
+        flinks_raw_responses_select,
+        snowflake_engine,
+        index_col=[
+            "merchant_guid",
+            "file_path",
+        ],
+    )
+
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        for _index, row in all_flinks_responses.iterrows():
+            try:
+                # See if we already have it
+                downloaded_flinks_responses.loc[
+                    (
+                        row.name[0],
+                        row.name[1],
+                    )
+                ]
+
+                # We already have it
+                logging.info(
+                    f"⏩️️ Skipping generating projections for {row.name[0]} - {row.name[1]}"
+                )
+            except KeyError:
+                # We don't have it
                 executor.submit(
                     store_flinks_response,
-                    merchant_guid,
-                    raw_file,
+                    row.name[0],
+                    row.name[1],
                     bucket_name,
                     snowflake_connection,
                     schema,
                 )
-    else:
-        merchants = Table(
-            "merchants",
-            metadata,
-            autoload=True,
-            schema=schema,
-        )
-
-        merchant_documents = Table(
-            "merchant_documents",
-            metadata,
-            autoload=True,
-            schema=schema,
-        )
-
-        flinks_raw_responses = Table(
-            "flinks_raw_responses",
-            metadata,
-            autoload=True,
-            schema=schema,
-        )
-
-        merchants_merchant_documents_join = join(
-            merchant_documents,
-            merchants,
-            func.get(merchants.c.fields, "id")
-            == func.get(merchant_documents.c.fields, "merchant_id"),
-        )
-        merchant_documents_select = (
-            select(
-                columns=[
-                    sqlalchemy.cast(
-                        func.get(merchants.c.fields, "guid"), VARCHAR
-                    ).label("merchant_guid"),
-                    sqlalchemy.cast(
-                        func.get(merchant_documents.c.fields, "cloud_file_path"),
-                        VARCHAR,
-                    ).label("file_path"),
-                    text("1"),
-                ],
-                from_obj=merchant_documents,
-            )
-            .where(
-                sqlalchemy.cast(
-                    func.get(merchant_documents.c.fields, "doc_type"), VARCHAR
-                )
-                == literal("flinks_raw_response")
-            )
-            .select_from(merchants_merchant_documents_join)
-        )
-
-        logging.info(
-            merchant_documents_select.compile(compile_kwargs={"literal_binds": True})
-        )
-
-        flinks_raw_responses_select = select(
-            columns=[
-                flinks_raw_responses.c.merchant_guid,
-                flinks_raw_responses.c.file_path,
-                text("1"),
-            ],
-            from_obj=flinks_raw_responses,
-        )
-
-        logging.info(
-            flinks_raw_responses_select.compile(compile_kwargs={"literal_binds": True})
-        )
-
-        # Get the set of all the raw flinks responses
-        all_flinks_responses = pd.read_sql_query(
-            merchant_documents_select,
-            snowflake_engine,
-            index_col=[
-                "merchant_guid",
-                "file_path",
-            ],
-        )
-
-        # Get the set of downloaded flinks responses
-        downloaded_flinks_responses = pd.read_sql_query(
-            flinks_raw_responses_select,
-            snowflake_engine,
-            index_col=[
-                "merchant_guid",
-                "file_path",
-            ],
-        )
-
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            for _index, row in all_flinks_responses.iterrows():
-                try:
-                    # See if we already have it
-                    downloaded_flinks_responses.loc[
-                        (
-                            row.name[0],
-                            row.name[1],
-                        )
-                    ]
-
-                    # We already have it
-                    logging.info(
-                        f"⏩️️ Skipping generating projections for {row.name[0]} - {row.name[1]}"
-                    )
-                except KeyError:
-                    # We don't have it
-                    executor.submit(
-                        store_flinks_response,
-                        row.name[0],
-                        row.name[1],
-                        bucket_name,
-                        snowflake_connection,
-                        schema,
-                    )
 
 
 def create_dag() -> DAG:
     with DAG(
         "process_flinks_transactions",
         max_active_runs=10,
-        schedule_interval=None,
+        schedule_interval="0 3 * * *",
         start_date=pendulum.datetime(
             2020, 8, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
@@ -292,18 +268,6 @@ def create_dag() -> DAG:
                     "fct_weekly_bank_account_balance fct_monthly_bank_account_balance "
                     "fct_bank_account_balance_week_over_week fct_bank_account_balance_month_over_month"
                 ),
-            )
-            >> PythonOperator(
-                task_id="notify_subscribers",
-                python_callable=notify_subscribers,
-                provide_context=True,
-                op_kwargs={
-                    "rabbit_url": Variable.get("CLOUDAMQP_URL"),
-                    "exchange_label": Variable.get("CLOUDAMQP_EXCHANGE"),
-                    "topic": Variable.get(
-                        "CLOUDAMQP_TOPIC_PROCESS_FLINKS_TRANSACTIONS"
-                    ),
-                },
             )
         )
 
