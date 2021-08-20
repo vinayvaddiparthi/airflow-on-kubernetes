@@ -45,7 +45,7 @@ dag = DAG(
 )
 
 snowflake_conn = "airflow_production"
-
+s3_connection = "s3_dataops"
 aws_hook = AwsBaseHook(aws_conn_id="s3_dataops", client_type="s3")
 aws_credentials = aws_hook.get_credentials()
 
@@ -147,27 +147,23 @@ def _convert_line_csv(line: str) -> str:
     parts = []
     x = zip(indices, indices[1:] + [None])
     for i, j in x:
-        if j in personal_info:  # remove once we confirm that we do not need to mask personal info
+        if (
+            j in personal_info
+        ):  # remove once we confirm that we do not need to mask personal info
             parts.append("")
         else:
             parts.append(line[i:j].strip().replace(",", "\,"))
     return ",".join(parts)
 
 
-def convert_file() -> None:
+def convert_file(bucket_name: str, download_key: str, upload_key: str) -> None:
     """
-    Convert out1 file to csv according to our field dictionary
+    Convert decrypted response file (txt) to csv according to our field dictionary
     """
     client = get_s3_client()
-    # key = f"{full_response_path}/{base_file_name}.out1"
-    # key = "equifax/consumer/decrypted/tc_consumer_batch_202107.out1"
-    key = "equifax/consumer/decrypted/exthinkingpd.eqxcan.ds.scrdas.D20210817.T1620.txt"
     try:
-        logging.info(f"Getting object {key} from {bucket}")
-        file = client.get_object(
-            Bucket=bucket,
-            Key=key,
-        )
+        logging.info(f"Getting object {download_key} from {bucket_name}")
+        file = client.get_object(Bucket=bucket_name, Key=download_key)
         logging.info(file)
         body = file["Body"].read()
         content = body.decode("ISO-8859-1")
@@ -189,15 +185,13 @@ def convert_file() -> None:
                     formatted.write(_convert_line_csv(line))
                     formatted.write("\n")
 
-            upload_file_s3(
-                formatted,
-                # f"{full_output_path}/{base_file_name}.csv",
-                # "equifax/consumer/csv/tc_consumer_batch_202107.csv",
-                "equifax/consumer/csv/exthinkingpd.eqxcan.ds.scrdas.D20210817.T1620.csv",
-            )
+            upload_key_split = upload_key.split(".")
+            upload_key_split.pop()
+            upload_key_no_file_type = ".".join(upload_key_split)
+            upload_file_s3(file=formatted, path=f"{upload_key_no_file_type}.csv")
     except Exception as e:
         raise Exception(
-            f"Unable to get object {key} from {bucket}: {e} or convert to csv"
+            f"Unable to get object {download_key} from {bucket_name}: {e} or convert to csv"
         )
 
 
@@ -404,7 +398,7 @@ task_decrypt_response_file = PythonOperator(
     python_callable=_decrypt_response_file,
     op_kwargs={
         "s3_conn": "s3_dataops",
-        "bucket_name": "tc-data-airflow-production",
+        "bucket_name": bucket,
         "download_key": "equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.pgp",
         "upload_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
     },
@@ -413,8 +407,8 @@ task_decrypt_response_file = PythonOperator(
 
 task_is_decrypted_response_file_available = S3KeySensor(
     task_id="is_decrypted_response_file_available",
-    bucket_key="s3://tc-data-airflow-production/equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.test",
-    aws_conn_id="s3_dataops",
+    bucket_key="s3://tc-data-airflow-production/equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+    aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
     on_failure_callback=sensor_timeout,
@@ -424,6 +418,12 @@ task_is_decrypted_response_file_available = S3KeySensor(
 task_convert_file = PythonOperator(
     task_id="convert_file",
     python_callable=convert_file,
+    op_kwargs={
+        "s3_conn": s3_connection,
+        "bucket_name": bucket,
+        "download_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+        "upload_key": "equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+    },
     dag=dag,
 )
 
