@@ -143,9 +143,9 @@ def copy_transactions(
     merchant_documents_select = (
         select(
             columns=[
-                sqlalchemy.cast(
-                    func.get(merchants.c.fields, "guid"), VARCHAR
-                ).label("merchant_guid"),
+                sqlalchemy.cast(func.get(merchants.c.fields, "guid"), VARCHAR).label(
+                    "merchant_guid"
+                ),
                 sqlalchemy.cast(
                     func.get(merchant_documents.c.fields, "cloud_file_path"),
                     VARCHAR,
@@ -155,9 +155,7 @@ def copy_transactions(
             from_obj=merchant_documents,
         )
         .where(
-            sqlalchemy.cast(
-                func.get(merchant_documents.c.fields, "doc_type"), VARCHAR
-            )
+            sqlalchemy.cast(func.get(merchant_documents.c.fields, "doc_type"), VARCHAR)
             == literal("flinks_raw_response")
         )
         .select_from(merchants_merchant_documents_join)
