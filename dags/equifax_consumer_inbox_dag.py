@@ -8,10 +8,7 @@ Then the CSV will be copied into Snowflake table EQUIFAX.PUBLIC.CONSUMER_BATCH a
 """
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import (
-    PythonOperator,
-    ShortCircuitOperator,
-)
+from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
 from airflow.providers.amazon.aws.transfers.sftp_to_s3 import SFTPToS3Operator
 from airflow.providers.sftp.sensors.sftp import SFTPSensor
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
@@ -48,7 +45,7 @@ dag = DAG(
 
 snowflake_conn = "airflow_production"
 
-aws_hook = AwsBaseHook(aws_conn_id="s3_datalake", client_type="s3")
+aws_hook = AwsBaseHook(aws_conn_id="s3_dataops", client_type="s3")
 aws_credentials = aws_hook.get_credentials()
 
 # Use first day of current month to determine last month name
@@ -58,7 +55,8 @@ last_month = first - timedelta(days=1)
 
 t_stamp = last_month.strftime("%Y%m")  # '2021XX'
 base_file_name = f"tc_consumer_batch_{t_stamp}"
-bucket = "tc-datalake"
+# bucket = "tc-datalake"
+bucket = "tc-data-airflow-production"
 full_response_path = "equifax_automated_batch/response/consumer"
 full_output_path = "equifax_automated_batch/output/consumer"
 
@@ -1564,18 +1562,6 @@ def upload_file_s3(file: Any, path: str) -> None:
         logging.error("Error when uploading file to s3")
 
 
-def _convert_line_csv(line: str) -> str:
-    indices = _generate_index_list(0, result_dict)
-    parts = []
-    x = zip(indices, indices[1:] + [None])
-    for i, j in x:
-        if j in personal_info:
-            parts.append("")
-        else:
-            parts.append(line[i:j].strip().replace(",", "\,"))
-    return ",".join(parts)
-
-
 def _generate_index_list(start: int, dol: Dict) -> List:
     result = [start]
     for l in dol:
@@ -1583,18 +1569,33 @@ def _generate_index_list(start: int, dol: Dict) -> List:
     return result[:-1]
 
 
+def _convert_line_csv(line: str) -> str:
+    indices = _generate_index_list(0, result_dict)
+    parts = []
+    x = zip(indices, indices[1:] + [None])
+    for i, j in x:
+        if j in personal_info:  # remove once we confirm that we do not need to mask personal info
+            parts.append("")
+        else:
+            parts.append(line[i:j].strip().replace(",", "\,"))
+    return ",".join(parts)
+
+
 def convert_file() -> None:
     """
     Convert out1 file to csv according to our field dictionary
     """
     client = get_s3_client()
-    key = f"{full_response_path}/{base_file_name}.out1"
+    # key = f"{full_response_path}/{base_file_name}.out1"
+    # key = "equifax/consumer/decrypted/tc_consumer_batch_202107.out1"
+    key = "equifax/consumer/decrypted/exthinkingpd.eqxcan.ds.scrdas.D20210817.T1620.txt"
     try:
         logging.info(f"Getting object {key} from {bucket}")
         file = client.get_object(
             Bucket=bucket,
             Key=key,
         )
+        logging.info(file)
         body = file["Body"].read()
         content = body.decode("ISO-8859-1")
         with tempfile.TemporaryFile(
@@ -1617,7 +1618,9 @@ def convert_file() -> None:
 
             upload_file_s3(
                 formatted,
-                f"{full_output_path}/{base_file_name}.csv",
+                # f"{full_output_path}/{base_file_name}.csv",
+                # "equifax/consumer/csv/tc_consumer_batch_202107.csv",
+                "equifax/consumer/csv/exthinkingpd.eqxcan.ds.scrdas.D20210817.T1620.csv",
             )
     except Exception as e:
         raise Exception(
