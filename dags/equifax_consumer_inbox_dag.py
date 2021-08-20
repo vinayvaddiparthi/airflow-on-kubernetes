@@ -83,10 +83,10 @@ def _get_filename_from_remote() -> str:
     # can safely assume only 1 file will be available every month as Equifax clears the directory after 7 days
     filename = hook.list_directory(path="outbox/")[0]
     filename_list = filename.split(".")
-    filename_list.pop()
-    filename_root = ".".join(filename_list)
-    logging.info(filename_root)
-    return filename_root
+    filename_list_no_file_type = filename_list[:-2]
+    filename_no_file_type = ".".join(filename_list_no_file_type)
+    logging.info(filename_no_file_type)
+    return filename_no_file_type
 
 
 def _mark_response_as_downloaded(context: Dict) -> None:
@@ -375,7 +375,7 @@ task_get_filename_from_remote = PythonOperator(
 
 task_is_response_file_available = SFTPSensor(
     task_id="is_response_file_available",
-    path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.pgp",
+    path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
     sftp_conn_id="equifax_sftp",
     poke_interval=5,
     timeout=5,
@@ -385,10 +385,10 @@ task_is_response_file_available = SFTPSensor(
 task_create_sftp_to_s3_job = SFTPToS3Operator(
     task_id="create_sftp_to_s3_job",
     sftp_conn_id="equifax_sftp",
-    sftp_path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.pgp",
+    sftp_path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
     s3_conn_id="s3_dataops",
     s3_bucket="tc-data-airflow-production",
-    s3_key="equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.pgp",
+    s3_key="equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
     on_success_callback=_mark_response_as_downloaded,
     dag=dag,
 )
@@ -399,15 +399,15 @@ task_decrypt_response_file = PythonOperator(
     op_kwargs={
         "s3_conn": "s3_dataops",
         "bucket_name": bucket,
-        "download_key": "equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.pgp",
-        "upload_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+        "download_key": "equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
+        "upload_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt",
     },
     dag=dag,
 )
 
 task_is_decrypted_response_file_available = S3KeySensor(
     task_id="is_decrypted_response_file_available",
-    bucket_key="s3://tc-data-airflow-production/equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+    bucket_key="s3://tc-data-airflow-production/equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt",
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
@@ -419,10 +419,9 @@ task_convert_file = PythonOperator(
     task_id="convert_file",
     python_callable=convert_file,
     op_kwargs={
-        "s3_conn": s3_connection,
         "bucket_name": bucket,
-        "download_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
-        "upload_key": "equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}",
+        "download_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt",
+        "upload_key": "equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
     },
     dag=dag,
 )
