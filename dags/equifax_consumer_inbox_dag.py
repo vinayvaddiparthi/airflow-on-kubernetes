@@ -61,8 +61,8 @@ bucket = "tc-data-airflow-production"
 full_response_path = "equifax_automated_batch/response/consumer"
 full_output_path = "equifax_automated_batch/output/consumer"
 
-table_name_raw = "equifax.output.consumer_batch_raw"
-table_name_raw_history = f"equifax.output_history.consumer_batch_raw_{t_stamp}"
+# table_name_raw = "equifax.output.consumer_batch_raw"
+# table_name_raw_history = f"equifax.output_history.consumer_batch_raw_{t_stamp}"
 table_name = "equifax.output.consumer_batch"
 table_name_history = f"equifax.output_history.consumer_batch_{t_stamp}"
 table_name_public = "equifax.public.consumer_batch"
@@ -137,8 +137,8 @@ def upload_file_s3(file: Any, path: str) -> None:
 
 def _generate_index_list(start: int, dol: Dict) -> List:
     result = [start]
-    for l in dol:
-        result.append(result[-1] + dol[l])
+    for length in dol:
+        result.append(result[-1] + dol[length])
     return result[:-1]
 
 
@@ -147,9 +147,7 @@ def _convert_line_csv(line: str) -> str:
     parts = []
     x = zip(indices, indices[1:] + [None])
     for i, j in x:
-        if (
-            j in personal_info
-        ):  # remove once we confirm that we do not need to mask personal info
+        if j in personal_info:
             parts.append("")
         else:
             parts.append(line[i:j].strip().replace(",", "\,"))
@@ -195,8 +193,8 @@ def convert_file(bucket_name: str, download_key: str, upload_key: str) -> None:
         )
 
 
-def _get_col_def(n: str, l: int, date_formatted: bool) -> str:
-    if date_formatted and n in (
+def _get_col_def(column: str, length: int, date_formatted: bool) -> str:
+    if date_formatted and column in (
         "DOB_TEXT",
         "PRXX014",
         "PRXX016",
@@ -217,8 +215,8 @@ def _get_col_def(n: str, l: int, date_formatted: bool) -> str:
         "INQBD009",
         "INQCL009",
     ):
-        return f"{n} date"
-    return f"{n} varchar({l})"
+        return f"{column} date"
+    return f"{column} varchar({length})"
 
 
 def insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
@@ -227,11 +225,11 @@ def insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -
 
     cols = []
     value_cols = []
-    for col, l in d3.items():
-        cols.append(_get_col_def(col, l, date_formatted))
+    for col, length in d3.items():
+        cols.append(_get_col_def(column=col, length=length, date_formatted=date_formatted))
         value_cols.append(col)
 
-    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
+    with SnowflakeHook(snowflake_conn_id="airflow_production").get_sqlalchemy_engine().begin() as sfh:
         if date_formatted:
             pass
             if "HISTORY" in table:
@@ -259,9 +257,9 @@ def insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -
         sfh.execute(copy)
 
 
-def insert_snowflake_raw() -> None:
-    insert_snowflake(table_name_raw, f"{base_file_name}.csv")
-    insert_snowflake(table_name_raw_history, f"{base_file_name}.csv")
+def insert_snowflake_raw(table_name_raw: str, table_name_raw_history: str, key: str) -> None:
+    insert_snowflake(table=table_name_raw, file_name=key)
+    insert_snowflake(table=table_name_raw_history, file_name=key)
 
 
 def _convert_date_format(value: str) -> Any:
@@ -429,6 +427,11 @@ task_convert_file = PythonOperator(
 task_insert_snowflake_raw = PythonOperator(
     task_id="insert_snowflake_raw",
     python_callable=insert_snowflake_raw,
+    op_kwargs={
+        "table_name_raw": "equifax.output.consumer_batch_raw",
+        "table_name_history": "equifax.output_history.consumer_batch_raw_{{ ds_nodash }}",
+        "key": "equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
+    },
     dag=dag,
 )
 
