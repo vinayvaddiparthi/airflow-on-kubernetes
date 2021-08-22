@@ -219,31 +219,28 @@ def _get_col_def(column: str, length: int, date_formatted: bool) -> str:
     return f"{column} varchar({length})"
 
 
-def insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -> None:
+def insert_snowflake(table: str, key: str, date_formatted: bool = False) -> None:
     d3: Dict[str, int] = result_dict
-    logging.info(f"Size of dict: {len(d3)}")
-
-    cols = []
-    value_cols = []
+    column_datatypes = []
+    column_names = []
     for col, length in d3.items():
-        cols.append(_get_col_def(column=col, length=length, date_formatted=date_formatted))
-        value_cols.append(col)
-
-    with SnowflakeHook(snowflake_conn_id="airflow_production").get_sqlalchemy_engine().begin() as sfh:
+        column_datatypes.append(_get_col_def(column=col, length=length, date_formatted=date_formatted))
+        column_names.append(col)
+    with SnowflakeHook(snowflake_conn_id="airflow_production").get_sqlalchemy_engine().begin() as snowflake:
         if date_formatted:
             pass
             if "HISTORY" in table:
-                sfh.execute(f"create or replace table {table} clone {table_name}")
+                snowflake.execute(f"create or replace table {table} clone {table_name}")
 
-            sql = f"create or replace table {table} ({','.join(cols)});"
-            sfh.execute(sql)
+            sql = f"create or replace table {table} ({','.join(column_datatypes)});"
+            snowflake.execute(sql)
         else:
-            sql = f"create or replace table {table} ({','.join(cols)});"
-            sfh.execute(sql)
+            sql = f"create or replace table {table} ({','.join(column_datatypes)});"
+            snowflake.execute(sql)
 
-        file = f"S3://{bucket}/{full_output_path}/{file_name}"
+        # file = f"S3://{bucket}/{full_output_path}/{file_name}"
         copy = f"""
-                COPY INTO {table} FROM {file} 
+                COPY INTO {table} FROM {key} 
                 CREDENTIALS = (
                     aws_key_id='{aws_credentials.access_key}',
                     aws_secret_key='{aws_credentials.secret_key}'
@@ -254,12 +251,12 @@ def insert_snowflake(table: Any, file_name: str, date_formatted: bool = False) -
                     {', skip_header=1' if date_formatted else ''}
                 )
                 """
-        sfh.execute(copy)
+        snowflake.execute(copy)
 
 
 def insert_snowflake_raw(table_name_raw: str, table_name_raw_history: str, key: str) -> None:
-    insert_snowflake(table=table_name_raw, file_name=key)
-    insert_snowflake(table=table_name_raw_history, file_name=key)
+    insert_snowflake(table=table_name_raw, key=key)
+    insert_snowflake(table=table_name_raw_history, key=key)
 
 
 def _convert_date_format(value: str) -> Any:
@@ -284,11 +281,11 @@ def fix_date_format() -> None:
     """
     Date format of listed field are SAS format,
     and they are not valid to be converted into datetime directly with snowflake to_date()
-    Therefore, we fix the format string value to make them convertable
+    Therefore, we fix the format string value to make them compatible.
     """
-    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
+    with SnowflakeHook(snowflake_conn_id="airflow_production").get_sqlalchemy_engine().begin() as snowflake:
         select = f"select * from {table_name_raw}"  # nosec
-        result = sfh.execute(select)
+        result = snowflake.execute(select)
 
         df = pd.DataFrame(result.cursor.fetchall())
         df.columns = [des[0] for des in result.cursor.description]
@@ -429,8 +426,8 @@ task_insert_snowflake_raw = PythonOperator(
     python_callable=insert_snowflake_raw,
     op_kwargs={
         "table_name_raw": "equifax.output.consumer_batch_raw",
-        "table_name_history": "equifax.output_history.consumer_batch_raw_{{ ds_nodash }}",
-        "key": "equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
+        "table_name_raw_history": "equifax.output_history.consumer_batch_raw_{{ ds_nodash }}",
+        "key": "s3://tc-data-airflow-production/equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
     },
     dag=dag,
 )
