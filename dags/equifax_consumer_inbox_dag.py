@@ -27,7 +27,7 @@ from typing import Dict, List, Any
 from helpers.aws_hack import hack_clear_aws_keys
 from utils.failure_callbacks import slack_dag, sensor_timeout
 from utils.gpg import init_gnupg
-from utils.dictionaries import result_dict
+from utils.reference_data import result_dict, date_columns, personal_info
 
 default_args = {
     "owner": "airflow",
@@ -66,8 +66,6 @@ full_output_path = "equifax_automated_batch/output/consumer"
 table_name = "equifax.output.consumer_batch"
 table_name_history = f"equifax.output_history.consumer_batch_{t_stamp}"
 table_name_public = "equifax.public.consumer_batch"
-
-personal_info = [37, 52, 62, 88, 94, 124, 144, 146, 152]
 
 
 def _check_if_file_downloaded() -> bool:
@@ -194,32 +192,12 @@ def convert_file(bucket_name: str, download_key: str, upload_key: str) -> None:
 
 
 def _get_col_def(column: str, length: int, date_formatted: bool) -> str:
-    if date_formatted and column in (
-        "DOB_TEXT",
-        "PRXX014",
-        "PRXX016",
-        "PRXX039",
-        "PRXX044",
-        "INQAL009",
-        "INQAM009",
-        "INQMG009",
-        "INQBK009",
-        "INQCU009",
-        "INQNC009",
-        "INQAF009",
-        "INQPF009",
-        "INQSF009",
-        "INQRT009",
-        "INQRD009",
-        "INQTE009",
-        "INQBD009",
-        "INQCL009",
-    ):
+    if date_formatted and column in date_columns:
         return f"{column} date"
     return f"{column} varchar({length})"
 
 
-def insert_snowflake(table: str, key: str, date_formatted: bool = False) -> None:
+def insert_snowflake(table: str, download_key: str, date_formatted: bool = False) -> None:
     d3: Dict[str, int] = result_dict
     column_datatypes = []
     column_names = []
@@ -238,9 +216,8 @@ def insert_snowflake(table: str, key: str, date_formatted: bool = False) -> None
             sql = f"create or replace table {table} ({','.join(column_datatypes)});"
             snowflake.execute(sql)
 
-        # file = f"S3://{bucket}/{full_output_path}/{file_name}"
         copy = f"""
-                COPY INTO {table} FROM {key} 
+                COPY INTO {table} FROM {download_key} 
                 CREDENTIALS = (
                     aws_key_id='{aws_credentials.access_key}',
                     aws_secret_key='{aws_credentials.secret_key}'
@@ -254,9 +231,9 @@ def insert_snowflake(table: str, key: str, date_formatted: bool = False) -> None
         snowflake.execute(copy)
 
 
-def insert_snowflake_raw(table_name_raw: str, table_name_raw_history: str, key: str) -> None:
-    insert_snowflake(table=table_name_raw, key=key)
-    insert_snowflake(table=table_name_raw_history, key=key)
+def insert_snowflake_raw(table_name_raw: str, table_name_raw_history: str, download_key: str) -> None:
+    insert_snowflake(table=table_name_raw, download_key=download_key)
+    insert_snowflake(table=table_name_raw_history, download_key=download_key)
 
 
 def _convert_date_format(value: str) -> Any:
@@ -277,7 +254,7 @@ def _convert_date_format(value: str) -> Any:
     return None
 
 
-def fix_date_format() -> None:
+def fix_date_format(table_name_raw: str, upload_key: str) -> None:
     """
     Date format of listed field are SAS format,
     and they are not valid to be converted into datetime directly with snowflake to_date()
@@ -289,35 +266,13 @@ def fix_date_format() -> None:
 
         df = pd.DataFrame(result.cursor.fetchall())
         df.columns = [des[0] for des in result.cursor.description]
-        for key in [
-            "DOB_TEXT",
-            "PRXX014",
-            "PRXX016",
-            "PRXX039",
-            "PRXX044",
-            "INQAL009",
-            "INQAM009",
-            "INQMG009",
-            "INQBK009",
-            "INQCU009",
-            "INQNC009",
-            "INQAF009",
-            "INQPF009",
-            "INQSF009",
-            "INQRT009",
-            "INQRD009",
-            "INQTE009",
-            "INQBD009",
-            "INQCL009",
-        ]:
+        for key in date_columns:
             df[key] = df[key].apply(lambda x: _convert_date_format(x))
+
         with tempfile.NamedTemporaryFile(mode="w") as file_in:
             df.to_csv(file_in.name, index=False, sep=",")
             with open(file_in.name, "rb") as file:
-                upload_file_s3(
-                    file,
-                    f"{full_output_path}/{base_file_name}.csv",
-                )
+                upload_file_s3(file=file, path=upload_key)
 
 
 def insert_snowflake_stage() -> None:
@@ -427,7 +382,7 @@ task_insert_snowflake_raw = PythonOperator(
     op_kwargs={
         "table_name_raw": "equifax.output.consumer_batch_raw",
         "table_name_raw_history": "equifax.output_history.consumer_batch_raw_{{ ds_nodash }}",
-        "key": "s3://tc-data-airflow-production/equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
+        "download_key": "s3://tc-data-airflow-production/equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
     },
     dag=dag,
 )
@@ -435,6 +390,10 @@ task_insert_snowflake_raw = PythonOperator(
 task_fix_date = PythonOperator(
     task_id="fix_date_format",
     python_callable=fix_date_format,
+    op_kwargs={
+        "table_name_raw": "equifax.output.consumer_batch_raw",
+        "upload_key": "equifax/consumer/csv_date_format_fixed/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}_date_format_fixed.csv",
+    },
     dag=dag,
 )
 

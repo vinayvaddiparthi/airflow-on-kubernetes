@@ -1,3 +1,4 @@
+# column names to length mapping for equifax consumer response file
 result_dict = {
     "customer_reference_number": 12,
     "last_name": 25,
@@ -1425,3 +1426,29 @@ result_dict = {
     "TCTT100": 5,
     "TCTT108": 5,
 }
+
+# column names that contain dates in the equifax consumer response file
+date_columns = (
+    "DOB_TEXT",
+    "PRXX014",
+    "PRXX016",
+    "PRXX039",
+    "PRXX044",
+    "INQAL009",
+    "INQAM009",
+    "INQMG009",
+    "INQBK009",
+    "INQCU009",
+    "INQNC009",
+    "INQAF009",
+    "INQPF009",
+    "INQSF009",
+    "INQRT009",
+    "INQRD009",
+    "INQTE009",
+    "INQBD009",
+    "INQCL009",
+)
+
+# indices of columns containing personally identifiable information
+personal_info = [37, 52, 62, 88, 94, 124, 144, 146, 152]
