@@ -346,7 +346,7 @@ def create_dag() -> DAG:
             2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="0 */2 * * *",
-        default_args={"retries": 10, "retry_delay": timedelta(minutes=5)},
+        default_args={"retries": 3, "retry_delay": timedelta(minutes=5)},
         catchup=False,
         on_failure_callback=slack_dag("slack_data_alerts"),
         max_active_runs=1,
