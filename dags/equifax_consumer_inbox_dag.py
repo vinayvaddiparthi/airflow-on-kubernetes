@@ -32,7 +32,7 @@ from utils.reference_data import result_dict, date_columns, personal_info
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
-    "start_date": datetime(2020, 9, 17, 2),
+    "start_date": datetime(2021, 1,1),
     "retries": 0,
     "catchup": False,
     "on_failure_callback": slack_dag("slack_data_alerts"),
@@ -56,7 +56,6 @@ last_month = first - timedelta(days=1)
 
 t_stamp = last_month.strftime("%Y%m")  # '2021XX'
 base_file_name = f"tc_consumer_batch_{t_stamp}"
-# bucket = "tc-datalake"
 bucket = "tc-data-airflow-production"
 full_response_path = "equifax_automated_batch/response/consumer"
 full_output_path = "equifax_automated_batch/output/consumer"
@@ -275,7 +274,7 @@ def fix_date_format(table_name_raw: str, upload_key: str) -> None:
                 upload_file_s3(file=file, path=upload_key)
 
 
-def insert_snowflake_stage() -> None:
+def insert_snowflake_stage(table_name: str, table_name_history: str) -> None:
     insert_snowflake(table_name, f"{base_file_name}.csv", True)
     insert_snowflake(table_name_history, f"{base_file_name}.csv", True)
 
@@ -400,6 +399,10 @@ task_fix_date = PythonOperator(
 task_insert_snowflake_stage = PythonOperator(
     task_id="insert_snowflake_stage",
     python_callable=insert_snowflake_stage,
+    op_kwargs={
+        "table_name": "equifax.output.consumer_batch",
+        "table_name_history": f"equifax.output_history.consumer_batch_{t_stamp}",
+    },
     dag=dag,
 )
 
