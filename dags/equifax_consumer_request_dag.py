@@ -255,6 +255,7 @@ def generate_file(
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
     Variable.set("equifax_consumer_request_filename", file_name)
     Variable.set("equifax_consumer_request_sent", False)
+    Variable.set("equifax_consumer_response_downloaded", False)
     return file_name
 
 
