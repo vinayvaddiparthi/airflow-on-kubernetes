@@ -54,21 +54,6 @@ aws_hook = AwsBaseHook(aws_conn_id=s3_connection, client_type="s3")
 aws_credentials = aws_hook.get_credentials()
 sftp_connection = "equifax_sftp"
 
-# Use first day of current month to determine last month name
-# today = datetime.now().today()
-# first = today.replace(day=1)
-# last_month = first - timedelta(days=1)
-
-# t_stamp = last_month.strftime("%Y%m")  # '2021XX'
-# base_file_name = f"tc_consumer_batch_{t_stamp}"
-# full_response_path = "equifax_automated_batch/response/consumer"
-# full_output_path = "equifax_automated_batch/output/consumer"
-
-# table_name_raw = "equifax.output.consumer_batch_raw"
-# table_name_raw_history = f"equifax.output_history.consumer_batch_raw_{t_stamp}"
-# table_name_history = f"equifax.output_history.consumer_batch_{t_stamp}"
-# table_name_public = "equifax.public.consumer_batch"
-
 
 def _check_if_file_downloaded() -> bool:
     return (
@@ -331,14 +316,6 @@ def insert_snowflake_public(
     ).get_sqlalchemy_engine().begin() as snowflake:
         snowflake.execute(sql)
 
-
-# short circuit if response file has already been downloaded for the month (file available for 7 days on server)
-# list all directories on the remote system + pass filename via Xcoms
-# check if response file is available for download on the sftp server (unnecessary?)
-# download response file from sftp server to inbox/ folder
-# check if the response file is available in the inbox/ folder (unnecessary?)
-# decrypt the response file and upload to decrypted/ folder
-# check if the decrypted response file is available
 
 task_check_if_file_downloaded = ShortCircuitOperator(
     task_id="check_if_file_downloaded",
