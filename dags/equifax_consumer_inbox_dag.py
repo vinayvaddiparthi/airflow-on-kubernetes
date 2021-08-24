@@ -337,15 +337,6 @@ task_get_filename_from_remote = PythonOperator(
     dag=dag,
 )
 
-task_is_response_file_available = SFTPSensor(
-    task_id="is_response_file_available",
-    path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
-    sftp_conn_id=sftp_connection,
-    poke_interval=5,
-    timeout=5,
-    dag=dag,
-)
-
 task_create_sftp_to_s3_job = SFTPToS3Operator(
     task_id="create_sftp_to_s3_job",
     sftp_conn_id=sftp_connection,
@@ -438,7 +429,6 @@ task_insert_snowflake_public = PythonOperator(
 (
     task_check_if_file_downloaded
     >> task_get_filename_from_remote
-    >> task_is_response_file_available
     >> task_create_sftp_to_s3_job
     >> task_decrypt_response_file
     >> task_is_decrypted_response_file_available
