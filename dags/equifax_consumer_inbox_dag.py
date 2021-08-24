@@ -1,10 +1,7 @@
 """
 #### Description
-This workflow processes the response file from Equifax. Currently, we manually rename and upload the .out1 file provided
-by Risk to the S3 bucket [advanceit] tc-datalake/equifax_automated_batch/response/consumer/. Once the response file is
-downloaded, the DAG will process the file into a CSV format and upload it to
-[advanceit] tc-datalake/equifax_automated_batch/output/consumer/.
-Then the CSV will be copied into Snowflake table EQUIFAX.PUBLIC.CONSUMER_BATCH as well as a history table.
+This workflow processes the consumer response file from Equifax. Once the response file is downloaded, the encrypted
+response file will be processed and uploaded to Snowflake.
 """
 from airflow import DAG
 from airflow.models import Variable
