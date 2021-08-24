@@ -53,11 +53,7 @@ sftp_connection = "equifax_sftp"
 
 
 def _check_if_file_downloaded() -> bool:
-    return (
-        False
-        if Variable.get("equifax_consumer_response_downloaded") == "True"
-        else True
-    )
+    return Variable.get("equifax_consumer_response_downloaded") != "True"
 
 
 def _get_filename_from_remote() -> str:
