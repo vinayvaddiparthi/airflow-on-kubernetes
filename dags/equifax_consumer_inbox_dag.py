@@ -36,6 +36,8 @@ default_args = {
     "retries": 0,
     "catchup": False,
     "on_failure_callback": slack_dag("slack_data_alerts"),
+    "tags": ["equifax"],
+    "description": "A workflow to download and process the consumer batch response file from Equifax",
 }
 
 dag = DAG(
