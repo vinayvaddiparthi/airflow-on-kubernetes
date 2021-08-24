@@ -113,22 +113,24 @@ def upload_file_s3(file: Any, path: str, bucket: str) -> None:
         logging.error("Error when uploading file to s3")
 
 
-def _generate_index_list(start: int, dol: Dict) -> List:
-    result = [start]
-    for length in dol:
-        result.append(result[-1] + dol[length])
+def _generate_index_list(start_idx: int, column_lengths: Dict) -> List:
+    """
+    Returns a list of column indices given a starting index and a dictionary mapping column name to column length
+    """
+    result = [start_idx]
+    for column in column_lengths:
+        result.append(result[-1] + column_lengths[column])
     return result[:-1]
 
 
-def _convert_line_csv(line: str) -> str:
-    indices = _generate_index_list(0, result_dict)
+def _convert_line_csv(line: str, indices: list) -> str:
     parts = []
     x = zip(indices, indices[1:] + [None])
-    for i, j in x:
-        if j in personal_info:
+    for start_idx, end_idx in x:
+        if end_idx in personal_info:
             parts.append("")
         else:
-            parts.append(line[i:j].strip().replace(",", "\,"))
+            parts.append(line[start_idx:end_idx].strip().replace(",", "\,"))
     return ",".join(parts)
 
 
@@ -157,10 +159,10 @@ def convert_file(bucket_name: str, download_key: str, upload_key: str) -> None:
                     and not line.startswith("BTRL-EQUIFAX")
                     and line
                 ):
-                    lines.append(_convert_line_csv(line))
-                    formatted.write(_convert_line_csv(line))
+                    indices = _generate_index_list(start_idx=0, column_lengths=result_dict)
+                    lines.append(_convert_line_csv(line=line, indices=indices))
+                    formatted.write(_convert_line_csv(line=line, indices=indices))
                     formatted.write("\n")
-
             upload_key_split = upload_key.split(".")
             upload_key_split.pop()
             upload_key_no_file_type = ".".join(upload_key_split)
