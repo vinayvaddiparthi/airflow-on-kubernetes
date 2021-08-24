@@ -453,12 +453,9 @@ task_insert_snowflake_public = PythonOperator(
     >> task_create_sftp_to_s3_job
     >> task_decrypt_response_file
     >> task_is_decrypted_response_file_available
-)
-
-(
-    task_convert_file  # out1 -> csv -> s3
-    >> task_insert_snowflake_raw  # copy from s3 to snowflake, table
-    >> task_fix_date  # query table into dataframe, apply the format conversion, df-> csv, overwrite
-    >> task_insert_snowflake_stage  # csv -> snowflake's equifax.output
-    >> task_insert_snowflake_public  # equifax.output-> equifax.public
+    >> task_convert_file
+    >> task_insert_snowflake_raw
+    >> task_fix_date
+    >> task_insert_snowflake_stage
+    >> task_insert_snowflake_public
 )
