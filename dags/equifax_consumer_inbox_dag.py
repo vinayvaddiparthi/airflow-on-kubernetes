@@ -168,7 +168,9 @@ def convert_file(bucket_name: str, download_key: str, upload_key: str) -> None:
             upload_key_split = upload_key.split(".")
             upload_key_split.pop()
             upload_key_no_file_type = ".".join(upload_key_split)
-            upload_file_s3(file=formatted, path=f"{upload_key_no_file_type}.csv", bucket=S3_BUCKET)
+            upload_file_s3(
+                file=formatted, path=f"{upload_key_no_file_type}.csv", bucket=S3_BUCKET
+            )
     except Exception as e:
         raise Exception(
             f"Unable to get object {download_key} from {bucket_name}: {e} or convert to csv"
@@ -208,17 +210,17 @@ def insert_snowflake(
             snowflake.execute(sql)
 
         copy = f"""
-                COPY INTO {table} FROM {download_key} 
-                CREDENTIALS = (
-                    aws_key_id='{aws_credentials.access_key}',
-                    aws_secret_key='{aws_credentials.secret_key}'
-                )
-                FILE_FORMAT = (
-                    field_delimiter=',',
-                    field_optionally_enclosed_by = '"'
-                    {', skip_header=1' if date_formatted else ''}
-                )
-                """
+            COPY INTO {table} FROM {download_key} 
+            CREDENTIALS = (
+                aws_key_id='{aws_credentials.access_key}',
+                aws_secret_key='{aws_credentials.secret_key}'
+            )
+            FILE_FORMAT = (
+                field_delimiter=',',
+                field_optionally_enclosed_by = '"'
+                {', skip_header=1' if date_formatted else ''}
+            )
+        """
         snowflake.execute(copy)
 
 
@@ -229,10 +231,17 @@ def _get_import_month(ds_nodash: str) -> str:
 
 
 def insert_snowflake_raw(
-    table_name_raw: str, table_name_raw_history: str, download_key: str, ds_nodash: str, **_: None,
+    table_name_raw: str,
+    table_name_raw_history: str,
+    download_key: str,
+    ds_nodash: str,
+    **_: None,
 ) -> None:
     insert_snowflake(table=table_name_raw, download_key=download_key)
-    insert_snowflake(table=f"{table_name_raw_history}_{_get_import_month(ds_nodash)}", download_key=download_key)
+    insert_snowflake(
+        table=f"{table_name_raw_history}_{_get_import_month(ds_nodash)}",
+        download_key=download_key,
+    )
 
 
 def _convert_date_format(value: str) -> Any:
@@ -277,11 +286,17 @@ def fix_date_format(table_name_raw: str, upload_key: str) -> None:
 
 
 def insert_snowflake_stage(
-    table_name: str, table_name_history: str, download_key: str, ds_nodash: str, **_: None,
+    table_name: str,
+    table_name_history: str,
+    download_key: str,
+    ds_nodash: str,
+    **_: None,
 ) -> None:
     insert_snowflake(table=table_name, download_key=download_key, date_formatted=True)
     insert_snowflake(
-        table=f"{table_name_history}_{_get_import_month(ds_nodash)}", download_key=download_key, date_formatted=True
+        table=f"{table_name_history}_{_get_import_month(ds_nodash)}",
+        download_key=download_key,
+        date_formatted=True,
     )
 
 
