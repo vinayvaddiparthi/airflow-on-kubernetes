@@ -32,7 +32,7 @@ from utils.reference_data import result_dict, date_columns, personal_info
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
-    "start_date": datetime(2021, 1,1),
+    "start_date": datetime(2021, 1, 1),
     "retries": 0,
     "catchup": False,
     "on_failure_callback": slack_dag("slack_data_alerts"),
@@ -50,21 +50,20 @@ aws_hook = AwsBaseHook(aws_conn_id="s3_dataops", client_type="s3")
 aws_credentials = aws_hook.get_credentials()
 
 # Use first day of current month to determine last month name
-today = datetime.now().today()
-first = today.replace(day=1)
-last_month = first - timedelta(days=1)
+# today = datetime.now().today()
+# first = today.replace(day=1)
+# last_month = first - timedelta(days=1)
 
-t_stamp = last_month.strftime("%Y%m")  # '2021XX'
-base_file_name = f"tc_consumer_batch_{t_stamp}"
+# t_stamp = last_month.strftime("%Y%m")  # '2021XX'
+# base_file_name = f"tc_consumer_batch_{t_stamp}"
 bucket = "tc-data-airflow-production"
-full_response_path = "equifax_automated_batch/response/consumer"
-full_output_path = "equifax_automated_batch/output/consumer"
+# full_response_path = "equifax_automated_batch/response/consumer"
+# full_output_path = "equifax_automated_batch/output/consumer"
 
 # table_name_raw = "equifax.output.consumer_batch_raw"
 # table_name_raw_history = f"equifax.output_history.consumer_batch_raw_{t_stamp}"
-table_name = "equifax.output.consumer_batch"
-table_name_history = f"equifax.output_history.consumer_batch_{t_stamp}"
-table_name_public = "equifax.public.consumer_batch"
+# table_name_history = f"equifax.output_history.consumer_batch_{t_stamp}"
+# table_name_public = "equifax.public.consumer_batch"
 
 
 def _check_if_file_downloaded() -> bool:
@@ -196,17 +195,24 @@ def _get_col_def(column: str, length: int, date_formatted: bool) -> str:
     return f"{column} varchar({length})"
 
 
-def insert_snowflake(table: str, download_key: str, date_formatted: bool = False) -> None:
+def insert_snowflake(
+    table: str, download_key: str, date_formatted: bool = False
+) -> None:
     d3: Dict[str, int] = result_dict
     column_datatypes = []
     column_names = []
     for col, length in d3.items():
-        column_datatypes.append(_get_col_def(column=col, length=length, date_formatted=date_formatted))
+        column_datatypes.append(
+            _get_col_def(column=col, length=length, date_formatted=date_formatted)
+        )
         column_names.append(col)
-    with SnowflakeHook(snowflake_conn_id="airflow_production").get_sqlalchemy_engine().begin() as snowflake:
+    with SnowflakeHook(
+        snowflake_conn_id="airflow_production"
+    ).get_sqlalchemy_engine().begin() as snowflake:
         if date_formatted:
             pass
             if "HISTORY" in table:
+                table_name = "equifax.output.consumer_batch"
                 snowflake.execute(f"create or replace table {table} clone {table_name}")
 
             sql = f"create or replace table {table} ({','.join(column_datatypes)});"
@@ -230,7 +236,9 @@ def insert_snowflake(table: str, download_key: str, date_formatted: bool = False
         snowflake.execute(copy)
 
 
-def insert_snowflake_raw(table_name_raw: str, table_name_raw_history: str, download_key: str) -> None:
+def insert_snowflake_raw(
+    table_name_raw: str, table_name_raw_history: str, download_key: str
+) -> None:
     insert_snowflake(table=table_name_raw, download_key=download_key)
     insert_snowflake(table=table_name_raw_history, download_key=download_key)
 
@@ -259,7 +267,9 @@ def fix_date_format(table_name_raw: str, upload_key: str) -> None:
     and they are not valid to be converted into datetime directly with snowflake to_date()
     Therefore, we fix the format string value to make them compatible.
     """
-    with SnowflakeHook(snowflake_conn_id="airflow_production").get_sqlalchemy_engine().begin() as snowflake:
+    with SnowflakeHook(
+        snowflake_conn_id="airflow_production"
+    ).get_sqlalchemy_engine().begin() as snowflake:
         select = f"select * from {table_name_raw}"  # nosec
         result = snowflake.execute(select)
 
@@ -274,12 +284,22 @@ def fix_date_format(table_name_raw: str, upload_key: str) -> None:
                 upload_file_s3(file=file, path=upload_key)
 
 
-def insert_snowflake_stage(table_name: str, table_name_history: str) -> None:
-    insert_snowflake(table_name, f"{base_file_name}.csv", True)
-    insert_snowflake(table_name_history, f"{base_file_name}.csv", True)
+def insert_snowflake_stage(
+    table_name: str, table_name_history: str, download_key: str
+) -> None:
+    insert_snowflake(table=table_name, download_key=download_key, date_formatted=True)
+    insert_snowflake(
+        table=table_name_history, download_key=download_key, date_formatted=True
+    )
 
 
-def insert_snowflake_public() -> None:
+def insert_snowflake_public(
+    source_table: str, destination_table: str, ds_nodash: str, **_: None
+) -> None:
+    import_month = (
+        datetime.strptime(ds_nodash, "%Y%m%d").replace(day=1) - timedelta(days=1)
+    ).strftime("%Y%m")
+
     columns = [
         "import_month",
         "accountid",
@@ -288,18 +308,22 @@ def insert_snowflake_public() -> None:
         *result_dict.keys(),
     ]
     columns_string = ",".join(columns)
+    logging.info(f"Inserting {len(columns)} columns to {destination_table}")
 
     sql = f"""
-            insert into {table_name_public}({columns_string})
-            select '{t_stamp}' as import_month,
-                    null as accountid,
-                    null as contractid,
-                    null as business_name,
-                    u.*
-            from {table_name} u
-            """
-    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as sfh:
-        sfh.execute(sql)
+        insert into {destination_table}({columns_string})
+        select
+        '{import_month}' as import_month,
+        null as accountid,
+        null as contractid,
+        null as business_name,
+        staging.*
+        from {source_table} as staging
+    """
+    with SnowflakeHook(
+        "airflow_production"
+    ).get_sqlalchemy_engine().begin() as snowflake:
+        snowflake.execute(sql)
 
 
 # short circuit if response file has already been downloaded for the month (file available for 7 days on server)
@@ -401,7 +425,8 @@ task_insert_snowflake_stage = PythonOperator(
     python_callable=insert_snowflake_stage,
     op_kwargs={
         "table_name": "equifax.output.consumer_batch",
-        "table_name_history": f"equifax.output_history.consumer_batch_{t_stamp}",
+        "table_name_history": "equifax.output_history.consumer_batch_{{ ds_nodash }}",
+        "download_key": "s3://tc-data-airflow-production/equifax/consumer/csv_date_format_fixed/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
     },
     dag=dag,
 )
@@ -409,6 +434,11 @@ task_insert_snowflake_stage = PythonOperator(
 task_insert_snowflake_public = PythonOperator(
     task_id="insert_snowflake_public",
     python_callable=insert_snowflake_public,
+    op_kwargs={
+        "source_table": "equifax.output.consumer_batch",
+        "destination_table": "equifax.public.consumer_batch",
+    },
+    provide_context=True,
     dag=dag,
 )
 
