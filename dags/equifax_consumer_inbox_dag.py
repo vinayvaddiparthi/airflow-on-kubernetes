@@ -7,7 +7,6 @@ from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
 from airflow.providers.amazon.aws.transfers.sftp_to_s3 import SFTPToS3Operator
-from airflow.providers.sftp.sensors.sftp import SFTPSensor
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.providers.sftp.hooks.sftp import SFTPHook
@@ -159,7 +158,9 @@ def convert_file(bucket_name: str, download_key: str, upload_key: str) -> None:
                     and not line.startswith("BTRL-EQUIFAX")
                     and line
                 ):
-                    indices = _generate_index_list(start_idx=0, column_lengths=result_dict)
+                    indices = _generate_index_list(
+                        start_idx=0, column_lengths=result_dict
+                    )
                     lines.append(_convert_line_csv(line=line, indices=indices))
                     formatted.write(_convert_line_csv(line=line, indices=indices))
                     formatted.write("\n")
@@ -195,17 +196,8 @@ def insert_snowflake(
     with SnowflakeHook(
         snowflake_conn_id=snowflake_connection
     ).get_sqlalchemy_engine().begin() as snowflake:
-        if date_formatted:
-            pass
-            if "HISTORY" in table:
-                table_name = "equifax.output.consumer_batch"
-                snowflake.execute(f"create or replace table {table} clone {table_name}")
-
-            sql = f"create or replace table {table} ({','.join(column_datatypes)});"
-            snowflake.execute(sql)
-        else:
-            sql = f"create or replace table {table} ({','.join(column_datatypes)});"
-            snowflake.execute(sql)
+        sql = f"create or replace table {table} ({','.join(column_datatypes)});"
+        snowflake.execute(sql)
 
         copy = f"""
             COPY INTO {table} FROM {download_key} 
