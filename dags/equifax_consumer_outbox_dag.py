@@ -5,18 +5,16 @@ Equifax on a monthly basis for recertification purposes.
 """
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
-from airflow.operators.python_operator import ShortCircuitOperator
+from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
 from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.exceptions import AirflowSensorTimeout
 
 from datetime import datetime, timedelta
 from typing import Dict
-from pprint import pprint
+import logging
 
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_dag, sensor_timeout
 from utils.gpg import init_gnupg
 
 default_args = {
@@ -46,12 +44,6 @@ sftp_connection = "equifax_sftp"
 S3_BUCKET = "tc-data-airflow-production"
 
 
-def _failure_callback(context: Dict) -> None:
-    if isinstance(context["exception"], AirflowSensorTimeout):
-        pprint(context)
-        print("Sensor timed out")
-
-
 def encrypt_request_file(
     s3_conn: str,
     bucket_name: str,
@@ -74,12 +66,12 @@ def encrypt_request_file(
 
 def _mark_request_as_sent(context: Dict) -> None:
     Variable.set("equifax_consumer_request_sent", True)
-    pprint(context)
-    print("Request file successfully sent to Equifax")
+    logging.info(context["task_instance"].log_url)
+    logging.info("Request file successfully sent to Equifax")
 
 
 def _check_if_file_sent() -> bool:
-    return not Variable.get("equifax_consumer_request_sent")
+    return False if Variable.get("equifax_consumer_request_sent") == "True" else True
 
 
 task_check_if_file_sent = ShortCircuitOperator(
@@ -94,7 +86,7 @@ task_is_request_file_available = S3KeySensor(
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
-    on_failure_callback=_failure_callback,
+    on_failure_callback=sensor_timeout,
     dag=dag,
 )
 
@@ -116,7 +108,7 @@ task_is_outbox_file_available = S3KeySensor(
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
-    on_failure_callback=_failure_callback,
+    on_failure_callback=sensor_timeout,
     dag=dag,
 )
 
