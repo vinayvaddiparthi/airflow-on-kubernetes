@@ -45,11 +45,14 @@ dag = DAG(
     schedule_interval="@daily",
     default_args=default_args,
 )
+dag.doc_md = __doc__
 
-snowflake_conn = "airflow_production"
+snowflake_connection = "airflow_production"
 s3_connection = "s3_dataops"
-aws_hook = AwsBaseHook(aws_conn_id="s3_dataops", client_type="s3")
+S3_BUCKET = "tc-data-airflow-production"
+aws_hook = AwsBaseHook(aws_conn_id=s3_connection, client_type="s3")
 aws_credentials = aws_hook.get_credentials()
+sftp_connection = "equifax_sftp"
 
 # Use first day of current month to determine last month name
 # today = datetime.now().today()
@@ -58,7 +61,6 @@ aws_credentials = aws_hook.get_credentials()
 
 # t_stamp = last_month.strftime("%Y%m")  # '2021XX'
 # base_file_name = f"tc_consumer_batch_{t_stamp}"
-bucket = "tc-data-airflow-production"
 # full_response_path = "equifax_automated_batch/response/consumer"
 # full_output_path = "equifax_automated_batch/output/consumer"
 
@@ -77,7 +79,7 @@ def _check_if_file_downloaded() -> bool:
 
 
 def _get_filename_from_remote() -> str:
-    hook = SFTPHook(ftp_conn_id="equifax_sftp")
+    hook = SFTPHook(ftp_conn_id=sftp_connection)
     # can safely assume only 1 file will be available every month as Equifax clears the directory after 7 days
     filename = hook.list_directory(path="outbox/")[0]
     filename_list = filename.split(".")
@@ -120,7 +122,7 @@ def get_s3_client() -> Any:
     )
 
 
-def upload_file_s3(file: Any, path: str) -> None:
+def upload_file_s3(file: Any, path: str, bucket: str) -> None:
     file.seek(0)
     try:
         client = get_s3_client()
@@ -184,7 +186,7 @@ def convert_file(bucket_name: str, download_key: str, upload_key: str) -> None:
             upload_key_split = upload_key.split(".")
             upload_key_split.pop()
             upload_key_no_file_type = ".".join(upload_key_split)
-            upload_file_s3(file=formatted, path=f"{upload_key_no_file_type}.csv")
+            upload_file_s3(file=formatted, path=f"{upload_key_no_file_type}.csv", bucket=S3_BUCKET)
     except Exception as e:
         raise Exception(
             f"Unable to get object {download_key} from {bucket_name}: {e} or convert to csv"
@@ -209,7 +211,7 @@ def insert_snowflake(
         )
         column_names.append(col)
     with SnowflakeHook(
-        snowflake_conn_id="airflow_production"
+        snowflake_conn_id=snowflake_connection
     ).get_sqlalchemy_engine().begin() as snowflake:
         if date_formatted:
             pass
@@ -270,7 +272,7 @@ def fix_date_format(table_name_raw: str, upload_key: str) -> None:
     Therefore, we fix the format string value to make them compatible.
     """
     with SnowflakeHook(
-        snowflake_conn_id="airflow_production"
+        snowflake_conn_id=snowflake_connection
     ).get_sqlalchemy_engine().begin() as snowflake:
         select = f"select * from {table_name_raw}"  # nosec
         result = snowflake.execute(select)
@@ -283,7 +285,7 @@ def fix_date_format(table_name_raw: str, upload_key: str) -> None:
         with tempfile.NamedTemporaryFile(mode="w") as file_in:
             df.to_csv(file_in.name, index=False, sep=",")
             with open(file_in.name, "rb") as file:
-                upload_file_s3(file=file, path=upload_key)
+                upload_file_s3(file=file, path=upload_key, bucket=S3_BUCKET)
 
 
 def insert_snowflake_stage(
@@ -351,7 +353,7 @@ task_get_filename_from_remote = PythonOperator(
 task_is_response_file_available = SFTPSensor(
     task_id="is_response_file_available",
     path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
-    sftp_conn_id="equifax_sftp",
+    sftp_conn_id=sftp_connection,
     poke_interval=5,
     timeout=5,
     dag=dag,
@@ -359,10 +361,10 @@ task_is_response_file_available = SFTPSensor(
 
 task_create_sftp_to_s3_job = SFTPToS3Operator(
     task_id="create_sftp_to_s3_job",
-    sftp_conn_id="equifax_sftp",
+    sftp_conn_id=sftp_connection,
     sftp_path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
     s3_conn_id="s3_dataops",
-    s3_bucket="tc-data-airflow-production",
+    s3_bucket=S3_BUCKET,
     s3_key="equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
     on_success_callback=_mark_response_as_downloaded,
     dag=dag,
@@ -373,7 +375,7 @@ task_decrypt_response_file = PythonOperator(
     python_callable=_decrypt_response_file,
     op_kwargs={
         "s3_conn": "s3_dataops",
-        "bucket_name": bucket,
+        "bucket_name": S3_BUCKET,
         "download_key": "equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
         "upload_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt",
     },
@@ -394,7 +396,7 @@ task_convert_file = PythonOperator(
     task_id="convert_file",
     python_callable=convert_file,
     op_kwargs={
-        "bucket_name": bucket,
+        "bucket_name": S3_BUCKET,
         "download_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt",
         "upload_key": "equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
     },
