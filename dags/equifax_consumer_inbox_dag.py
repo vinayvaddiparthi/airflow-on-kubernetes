@@ -240,11 +240,17 @@ def insert_snowflake(
         snowflake.execute(copy)
 
 
+def _get_import_month(ds_nodash: str) -> str:
+    return (
+        datetime.strptime(ds_nodash, "%Y%m%d").replace(day=1) - timedelta(days=1)
+    ).strftime("%Y%m")
+
+
 def insert_snowflake_raw(
-    table_name_raw: str, table_name_raw_history: str, download_key: str
+    table_name_raw: str, table_name_raw_history: str, download_key: str, ds_nodash: str, **_: None,
 ) -> None:
     insert_snowflake(table=table_name_raw, download_key=download_key)
-    insert_snowflake(table=table_name_raw_history, download_key=download_key)
+    insert_snowflake(table=f"{table_name_raw_history}_{_get_import_month(ds_nodash)}", download_key=download_key)
 
 
 def _convert_date_format(value: str) -> Any:
@@ -289,21 +295,17 @@ def fix_date_format(table_name_raw: str, upload_key: str) -> None:
 
 
 def insert_snowflake_stage(
-    table_name: str, table_name_history: str, download_key: str
+    table_name: str, table_name_history: str, download_key: str, ds_nodash: str, **_: None,
 ) -> None:
     insert_snowflake(table=table_name, download_key=download_key, date_formatted=True)
     insert_snowflake(
-        table=table_name_history, download_key=download_key, date_formatted=True
+        table=f"{table_name_history}_{_get_import_month(ds_nodash)}", download_key=download_key, date_formatted=True
     )
 
 
 def insert_snowflake_public(
     source_table: str, destination_table: str, ds_nodash: str, **_: None
 ) -> None:
-    import_month = (
-        datetime.strptime(ds_nodash, "%Y%m%d").replace(day=1) - timedelta(days=1)
-    ).strftime("%Y%m")
-
     columns = [
         "import_month",
         "accountid",
@@ -317,7 +319,7 @@ def insert_snowflake_public(
     sql = f"""
         insert into {destination_table}({columns_string})
         select
-        '{import_month}' as import_month,
+        '{_get_import_month((ds_nodash))}' as import_month,
         null as accountid,
         null as contractid,
         null as business_name,
@@ -325,7 +327,7 @@ def insert_snowflake_public(
         from {source_table} as staging
     """
     with SnowflakeHook(
-        "airflow_production"
+        snowflake_conn_id=snowflake_connection
     ).get_sqlalchemy_engine().begin() as snowflake:
         snowflake.execute(sql)
 
@@ -363,7 +365,7 @@ task_create_sftp_to_s3_job = SFTPToS3Operator(
     task_id="create_sftp_to_s3_job",
     sftp_conn_id=sftp_connection,
     sftp_path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
-    s3_conn_id="s3_dataops",
+    s3_conn_id=s3_connection,
     s3_bucket=S3_BUCKET,
     s3_key="equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
     on_success_callback=_mark_response_as_downloaded,
@@ -374,7 +376,7 @@ task_decrypt_response_file = PythonOperator(
     task_id="decrypt_response_file",
     python_callable=_decrypt_response_file,
     op_kwargs={
-        "s3_conn": "s3_dataops",
+        "s3_conn": s3_connection,
         "bucket_name": S3_BUCKET,
         "download_key": "equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
         "upload_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt",
@@ -408,9 +410,10 @@ task_insert_snowflake_raw = PythonOperator(
     python_callable=insert_snowflake_raw,
     op_kwargs={
         "table_name_raw": "equifax.output.consumer_batch_raw",
-        "table_name_raw_history": "equifax.output_history.consumer_batch_raw_{{ ds_nodash }}",
+        "table_name_raw_history": "equifax.output_history.consumer_batch_raw",
         "download_key": "s3://tc-data-airflow-production/equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
     },
+    provide_context=True,
     dag=dag,
 )
 
@@ -429,9 +432,10 @@ task_insert_snowflake_stage = PythonOperator(
     python_callable=insert_snowflake_stage,
     op_kwargs={
         "table_name": "equifax.output.consumer_batch",
-        "table_name_history": "equifax.output_history.consumer_batch_{{ ds_nodash }}",
+        "table_name_history": "equifax.output_history.consumer_batch",
         "download_key": "s3://tc-data-airflow-production/equifax/consumer/csv_date_format_fixed/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
     },
+    provide_context=True,
     dag=dag,
 )
 
