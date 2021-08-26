@@ -82,7 +82,7 @@ task_check_if_file_sent = ShortCircuitOperator(
 
 task_is_request_file_available = S3KeySensor(
     task_id="is_request_file_available",
-    bucket_key="s3://tc-data-airflow-production/equifax/consumer/request/{{ var.value.equifax_consumer_request_filename }}",
+    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/request_reviewed_by_risk/{{ var.value.equifax_consumer_request_filename }}",
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
@@ -96,7 +96,7 @@ task_encrypt_request_file = PythonOperator(
     op_kwargs={
         "s3_conn": s3_connection,
         "bucket_name": S3_BUCKET,
-        "download_key": "equifax/consumer/request/{{ var.value.equifax_consumer_request_filename }}",
+        "download_key": "equifax/consumer/request_reviewed_by_risk/{{ var.value.equifax_consumer_request_filename }}",
         "upload_key": "equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
     },
     dag=dag,
@@ -104,7 +104,7 @@ task_encrypt_request_file = PythonOperator(
 
 task_is_outbox_file_available = S3KeySensor(
     task_id="is_outbox_file_available",
-    bucket_key="s3://tc-data-airflow-production/equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
+    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
