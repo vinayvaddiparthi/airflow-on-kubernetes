@@ -96,7 +96,7 @@ task_encrypt_request_file = PythonOperator(
     op_kwargs={
         "s3_conn": s3_connection,
         "bucket_name": S3_BUCKET,
-        "download_key": "equifax/consumer/request/{{ var.value.equifax_consumer_request_filename }}",
+        "download_key": "equifax/consumer/request_reviewed_by_risk/{{ var.value.equifax_consumer_request_filename }}",
         "upload_key": "equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
     },
     dag=dag,
