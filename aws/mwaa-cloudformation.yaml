@@ -5,7 +5,7 @@ Parameters:
   EnvironmentName:
     Description: An environment name that is prefixed to resource names
     Type: String
-    Default: MWAAEnvironment
+    Default: MWAAStagingEnvironment
 
   VpcCIDR:
     Description: The IP range (CIDR notation) for this VPC
@@ -33,7 +33,7 @@ Parameters:
   MaxWorkerNodes:
     Description: The maximum number of workers that can run in the environment
     Type: Number
-    Default: 2
+    Default: 20
   DagProcessingLogs:
     Description: Log level for DagProcessing
     Type: String

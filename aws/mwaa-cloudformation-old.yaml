@@ -83,7 +83,7 @@ Resources:
           Enabled: true
           LogLevel: INFO
       MaxWorkers: 20
-      MinWorkers: 1
+      MinWorkers: 2
       Name: staging-airflow
       NetworkConfiguration:
         SecurityGroupIds:

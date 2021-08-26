@@ -1,0 +1,291 @@
+build aws cloudformation image:
+  extends: .build
+  stage: build
+  variables:
+    BUILD_IMAGE_NAME: "$CI_REGISTRY_IMAGE/aws-cloudformation:$CI_COMMIT_SHA"
+  script:
+    - docker build -t "$BUILD_IMAGE_NAME" -f "aws/cloudformation/Dockerfile" --build-arg BASE_VERSION="$CI_COMMIT_SHA" .
+
+test aws cloudformation command:
+  extends: .test-command
+  variables:
+    BUILD_IMAGE_NAME: "$CI_REGISTRY_IMAGE/aws-cloudformation:$CI_COMMIT_SHA"
+  script:
+    - jq --version
+    - bc --version
+    - aws cloudformation help
+
+publish aws cloudformation:
+  extends: .publish-tag
+  variables:
+    BUILD_IMAGE_NAME: "$CI_REGISTRY_IMAGE/aws-cloudformation:$CI_COMMIT_SHA"
+    IMAGE_NAME_FOR_REGISTRY: "$CI_REGISTRY_IMAGE/aws-cloudformation"
+
+
+
+
+# default:
+#   image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest #Docker image to use for build jobs
+#
+# variables:
+#   PROD_ACCOUNT: "810110616880" #12-digit account ID for your production AWS environment
+#   STAGING_ACCOUNT: "625892522339" #12-digit account ID for your staging AWS environment
+#   DEV_ACCOUNT: "623810217472" #12-digit account ID for your dev AWS environment
+#   DEV_REGION: ca-central-1 #Deployment AWS region for your development environment
+#   STAGING_REGION: ca-central-1 #Deployment AWS region for your staging environment
+#   PROD_REGION: ca-central-1 #Deployment AWS region for your production environment
+#   CI_ROLE_NAME: gitlab-ci-deployment #'SharedServiceRoleName' output from deployed setup-templates/roles.yml
+#   DEPLOYMENT_ROLE_NAME: gitlab-ci-passed-role #'SharedDeploymentRoleName' output from deployed x-account-roles/roles.yml
+#   CI_BUCKET: my-ci-bucket #'ArtifactBucket' output from deployed setup-templates/ci-bucket.yml
+#   DEV_HOSTED_ZONE_NAME: dev.mycompany.com #OPTIONAL - only needed if you want a DNS name for your review apps. Don't include trailing dot
+#   STAGING_HOSTED_ZONE_NAME: staging.mycompany.com #OPTIONAL - only needed if you want a DNS name for your review apps. Don't include trailing dot
+#   PROD_HOSTED_ZONE_NAME: prod.mycompany.com #OPTIONAL - only needed if you want a DNS name for your review apps. Don't include trailing dot
+#   DEV_ACM_CERT_ID: asdfg12-sdfa-asdf-1234-0a2b3c4f5gasdf #OPTIONAL - only needed if you want a DNS name for your review apps.
+#   STAGING_ACM_CERT_ID: asdfg12-sdfa-asdf-1234-0a2b3c4f5gasdf #OPTIONAL - only needed if you want a DNS name for your review apps.
+#   PROD_ACM_CERT_ID: asdfg12-sdfa-asdf-1234-0a2b3c4f5gasdf #OPTIONAL - only needed if you want a DNS name for your review apps.
+#   SES_SENDER_ADDRESS: devsecops@thinkingcapital.ca #Email address to send weekly emails from
+#
+# .dev_variables: &dev_variables
+#   STAGE: ${CI_COMMIT_REF_NAME}
+#   REGION: ${DEV_REGION}
+#   SERVICE_ROLE: "arn:aws:iam::${DEV_ACCOUNT}:role/${CI_ROLE_NAME}"
+#   DEPLOYMENT_ROLE: "arn:aws:iam::${DEV_ACCOUNT}:role/${DEPLOYMENT_ROLE_NAME}"
+#   # HOSTED_ZONE_NAME: ${DEV_HOSTED_ZONE_NAME} ==>
+#   ACM_CERT_ARN: arn:aws:acm:${DEV_REGION}:${DEV_ACCOUNT}:certificate/${DEV_ACM_CERT_ID}
+#   VERIFIED_SES_SENDER: arn:aws:ses:${DEV_REGION}:${DEV_ACCOUNT}:identity/${SES_SENDER_ADDRESS}
+#
+# .staging_variables: &staging_variables
+#   STAGE: staging
+#   REGION: ${STAGING_REGION}
+#   SERVICE_ROLE: "arn:aws:iam::${STAGING_ACCOUNT}:role/${CI_ROLE_NAME}"
+#   DEPLOYMENT_ROLE: "arn:aws:iam::${STAGING_ACCOUNT}:role/${DEPLOYMENT_ROLE_NAME}"
+#   HOSTED_ZONE_NAME: ${STAGING_HOSTED_ZONE_NAME}
+#   ACM_CERT_ARN: arn:aws:acm:${STAGING_REGION}:${STAGING_ACCOUNT}:certificate/${STAGING_ACM_CERT_ID}
+#   VERIFIED_SES_SENDER: arn:aws:ses:${STAGING_REGION}:${STAGING_ACCOUNT}:identity/${SES_SENDER_ADDRESS}
+#
+# .prod_variables: &prod_variables
+#   STAGE: prod
+#   REGION: ${PROD_REGION}
+#   SERVICE_ROLE: "arn:aws:iam::${PROD_ACCOUNT}:role/${CI_ROLE_NAME}"
+#   DEPLOYMENT_ROLE: "arn:aws:iam::${PROD_ACCOUNT}:role/${DEPLOYMENT_ROLE_NAME}"
+#   HOSTED_ZONE_NAME: ${PROD_HOSTED_ZONE_NAME}
+#   ACM_CERT_ARN: arn:aws:acm:${PROD_REGION}:${PROD_ACCOUNT}:certificate/${PROD_ACM_CERT_ID}
+#   VERIFIED_SES_SENDER: arn:aws:ses:${PROD_REGION}:${PROD_ACCOUNT}:identity/${SES_SENDER_ADDRESS}
+#
+# cache:
+#   key: ${CI_COMMIT_REF_NAME}
+#   untracked: true
+#
+# stages:
+#   - test
+#   - build-dev
+#   - deploy-dev
+#   - build-staging
+#   - deploy-staging
+#   - create-change-prod
+#   - execute-change-prod
+#
+# .build_script: &build_script
+#   script: |
+#     pip install awscli==1.16.41
+#     echo "===== building Lambda package ====="
+#     if test -f requirements.txt; then
+#       pip install -t functions/ -r requirements.txt
+#     fi
+#     source ./assume-role.sh "${REGION}" "${CI_COMMIT_TAG}" "${SERVICE_ROLE}"
+#     aws cloudformation package --template-file sam.yml --s3-bucket ${CI_BUCKET} --output-template-file deployment.yml
+#
+# .create_change_script: &create_change_script
+#   script: |
+#     echo "===== creating changeset for stack ${CI_PROJECT_NAME}-${STAGE} in ${CI_ENVIRONMENT_NAME} environment ====="
+#     source ./assume-role.sh "${REGION}" "${CI_COMMIT_TAG}" "${SERVICE_ROLE}"
+#     TEST_STACK=(`aws cloudformation describe-stacks --stack-name ${CI_PROJECT_NAME}-${STAGE} --region $REGION --output text || true`)
+#     CHANGE_TYPE="UPDATE"
+#     if [ -z "$TEST_STACK" ]; then
+#       CHANGE_TYPE="CREATE"
+#     fi
+#     pip install awscli==1.16.41
+#     aws cloudformation create-change-set \
+#     --stack-name ${CI_PROJECT_NAME}-${STAGE} \
+#     --template-body file://${CI_PROJECT_DIR}/deployment.yml \
+#     --role-arn ${DEPLOYMENT_ROLE} \
+#     --change-set-name changeset-${CI_COMMIT_REF_SLUG} \
+#     --change-set-type $CHANGE_TYPE \
+#     --parameters \
+#       ParameterKey=HostedZoneName,ParameterValue="${HOSTED_ZONE_NAME}" \
+#       ParameterKey=Stage,ParameterValue="${STAGE}" \
+#       ParameterKey=CertificateArn,ParameterValue="${ACM_CERT_ARN}" \
+#       ParameterKey=VerifiedSenderArn,ParameterValue="${VERIFIED_SES_SENDER}" \
+#       ParameterKey=SenderEmail,ParameterValue="${SES_SENDER_ADDRESS}" \
+#     --capabilities CAPABILITY_NAMED_IAM \
+#     --tags Key=Stage,Value=${STAGE}
+#
+# .execute_change_script: &execute_change_script
+#   script: |
+#     echo "===== executing changeset for stack ${CI_PROJECT_NAME}-${STAGE} in ${CI_ENVIRONMENT_NAME} environment ====="
+#     source ./assume-role.sh "${REGION}" "${CI_COMMIT_TAG}" "${SERVICE_ROLE}"
+#     STATUS=(`aws cloudformation describe-change-set --change-set-name changeset-${CI_COMMIT_REF_SLUG} --stack-name ${CI_PROJECT_NAME}-${STAGE} --region ${REGION} --query Status --output text`)
+#     if [ "$STATUS" != "FAILED" ]; then
+#       aws cloudformation execute-change-set --stack-name ${CI_PROJECT_NAME}-${STAGE} --change-set-name changeset-${CI_COMMIT_REF_SLUG} --region ${REGION}
+#       ./cfn-wait.sh ${CI_PROJECT_NAME}-${STAGE} ${REGION}
+#     fi
+#
+# .deploy_script: &deploy_script
+#   script: |
+#     echo "===== executing changeset for stack ${CI_PROJECT_NAME}-${STAGE} in ${CI_ENVIRONMENT_NAME} environment ====="
+#     source ./assume-role.sh "${REGION}" "${CI_COMMIT_TAG}" "${SERVICE_ROLE}"
+#     pip install awscli==1.16.57
+#     aws cloudformation deploy \
+#     --stack-name ${CI_PROJECT_NAME}-${STAGE} \
+#     --template-file ${CI_PROJECT_DIR}/deployment.yml \
+#     --role-arn ${DEPLOYMENT_ROLE} \
+#     --no-fail-on-empty-changeset \
+#     --parameter-overrides \
+#       HostedZoneName="${HOSTED_ZONE_NAME}" \
+#       Stage="${STAGE}" \
+#       CertificateArn="${ACM_CERT_ARN}" \
+#       VerifiedSenderArn="${VERIFIED_SES_SENDER}" \
+#       SenderEmail="${SES_SENDER_ADDRESS}" \
+#     --capabilities CAPABILITY_NAMED_IAM \
+#     --tags Stage=${STAGE}
+#     ./cfn-wait.sh ${CI_PROJECT_NAME}-${STAGE} ${REGION}
+#
+# .shutdown_script: &shutdown_script
+#   script: |
+#     echo "===== Deleting stack ${CI_PROJECT_NAME}-${STAGE} ====="
+#     ls
+#     source ./assume-role.sh "${REGION}" "${CI_COMMIT_TAG}" "${SERVICE_ROLE}"
+#     aws cloudformation delete-stack --stack-name ${CI_PROJECT_NAME}-${STAGE} --region ${REGION}
+#     ./cfn-wait.sh ${CI_PROJECT_NAME}-${STAGE} ${REGION}
+#
+# test:unit:
+#   stage: test
+#   only:
+#     - branches
+#   script: |
+#     if test -f package.json; then
+#       npm install --loglevel error;
+#       npm run test;
+#     elif test -f requirements.txt; then
+#         pip install -r requirements.txt
+#         python -m pytest --ignore=functions/
+#     elif test -f pom.xml; then
+#         mvn verify
+#     else
+#       echo "no test file found to run tests from";
+#     fi
+#
+#
+# dependency_scanning:
+#   stage: test
+#   image: docker:stable
+#   only:
+#     - master
+#   variables:
+#     DOCKER_DRIVER: overlay2
+#   allow_failure: true
+#   services:
+#     - docker:stable-dind
+#   script:
+#     - export SP_VERSION=$(echo "$CI_SERVER_VERSION" | sed 's/^\([0-9]*\)\.\([0-9]*\).*/\1-\2-stable/')
+#     - echo $PWD
+#     - docker run
+#         --env DEP_SCAN_DISABLE_REMOTE_CHECKS="${DEP_SCAN_DISABLE_REMOTE_CHECKS:-false}"
+#         --volume "$PWD:/code"
+#         --volume /var/run/docker.sock:/var/run/docker.sock
+#         "registry.gitlab.com/gitlab-org/security-products/dependency-scanning:$SP_VERSION" .
+#   artifacts:
+#     paths: [gl-dependency-scanning-report.json]
+#
+# build:dev:
+#   stage: build-dev
+#   <<: *build_script
+#   variables:
+#     <<: *dev_variables
+#   artifacts:
+#     paths:
+#       - deployment.yml
+#       - assume-role.sh
+#       - cfn-wait.sh
+#     expire_in: 1 week
+#   only:
+#     - branches
+#   except:
+#     - master
+#
+# build:staging:
+#   stage: build-staging
+#   <<: *build_script
+#   variables:
+#     <<: *staging_variables
+#   artifacts:
+#     paths:
+#       - deployment.yml
+#     expire_in: 1 week
+#   only:
+#     - master
+#
+# execute:production:
+#   stage: execute-change-prod
+#   <<: *execute_change_script
+#   variables:
+#     <<: *prod_variables
+#   environment:
+#     name: prod
+#     url: https://prod.${PROD_HOSTED_ZONE_NAME}/services
+#   when: manual
+#   only:
+#     - master
+#
+# deploy:staging:
+#   stage: deploy-staging
+#   dependencies:
+#     - build:staging
+#   <<: *deploy_script
+#   variables:
+#     <<: *staging_variables
+#   environment:
+#     name: staging
+#     url: https://staging.${STAGING_HOSTED_ZONE_NAME}/services
+#   only:
+#     - master
+#
+# create-changeset:production:
+#   <<: *create_change_script
+#   stage: create-change-prod
+#   dependencies:
+#     - deploy:staging
+#   variables:
+#     <<: *prod_variables
+#   only:
+#     - master
+#
+# deploy:dev:
+#   <<: *deploy_script
+#   stage: deploy-dev
+#   dependencies:
+#     - build:dev
+#   variables:
+#     <<: *dev_variables
+#   environment:
+#     name: review/$CI_COMMIT_REF_NAME
+#     url: https://${CI_COMMIT_REF_NAME}.${DEV_HOSTED_ZONE_NAME}/services
+#     on_stop: stop:dev
+#   only:
+#     - branches
+#   except:
+#     - master
+#
+# stop:dev:
+#   stage: deploy-dev
+#   variables:
+#     <<: *dev_variables
+#   <<: *shutdown_script
+#   when: manual
+#   environment:
+#     name: review/$CI_COMMIT_REF_NAME
+#     action: stop
+#   only:
+#     - branches
+#   except:
+#     - master

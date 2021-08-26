@@ -1,0 +1,63 @@
+# Deploy these roles in any AWS account where application resources will be deployed (dev, staging, prod)
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  CIAccountID:
+    Type: String
+    Description: The AWS Account ID for the account where the Gitlab runner lives
+  CIAccountSTSCondition:
+    Type: String
+    Description: The aws:userid for the IAM principal used by the Gitlab runner (see https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_variables.html#principaltable)
+    NoEcho: True
+
+Resources:
+  SharedServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: gitlab-ci-deployment
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${CIAccountID}:root
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:userid: !Ref CIAccountSTSCondition
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: '*'
+                Effect: Allow
+                Action:
+                  - iam:PassRole
+                  - cloudformation:*
+                  - cloudfront:*
+                  - s3:*
+                  - iam:CreateServiceLinkedRole
+  
+  SharedDeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: gitlab-ci-passed-role
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+Outputs:
+  SharedServiceRoleName:
+    Value: !GetAtt SharedServiceRole
+  SharedDeploymentRoleName:
+    Value: !GetAtt SharedDeploymentRole
