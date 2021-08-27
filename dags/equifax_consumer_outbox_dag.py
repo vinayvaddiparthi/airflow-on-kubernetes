@@ -10,9 +10,10 @@ from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
-from datetime import datetime, timedelta
-from typing import Dict
+import pendulum
 import logging
+from datetime import timedelta
+from typing import Dict
 
 from utils.failure_callbacks import slack_dag, sensor_timeout
 from utils.gpg import init_gnupg
@@ -26,7 +27,9 @@ default_args = {
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
     "on_failure_callback": slack_dag("slack_data_alerts"),
-    "start_date": datetime(2021, 1, 1),
+    "start_date": pendulum.datetime(
+        2021, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+    ),
     "catchup": False,
     "tags": ["equifax"],
     "description": "A workflow to send the consumer batch request file to Equifax",
