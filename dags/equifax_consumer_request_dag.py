@@ -1,5 +1,8 @@
-# This dag generates request file for monthly Equifax consumer request file(.txt)
-# encoded in [windows-1252] or [iso-8859-1]
+"""
+#### Description
+This dag generates request file for monthly Equifax consumer request file(.txt)
+encoded in [windows-1252] or [iso-8859-1]
+"""
 from airflow import DAG
 from airflow.models import Variable
 from airflow.models.dagrun import DagRun
@@ -38,6 +41,7 @@ dag = DAG(
     schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
     on_failure_callback=slack_dag("slack_data_alerts"),
 )
+dag.doc_md = __doc__
 
 snowflake_connection = "airflow_production"
 s3_connection = "s3_dataops"
