@@ -61,3 +61,4 @@ pyjwt<2.0 # pinned because of snowflake connector
 pytz<2021.0 # pinned because of snowflake connector
 
 numba==0.53.1  # pinned because of fastparquet issues in zetatango_import dag
+snowflake-connector-python<=2.5.1 # pinned to fix failures encountered with 2.6.0 version
