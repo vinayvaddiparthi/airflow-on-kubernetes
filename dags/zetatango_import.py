@@ -465,6 +465,35 @@ def create_dag() -> DAG:
             },
         )
 
+        decrypt_idp_prod = PythonOperator(
+            task_id="zt-production-elt-idp__pii_decryption",
+            python_callable=decrypt_pii_columns,
+            op_kwargs={
+                "snowflake_connection": "snowflake_zetatango_production",
+                "decryption_specs": [
+                    DecryptionSpec(
+                        schema="IDP_PRODUCTION",
+                        table="POLY_PROPERTIES",
+                        columns=[
+                            "merchant",
+                        ],
+                    ),
+                ],
+                "target_schema": "PII_PRODUCTION",
+            },
+            executor_config={
+                "KubernetesExecutor": {
+                    "annotations": {
+                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
+                        "KubernetesAirflowProductionZetatangoPiiRole"
+                    }
+                },
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                },
+            },
+        )
+
         import_kyc_prod = PythonOperator(
             task_id="zt-production-elt-kyc__import",
             python_callable=export_to_snowflake,
@@ -556,13 +585,13 @@ def create_dag() -> DAG:
         )
 
         dag << import_core_prod >> decrypt_core_prod
-        dag << import_idp_prod
+        dag << import_idp_prod >> decrypt_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
         (
             [
                 decrypt_core_prod,
                 decrypt_kyc_prod,
-                import_idp_prod,
+                decrypt_idp_prod,
             ]
             >> dbt_run
             >> dbt_snapshot
