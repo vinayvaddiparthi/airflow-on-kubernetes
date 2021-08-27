@@ -1,11 +1,5 @@
 # This dag generates request file for monthly Equifax consumer request file(.txt)
 # encoded in [windows-1252] or [iso-8859-1]
-import logging
-import tempfile
-from datetime import datetime, timedelta
-from pathlib import Path
-from fs import open_fs, copy
-
 from airflow import DAG
 from airflow.models import Variable
 from airflow.models.dagrun import DagRun
@@ -14,6 +8,12 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
+import logging
+import tempfile
+import pendulum
+from datetime import timedelta
+from pathlib import Path
+from fs import open_fs, copy
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 from jinja2 import Template
@@ -26,7 +26,7 @@ from utils.failure_callbacks import slack_dag
 
 default_args = {
     "owner": "airflow",
-    "start_date": datetime(2020, 1, 1, 00, 00, 00),
+    "start_date": pendulum.datetime(2020, 1, 1, tzinfo=pendulum.timezone("America/Toronto")),
     "concurrency": 1,
     "retries": 3,
 }

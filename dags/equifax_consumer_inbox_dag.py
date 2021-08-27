@@ -13,11 +13,12 @@ from airflow.providers.sftp.hooks.sftp import SFTPHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 
-from datetime import datetime, timedelta
+import pendulum
 import logging
 import boto3
 import pandas as pd
 import tempfile
+from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 from helpers.aws_hack import hack_clear_aws_keys
@@ -28,7 +29,7 @@ from utils.reference_data import result_dict, date_columns, personal_info
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
-    "start_date": datetime(2021, 1, 1),
+    "start_date": pendulum.datetime(2021, 1, 1, tzinfo=pendulum.timezone("America/Toronto")),
     "retries": 0,
     "catchup": False,
     "on_failure_callback": slack_dag("slack_data_alerts"),
