@@ -57,8 +57,9 @@ def _check_if_file_downloaded() -> bool:
 
 def _get_filename_from_remote() -> str:
     hook = SFTPHook(ftp_conn_id=sftp_connection)
-    # can safely assume only 1 file will be available every month as Equifax clears the directory after 7 days
-    filename = hook.list_directory(path="outbox/")[0]
+    files = hook.list_directory(path="outbox/")
+    # can safely assume only 1 consumer file will be available every month as Equifax clears the directory after 7 days
+    filename = [file for file in files if file.startswith("exthinkingpd.eqxcan.ds")][0]
     filename_list = filename.split(".")
     filename_list_no_file_type = filename_list[:-2]
     filename_no_file_type = ".".join(filename_list_no_file_type)
