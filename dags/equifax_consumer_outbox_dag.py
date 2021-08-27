@@ -27,7 +27,9 @@ default_args = {
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
     "on_failure_callback": slack_dag("slack_data_alerts"),
-    "start_date": pendulum.datetime(2021, 1, 1, tzinfo=pendulum.timezone("America/Toronto")),
+    "start_date": pendulum.datetime(
+        2021, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+    ),
     "catchup": False,
     "tags": ["equifax"],
     "description": "A workflow to send the consumer batch request file to Equifax",

@@ -29,7 +29,9 @@ from utils.reference_data import result_dict, date_columns, personal_info
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
-    "start_date": pendulum.datetime(2021, 1, 1, tzinfo=pendulum.timezone("America/Toronto")),
+    "start_date": pendulum.datetime(
+        2021, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+    ),
     "retries": 0,
     "catchup": False,
     "on_failure_callback": slack_dag("slack_data_alerts"),

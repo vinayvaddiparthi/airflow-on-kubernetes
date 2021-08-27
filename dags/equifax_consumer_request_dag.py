@@ -29,7 +29,9 @@ from utils.failure_callbacks import slack_dag
 
 default_args = {
     "owner": "airflow",
-    "start_date": pendulum.datetime(2020, 1, 1, tzinfo=pendulum.timezone("America/Toronto")),
+    "start_date": pendulum.datetime(
+        2020, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+    ),
     "concurrency": 1,
     "retries": 3,
 }
