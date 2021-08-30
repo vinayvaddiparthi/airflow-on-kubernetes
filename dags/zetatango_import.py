@@ -475,6 +475,7 @@ def create_dag() -> DAG:
                         schema="IDP_PRODUCTION",
                         table="POLY_PROPERTIES",
                         columns=["value"],
+                        format="marshal",
                     ),
                 ],
                 "target_schema": "PII_PRODUCTION",
