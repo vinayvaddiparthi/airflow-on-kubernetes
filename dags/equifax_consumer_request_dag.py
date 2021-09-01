@@ -189,7 +189,6 @@ with
         eligible_applicant.applicant_guid = applicant_with_attributes.applicant_guid
       left join applicant_with_address on
         eligible_applicant.applicant_guid = applicant_with_address.applicant_guid
-      where eligible_applicant.applicant_guid != 'app_JRagcMvXYyziw7bx'  // remove White Lake Private Resort
     )
 select
     row_number() over (order by applicant_guid) as id,
