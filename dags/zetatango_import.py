@@ -530,7 +530,12 @@ def create_dag() -> DAG:
                         columns=["value"],
                         format="marshal",
                         whereclause=literal_column("$1:key").in_(
-                            ["default_beacon_score"]
+                            [
+                                "default_beacon_score",
+                                "sin",
+                                "suffix",
+                                "file_number",
+                            ]
                         ),
                     ),
                     DecryptionSpec(
@@ -545,6 +550,16 @@ def create_dag() -> DAG:
                                 "flinks_account_type",
                                 "flinks_account_id",
                                 "stale",
+                            ]
+                        ),
+                    ),
+                    DecryptionSpec(
+                        schema="KYC_PRODUCTION",
+                        table="ENTITIES_BUSINESS_ATTRIBUTES",
+                        columns=["value"],
+                        whereclause=literal_column("$1:key").in_(
+                            [
+                                "file_number",
                             ]
                         ),
                     ),
