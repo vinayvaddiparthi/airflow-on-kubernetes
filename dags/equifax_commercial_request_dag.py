@@ -174,7 +174,6 @@ with
         eligible_merchant.merchant_guid = merchant_with_phone_number.merchant_guid
       left join merchant_with_attributes on
         eligible_merchant.merchant_guid = merchant_with_attributes.merchant_guid
-      where eligible_merchant.merchant_guid != 'm_r8YoERK5m6LexnDa'  // remove White Lake Private Resort
     )
 select
     row_number() over (order by merchant_guid) as id,
