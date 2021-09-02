@@ -5,6 +5,7 @@ response file will be processed and uploaded to Snowflake.
 """
 from airflow import DAG
 from airflow.models import Variable
+from airflow.models.taskinstance import TaskInstance
 from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
 from airflow.providers.amazon.aws.transfers.sftp_to_s3 import SFTPToS3Operator
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
@@ -58,16 +59,23 @@ def _check_if_file_downloaded() -> bool:
     return Variable.get("equifax_consumer_response_downloaded") != "True"
 
 
-def _get_filename_from_remote() -> str:
+def _check_if_response_available(task_instance: TaskInstance, **_: None) -> bool:
     hook = SFTPHook(ftp_conn_id=sftp_connection)
     files = hook.list_directory(path="outbox/")
+    if len(files) == 0:
+        return False
     # can safely assume only 1 consumer file will be available every month as Equifax clears the directory after 7 days
-    filename = [file for file in files if file.startswith("exthinkingpd.eqxcan.ds")][0]
-    filename_list = filename.split(".")
+    filename = [file for file in files if file.startswith("exthinkingpd.eqxcan.ds")]
+    if len(filename) == 0:
+        return False
+    filename_list = filename[0].split(".")
     filename_list_no_file_type = filename_list[:-2]
     filename_no_file_type = ".".join(filename_list_no_file_type)
     logging.info(filename_no_file_type)
-    return filename_no_file_type
+    task_instance.xcom_push(
+        key="check_if_response_available", value=filename_no_file_type
+    )
+    return True
 
 
 def _mark_response_as_downloaded(context: Dict) -> None:
@@ -329,19 +337,20 @@ task_check_if_file_downloaded = ShortCircuitOperator(
     dag=dag,
 )
 
-task_get_filename_from_remote = PythonOperator(
-    task_id="get_filename_from_remote",
-    python_callable=_get_filename_from_remote,
+task_check_if_response_available = ShortCircuitOperator(
+    task_id="check_if_response_available",
+    python_callable=_check_if_response_available,
+    provide_context=True,
     dag=dag,
 )
 
 task_create_sftp_to_s3_job = SFTPToS3Operator(
     task_id="create_sftp_to_s3_job",
     sftp_conn_id=sftp_connection,
-    sftp_path="outbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
+    sftp_path="outbox/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.txt.pgp",
     s3_conn_id=s3_connection,
     s3_bucket=S3_BUCKET,
-    s3_key="equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
+    s3_key="equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.txt.pgp",
     on_success_callback=_mark_response_as_downloaded,
     dag=dag,
 )
@@ -352,15 +361,15 @@ task_decrypt_response_file = PythonOperator(
     op_kwargs={
         "s3_conn": s3_connection,
         "bucket_name": S3_BUCKET,
-        "download_key": "equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt.pgp",
-        "upload_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt",
+        "download_key": "equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.txt.pgp",
+        "upload_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.txt",
     },
     dag=dag,
 )
 
 task_is_decrypted_response_file_available = S3KeySensor(
     task_id="is_decrypted_response_file_available",
-    bucket_key="s3://tc-data-airflow-production/equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt",
+    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/decrypted/{{{{ ti.xcom_pull(task_ids='check_if_response_available') }}}}.txt",
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
@@ -373,8 +382,8 @@ task_convert_file = PythonOperator(
     python_callable=convert_file,
     op_kwargs={
         "bucket_name": S3_BUCKET,
-        "download_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.txt",
-        "upload_key": "equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
+        "download_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.txt",
+        "upload_key": "equifax/consumer/csv/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.csv",
     },
     dag=dag,
 )
@@ -385,7 +394,7 @@ task_insert_snowflake_raw = PythonOperator(
     op_kwargs={
         "table_name_raw": "equifax.output.consumer_batch_raw",
         "table_name_raw_history": "equifax.output_history.consumer_batch_raw",
-        "download_key": "s3://tc-data-airflow-production/equifax/consumer/csv/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
+        "download_key": f"s3://{S3_BUCKET}/equifax/consumer/csv/{{{{ ti.xcom_pull(task_ids='check_if_response_available') }}}}.csv",
     },
     provide_context=True,
     dag=dag,
@@ -396,7 +405,7 @@ task_fix_date = PythonOperator(
     python_callable=fix_date_format,
     op_kwargs={
         "table_name_raw": "equifax.output.consumer_batch_raw",
-        "upload_key": "equifax/consumer/csv_date_format_fixed/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}_date_format_fixed.csv",
+        "upload_key": "equifax/consumer/csv_date_format_fixed/{{ ti.xcom_pull(task_ids='check_if_response_available') }}_date_format_fixed.csv",
     },
     dag=dag,
 )
@@ -407,7 +416,7 @@ task_insert_snowflake_stage = PythonOperator(
     op_kwargs={
         "table_name": "equifax.output.consumer_batch",
         "table_name_history": "equifax.output_history.consumer_batch",
-        "download_key": "s3://tc-data-airflow-production/equifax/consumer/csv_date_format_fixed/{{ ti.xcom_pull(task_ids='get_filename_from_remote') }}.csv",
+        "download_key": f"s3://{S3_BUCKET}/equifax/consumer/csv_date_format_fixed/{{{{ ti.xcom_pull(task_ids='check_if_response_available') }}}}.csv",
     },
     provide_context=True,
     dag=dag,
@@ -426,7 +435,7 @@ task_insert_snowflake_public = PythonOperator(
 
 (
     task_check_if_file_downloaded
-    >> task_get_filename_from_remote
+    >> task_check_if_response_available
     >> task_create_sftp_to_s3_job
     >> task_decrypt_response_file
     >> task_is_decrypted_response_file_available
