@@ -8,7 +8,8 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 import logging
 import tempfile
-from datetime import datetime, timedelta
+import pendulum
+from datetime import timedelta
 from pathlib import Path
 from fs import open_fs, copy
 from sqlalchemy import text
@@ -21,17 +22,21 @@ from utils.failure_callbacks import slack_dag
 
 default_args = {
     "owner": "airflow",
-    "start_date": datetime(2020, 1, 1, 00, 00, 00),
+    "start_date": pendulum.datetime(
+        2020, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+    ),
     "concurrency": 1,
     "retries": 3,
+    "on_failure_callback": slack_dag("slack_data_alerts"),
+    "catchup": False,
+    "tags": ["equifax"],
+    "description": "A workflow to generate the commercial batch request file to send to Equifax.",
 }
 
 dag = DAG(
     dag_id="equifax_commercial_request",
-    catchup=False,
     default_args=default_args,
-    schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
-    on_failure_callback=slack_dag("slack_data_alerts"),
+    schedule_interval="0 0 1 1-11/2 *",
 )
 
 snowflake_connection = "airflow_production"
