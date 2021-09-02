@@ -85,7 +85,7 @@ task_check_if_file_sent = ShortCircuitOperator(
 
 task_is_request_file_available = S3KeySensor(
     task_id="is_request_file_available",
-    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/request_reviewed_by_risk/{{ var.value.equifax_consumer_request_filename }}",
+    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/request_reviewed_by_risk/{{{{ var.value.equifax_consumer_request_filename }}}}",
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
@@ -107,7 +107,7 @@ task_encrypt_request_file = PythonOperator(
 
 task_is_outbox_file_available = S3KeySensor(
     task_id="is_outbox_file_available",
-    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
+    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/outbox/{{{{ var.value.equifax_consumer_request_filename }}}}.pgp",
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
