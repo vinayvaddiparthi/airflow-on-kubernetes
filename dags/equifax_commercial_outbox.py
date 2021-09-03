@@ -100,16 +100,6 @@ encrypt_request_file = PythonOperator(
     dag=dag,
 )
 
-is_outbox_file_available = S3KeySensor(
-    task_id="is_outbox_file_available",
-    bucket_key=f"s3://{S3_BUCKET}/{DIR_PATH}/outbox/{{{{ var.value.equifax_commercial_request_filename }}}}.pgp",
-    aws_conn_id=S3_CONN,
-    poke_interval=5,
-    timeout=20,
-    on_failure_callback=sensor_timeout,
-    dag=dag,
-)
-
 create_s3_to_sftp_job = S3ToSFTPOperator(
     task_id="create_s3_to_sftp_job",
     sftp_conn_id=SFTP_CONN,
@@ -125,6 +115,5 @@ create_s3_to_sftp_job = S3ToSFTPOperator(
     check_if_file_sent
     >> is_request_file_available
     >> encrypt_request_file
-    >> is_outbox_file_available
     >> create_s3_to_sftp_job
 )
