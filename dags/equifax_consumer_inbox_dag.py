@@ -418,7 +418,7 @@ insert_snowflake_stage = PythonOperator(
     op_kwargs={
         "table_name": "equifax.output.consumer_batch",
         "table_name_history": "equifax.output_history.consumer_batch",
-        "download_key": f"s3://{S3_BUCKET}/equifax/consumer/csv_date_format_fixed/{CONSUMER_FILENAME}.csv",
+        "download_key": f"s3://{S3_BUCKET}/equifax/consumer/csv_date_format_fixed/{CONSUMER_FILENAME}_date_format_fixed.csv",
     },
     provide_context=True,
     dag=dag,
