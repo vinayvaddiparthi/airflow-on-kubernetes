@@ -55,7 +55,7 @@ def _mark_request_as_sent(context: Dict) -> None:
     logging.info("Commercial request file successfully sent to Equifax")
 
 
-def _encrypt_request_file():
+def _encrypt_request_file() -> None:
     s3 = S3Hook(aws_conn_id=S3_CONN)
     filename = s3.download_file(
         key=f"{DIR_PATH}/request/{{{{ var.value.equifax_commercial_request_filename }}}}",
