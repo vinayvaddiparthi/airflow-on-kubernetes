@@ -41,7 +41,7 @@ dag = DAG(
 
 snowflake_connection = "airflow_production"
 s3_connection = "s3_dataops"
-output_bucket = "tc-data-airflow-production"
+output_bucket = f"tc-data-airflow-{'production' if Variable.get('environment') == 'production' else 'staging'}"
 output_folder = "equifax/commercial/request"
 
 statement = text(
@@ -189,7 +189,7 @@ from final
 )
 
 
-def generate_file(
+def _generate_file(
     snowflake_conn: str,
     s3_conn: str,
     bucket: str,
@@ -235,11 +235,12 @@ def generate_file(
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
     Variable.set("equifax_commercial_request_filename", file_name)
     Variable.set("equifax_commercial_request_sent", False)
+    Variable.set("equifax_commercial_response_downloaded", False)
 
 
-task_generate_file = PythonOperator(
+generate_file = PythonOperator(
     task_id="generate_file",
-    python_callable=generate_file,
+    python_callable=_generate_file,
     op_kwargs={
         "snowflake_conn": snowflake_connection,
         "s3_conn": s3_connection,
