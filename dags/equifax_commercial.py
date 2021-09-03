@@ -97,9 +97,16 @@ def sync_sshfs_to_s3fs(aws_conn: str, sshfs_conn: str) -> None:
         s3fs, sshfs = _get_s3fs_from_conn(aws_conn), _get_sshfs_from_conn(sshfs_conn)
 
         remote_files = sshfs.listdir("outbox")
+        commercial_remote_files = [
+            file
+            for file in remote_files
+            if file.startswith("exthinkingpd.eqxcan.eqxcom")
+        ]
         local_files = set(s3fs.listdir("inbox"))  # cast to set for O(1) lookup
 
-        for file in (file for file in remote_files if file not in local_files):
+        for file in (
+            file for file in commercial_remote_files if file not in local_files
+        ):
             with sshfs.open(f"outbox/{file}", "rb") as origin_file, s3fs.open(
                 f"inbox/{file}", "wb"
             ) as dest_file:

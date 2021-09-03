@@ -53,7 +53,10 @@ S3_BUCKET = "tc-data-airflow-production"
 aws_hook = AwsBaseHook(aws_conn_id=s3_connection, client_type="s3")
 aws_credentials = aws_hook.get_credentials()
 sftp_connection = "equifax_sftp"
-CONSUMER_FILENAME = "{{ ti.xcom_pull(task_ids='check_if_response_available', key='filename') }}"
+CONSUMER_FILENAME = (
+    "{{ ti.xcom_pull(task_ids='check_if_response_available', key='filename') }}"
+)
+
 
 def _check_if_file_downloaded() -> bool:
     return Variable.get("equifax_consumer_response_downloaded") != "True"
@@ -72,9 +75,7 @@ def _check_if_response_available(ti: TaskInstance, **_: None) -> bool:
     filename_list_no_file_type = filename_list[:-2]
     filename_no_file_type = ".".join(filename_list_no_file_type)
     logging.info(filename_no_file_type)
-    ti.xcom_push(
-        key="filename", value=filename_no_file_type
-    )
+    ti.xcom_push(key="filename", value=filename_no_file_type)
     return True
 
 
