@@ -81,6 +81,7 @@ def _encrypt_request_file():
 check_if_file_sent = ShortCircuitOperator(
     task_id="check_if_file_sent",
     python_callable=_check_if_file_sent,
+    do_xcom_push=False,
     dag=dag,
 )
 
