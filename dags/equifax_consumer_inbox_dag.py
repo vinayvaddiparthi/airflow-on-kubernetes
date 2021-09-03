@@ -53,13 +53,16 @@ S3_BUCKET = "tc-data-airflow-production"
 aws_hook = AwsBaseHook(aws_conn_id=s3_connection, client_type="s3")
 aws_credentials = aws_hook.get_credentials()
 sftp_connection = "equifax_sftp"
+CONSUMER_FILENAME = (
+    "{{ ti.xcom_pull(task_ids='check_if_response_available', key='filename') }}"
+)
 
 
 def _check_if_file_downloaded() -> bool:
     return Variable.get("equifax_consumer_response_downloaded") != "True"
 
 
-def _check_if_response_available(task_instance: TaskInstance, **_: None) -> bool:
+def _check_if_response_available(ti: TaskInstance, **_: None) -> bool:
     hook = SFTPHook(ftp_conn_id=sftp_connection)
     files = hook.list_directory(path="outbox/")
     if len(files) == 0:
@@ -72,9 +75,7 @@ def _check_if_response_available(task_instance: TaskInstance, **_: None) -> bool
     filename_list_no_file_type = filename_list[:-2]
     filename_no_file_type = ".".join(filename_list_no_file_type)
     logging.info(filename_no_file_type)
-    task_instance.xcom_push(
-        key="check_if_response_available", value=filename_no_file_type
-    )
+    ti.xcom_push(key="filename", value=filename_no_file_type)
     return True
 
 
@@ -145,7 +146,7 @@ def _convert_line_csv(line: str, indices: list) -> str:
     return ",".join(parts)
 
 
-def convert_file(bucket_name: str, download_key: str, upload_key: str) -> None:
+def _convert_file(bucket_name: str, download_key: str, upload_key: str) -> None:
     """
     Convert decrypted response file (txt) to csv according to our field dictionary
     """
@@ -194,7 +195,7 @@ def _get_col_def(column: str, length: int, date_formatted: bool) -> str:
     return f"{column} varchar({length})"
 
 
-def insert_snowflake(
+def _insert_snowflake(
     table: str, download_key: str, date_formatted: bool = False
 ) -> None:
     d3: Dict[str, int] = result_dict
@@ -232,15 +233,15 @@ def _get_import_month(ds_nodash: str) -> str:
     ).strftime("%Y%m")
 
 
-def insert_snowflake_raw(
+def _insert_snowflake_raw(
     table_name_raw: str,
     table_name_raw_history: str,
     download_key: str,
     ds_nodash: str,
     **_: None,
 ) -> None:
-    insert_snowflake(table=table_name_raw, download_key=download_key)
-    insert_snowflake(
+    _insert_snowflake(table=table_name_raw, download_key=download_key)
+    _insert_snowflake(
         table=f"{table_name_raw_history}_{_get_import_month(ds_nodash)}",
         download_key=download_key,
     )
@@ -264,7 +265,7 @@ def _convert_date_format(value: str) -> Any:
     return None
 
 
-def fix_date_format(table_name_raw: str, upload_key: str) -> None:
+def _fix_date_format(table_name_raw: str, upload_key: str) -> None:
     """
     Date format of listed field are SAS format,
     and they are not valid to be converted into datetime directly with snowflake to_date()
@@ -287,22 +288,22 @@ def fix_date_format(table_name_raw: str, upload_key: str) -> None:
                 upload_file_s3(file=file, path=upload_key, bucket=S3_BUCKET)
 
 
-def insert_snowflake_stage(
+def _insert_snowflake_stage(
     table_name: str,
     table_name_history: str,
     download_key: str,
     ds_nodash: str,
     **_: None,
 ) -> None:
-    insert_snowflake(table=table_name, download_key=download_key, date_formatted=True)
-    insert_snowflake(
+    _insert_snowflake(table=table_name, download_key=download_key, date_formatted=True)
+    _insert_snowflake(
         table=f"{table_name_history}_{_get_import_month(ds_nodash)}",
         download_key=download_key,
         date_formatted=True,
     )
 
 
-def insert_snowflake_public(
+def _insert_snowflake_public(
     source_table: str, destination_table: str, ds_nodash: str, **_: None
 ) -> None:
     columns = [
@@ -331,45 +332,46 @@ def insert_snowflake_public(
         snowflake.execute(sql)
 
 
-task_check_if_file_downloaded = ShortCircuitOperator(
+check_if_file_downloaded = ShortCircuitOperator(
     task_id="check_if_file_downloaded",
     python_callable=_check_if_file_downloaded,
+    do_xcom_push=False,
     dag=dag,
 )
 
-task_check_if_response_available = ShortCircuitOperator(
+check_if_response_available = ShortCircuitOperator(
     task_id="check_if_response_available",
     python_callable=_check_if_response_available,
     provide_context=True,
     dag=dag,
 )
 
-task_create_sftp_to_s3_job = SFTPToS3Operator(
+create_sftp_to_s3_job = SFTPToS3Operator(
     task_id="create_sftp_to_s3_job",
     sftp_conn_id=sftp_connection,
-    sftp_path="outbox/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.txt.pgp",
+    sftp_path=f"outbox/{CONSUMER_FILENAME}.txt.pgp",
     s3_conn_id=s3_connection,
     s3_bucket=S3_BUCKET,
-    s3_key="equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.txt.pgp",
+    s3_key=f"equifax/consumer/inbox/{CONSUMER_FILENAME}.txt.pgp",
     on_success_callback=_mark_response_as_downloaded,
     dag=dag,
 )
 
-task_decrypt_response_file = PythonOperator(
+decrypt_response_file = PythonOperator(
     task_id="decrypt_response_file",
     python_callable=_decrypt_response_file,
     op_kwargs={
         "s3_conn": s3_connection,
         "bucket_name": S3_BUCKET,
-        "download_key": "equifax/consumer/inbox/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.txt.pgp",
-        "upload_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.txt",
+        "download_key": f"equifax/consumer/inbox/{CONSUMER_FILENAME}.txt.pgp",
+        "upload_key": f"equifax/consumer/decrypted/{CONSUMER_FILENAME}.txt",
     },
     dag=dag,
 )
 
-task_is_decrypted_response_file_available = S3KeySensor(
+is_decrypted_response_file_available = S3KeySensor(
     task_id="is_decrypted_response_file_available",
-    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/decrypted/{{{{ ti.xcom_pull(task_ids='check_if_response_available') }}}}.txt",
+    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/decrypted/{CONSUMER_FILENAME}.txt",
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
@@ -377,54 +379,54 @@ task_is_decrypted_response_file_available = S3KeySensor(
     dag=dag,
 )
 
-task_convert_file = PythonOperator(
+convert_file = PythonOperator(
     task_id="convert_file",
-    python_callable=convert_file,
+    python_callable=_convert_file,
     op_kwargs={
         "bucket_name": S3_BUCKET,
-        "download_key": "equifax/consumer/decrypted/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.txt",
-        "upload_key": "equifax/consumer/csv/{{ ti.xcom_pull(task_ids='check_if_response_available') }}.csv",
+        "download_key": f"equifax/consumer/decrypted/{CONSUMER_FILENAME}.txt",
+        "upload_key": f"equifax/consumer/csv/{CONSUMER_FILENAME}.csv",
     },
     dag=dag,
 )
 
-task_insert_snowflake_raw = PythonOperator(
+insert_snowflake_raw = PythonOperator(
     task_id="insert_snowflake_raw",
-    python_callable=insert_snowflake_raw,
+    python_callable=_insert_snowflake_raw,
     op_kwargs={
         "table_name_raw": "equifax.output.consumer_batch_raw",
         "table_name_raw_history": "equifax.output_history.consumer_batch_raw",
-        "download_key": f"s3://{S3_BUCKET}/equifax/consumer/csv/{{{{ ti.xcom_pull(task_ids='check_if_response_available') }}}}.csv",
+        "download_key": f"s3://{S3_BUCKET}/equifax/consumer/csv/{CONSUMER_FILENAME}.csv",
     },
     provide_context=True,
     dag=dag,
 )
 
-task_fix_date = PythonOperator(
+fix_date = PythonOperator(
     task_id="fix_date_format",
-    python_callable=fix_date_format,
+    python_callable=_fix_date_format,
     op_kwargs={
         "table_name_raw": "equifax.output.consumer_batch_raw",
-        "upload_key": "equifax/consumer/csv_date_format_fixed/{{ ti.xcom_pull(task_ids='check_if_response_available') }}_date_format_fixed.csv",
+        "upload_key": f"equifax/consumer/csv_date_format_fixed/{CONSUMER_FILENAME}_date_format_fixed.csv",
     },
     dag=dag,
 )
 
-task_insert_snowflake_stage = PythonOperator(
+insert_snowflake_stage = PythonOperator(
     task_id="insert_snowflake_stage",
-    python_callable=insert_snowflake_stage,
+    python_callable=_insert_snowflake_stage,
     op_kwargs={
         "table_name": "equifax.output.consumer_batch",
         "table_name_history": "equifax.output_history.consumer_batch",
-        "download_key": f"s3://{S3_BUCKET}/equifax/consumer/csv_date_format_fixed/{{{{ ti.xcom_pull(task_ids='check_if_response_available') }}}}.csv",
+        "download_key": f"s3://{S3_BUCKET}/equifax/consumer/csv_date_format_fixed/{CONSUMER_FILENAME}.csv",
     },
     provide_context=True,
     dag=dag,
 )
 
-task_insert_snowflake_public = PythonOperator(
+insert_snowflake_public = PythonOperator(
     task_id="insert_snowflake_public",
-    python_callable=insert_snowflake_public,
+    python_callable=_insert_snowflake_public,
     op_kwargs={
         "source_table": "equifax.output.consumer_batch",
         "destination_table": "equifax.public.consumer_batch",
@@ -434,14 +436,14 @@ task_insert_snowflake_public = PythonOperator(
 )
 
 (
-    task_check_if_file_downloaded
-    >> task_check_if_response_available
-    >> task_create_sftp_to_s3_job
-    >> task_decrypt_response_file
-    >> task_is_decrypted_response_file_available
-    >> task_convert_file
-    >> task_insert_snowflake_raw
-    >> task_fix_date
-    >> task_insert_snowflake_stage
-    >> task_insert_snowflake_public
+    check_if_file_downloaded
+    >> check_if_response_available
+    >> create_sftp_to_s3_job
+    >> decrypt_response_file
+    >> is_decrypted_response_file_available
+    >> convert_file
+    >> insert_snowflake_raw
+    >> fix_date
+    >> insert_snowflake_stage
+    >> insert_snowflake_public
 )
