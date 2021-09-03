@@ -475,6 +475,13 @@ def create_dag() -> DAG:
                         schema="IDP_PRODUCTION",
                         table="POLY_PROPERTIES",
                         columns=["value"],
+                        whereclause=literal_column("$1:key").in_(
+                            [
+                                "merchant",
+                                "applicant",
+                                "applicants",
+                            ]
+                        ),
                     ),
                 ],
                 "target_schema": "PII_PRODUCTION",
