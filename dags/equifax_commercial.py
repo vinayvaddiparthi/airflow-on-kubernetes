@@ -245,26 +245,26 @@ def create_dags() -> Tuple[DAG, DAG]:
             )
         )
 
-    with DAG(
-        "equifax_commercial_outbox",
-        start_date=pendulum.datetime(
-            2020, 11, 15, tzinfo=pendulum.timezone("America/Toronto")
-        ),
-        schedule_interval=None,
-        catchup=False,
-        on_failure_callback=slack_dag("slack_data_alerts"),
-    ) as outbox_dag:
-        outbox_dag << PythonOperator(
-            task_id="sync_s3fs_to_sshfs",
-            python_callable=sync_s3fs_to_sshfs,
-            op_kwargs={
-                "aws_conn": "s3_equifax_commercial",
-                "sshfs_conn": "ssh_equifax_commercial",
-            },
-            executor_config=EXECUTOR_CONFIG,
-        )
+    # with DAG(
+    #     "equifax_commercial_outbox",
+    #     start_date=pendulum.datetime(
+    #         2020, 11, 15, tzinfo=pendulum.timezone("America/Toronto")
+    #     ),
+    #     schedule_interval=None,
+    #     catchup=False,
+    #     on_failure_callback=slack_dag("slack_data_alerts"),
+    # ) as outbox_dag:
+    #     outbox_dag << PythonOperator(
+    #         task_id="sync_s3fs_to_sshfs",
+    #         python_callable=sync_s3fs_to_sshfs,
+    #         op_kwargs={
+    #             "aws_conn": "s3_equifax_commercial",
+    #             "sshfs_conn": "ssh_equifax_commercial",
+    #         },
+    #         executor_config=EXECUTOR_CONFIG,
+    #     )
 
-    return inbox_dag, outbox_dag
+    # return inbox_dag, outbox_dag
 
 
 if __name__ == "__main__":

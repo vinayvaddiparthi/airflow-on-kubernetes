@@ -43,6 +43,16 @@ S3_CONN = "s3_dataops"
 S3_BUCKET = f"tc-data-airflow-{'production' if Variable.get('environment') == 'production' else 'staging'}"
 DIR_PATH = "equifax/commercial"
 SFTP_CONN = "equifax_sftp"
+EXECUTOR_CONFIG = {
+    "KubernetesExecutor": {
+        "annotations": {
+            "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowProductionEquifaxCommercialRole"
+        },
+    },
+    "resources": {
+        "requests": {"memory": "512Mi"},
+    },
+}
 
 
 def _check_if_file_sent() -> bool:
@@ -55,25 +65,30 @@ def _mark_request_as_sent(context: Dict) -> None:
     logging.info("Commercial request file successfully sent to Equifax")
 
 
-def _encrypt_request_file() -> None:
-    s3 = S3Hook(aws_conn_id=S3_CONN)
+def _encrypt_request_file(
+    s3_conn: str,
+    bucket_name: str,
+    download_key: str,
+    upload_key: str,
+) -> None:
+    s3 = S3Hook(aws_conn_id=s3_conn)
     filename = s3.download_file(
-        key=f"{DIR_PATH}/request/{{{{ var.value.equifax_commercial_request_filename }}}}",
-        bucket_name=S3_BUCKET,
+        key=download_key,
+        bucket_name=bucket_name,
     )
     with open(filename, "rb") as reader:
         gpg = init_gnupg()
         encrypted_msg = gpg.encrypt_file(
-            stream=reader,
-            recipients="sts@equifax.com",
+            reader,
+            "sts@equifax.com",
             always_trust=True,
         )
     with open(filename, "wb") as writer:
         writer.write(encrypted_msg.data)
         s3.load_file(
             filename=filename,
-            key=f"{DIR_PATH}/outbox/{{{{ var.value.equifax_commercial_request_filename }}}}.pgp",
-            bucket_name=S3_BUCKET,
+            key=upload_key,
+            bucket_name=bucket_name,
             replace=True,
         )
 
@@ -98,6 +113,13 @@ is_request_file_available = S3KeySensor(
 encrypt_request_file = PythonOperator(
     task_id="encrypt_request_file",
     python_callable=_encrypt_request_file,
+    op_kwargs={
+        "s3_conn": S3_CONN,
+        "bucket_name": S3_BUCKET,
+        "download_key": f"{DIR_PATH}/request/{{{{ var.value.equifax_commercial_request_filename }}}}",
+        "upload_key": f"{DIR_PATH}/outbox/{{{{ var.value.equifax_commercial_request_filename }}}}.pgp",
+    },
+    executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
 
@@ -109,6 +131,7 @@ create_s3_to_sftp_job = S3ToSFTPOperator(
     s3_bucket=S3_BUCKET,
     s3_key=f"{DIR_PATH}/outbox/{{{{ var.value.equifax_commercial_request_filename }}}}.pgp",
     on_success_callback=_mark_request_as_sent,
+    executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
 
