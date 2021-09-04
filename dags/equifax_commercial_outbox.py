@@ -40,7 +40,7 @@ dag = DAG(
 dag.doc_md = __doc__
 
 S3_CONN = "s3_dataops"
-S3_BUCKET = "tc-data-airflow-production"
+S3_BUCKET = f"tc-data-airflow-{'production' if Variable.get('environment') == 'production' else 'staging'}"
 DIR_PATH = "equifax/commercial"
 SFTP_CONN = "equifax_sftp"
 
