@@ -62,4 +62,4 @@ pytz<2021.0 # pinned because of snowflake connector
 
 numba==0.53.1  # pinned because of fastparquet issues in zetatango_import dag
 snowflake-connector-python<=2.5.1 # pinned to fix failures encountered with 2.6.0 version
-setuptools==58.0.1  # #2769: Build now fails fast when ``use_2to3`` is supplied.
+setuptools<58.0.0  # #2769: Build now fails fast when ``use_2to3`` is supplied.
