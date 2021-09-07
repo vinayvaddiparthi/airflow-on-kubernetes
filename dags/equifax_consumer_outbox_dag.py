@@ -21,9 +21,6 @@ from utils.gpg import init_gnupg
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
-    "email": ["enterprisedata@thinkingcapital.ca"],
-    "email_on_failure": False,
-    "email_on_retry": True,
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
     "on_failure_callback": slack_dag("slack_data_alerts"),
@@ -45,9 +42,20 @@ dag.doc_md = __doc__
 s3_connection = "s3_dataops"
 sftp_connection = "equifax_sftp"
 S3_BUCKET = "tc-data-airflow-production"
+DIR_PATH = "equifax/consumer"
 
 
-def encrypt_request_file(
+def _check_if_file_sent() -> bool:
+    return False if Variable.get("equifax_consumer_request_sent") == "True" else True
+
+
+def _mark_request_as_sent(context: Dict) -> None:
+    Variable.set("equifax_consumer_request_sent", True)
+    logging.info(context["task_instance"].log_url)
+    logging.info("Request file successfully sent to Equifax")
+
+
+def _encrypt_request_file(
     s3_conn: str,
     bucket_name: str,
     download_key: str,
@@ -67,25 +75,16 @@ def encrypt_request_file(
         )
 
 
-def _mark_request_as_sent(context: Dict) -> None:
-    Variable.set("equifax_consumer_request_sent", True)
-    logging.info(context["task_instance"].log_url)
-    logging.info("Request file successfully sent to Equifax")
-
-
-def _check_if_file_sent() -> bool:
-    return False if Variable.get("equifax_consumer_request_sent") == "True" else True
-
-
-task_check_if_file_sent = ShortCircuitOperator(
+check_if_file_sent = ShortCircuitOperator(
     task_id="check_if_file_sent",
     python_callable=_check_if_file_sent,
+    do_xcom_push=False,
     dag=dag,
 )
 
-task_is_request_file_available = S3KeySensor(
+is_request_file_available = S3KeySensor(
     task_id="is_request_file_available",
-    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/request_reviewed_by_risk/{{{{ var.value.equifax_consumer_request_filename }}}}",
+    bucket_key=f"s3://{S3_BUCKET}/{DIR_PATH}/request_reviewed_by_risk/{{{{ var.value.equifax_consumer_request_filename }}}}",
     aws_conn_id=s3_connection,
     poke_interval=5,
     timeout=20,
@@ -93,43 +92,32 @@ task_is_request_file_available = S3KeySensor(
     dag=dag,
 )
 
-task_encrypt_request_file = PythonOperator(
+encrypt_request_file = PythonOperator(
     task_id="encrypt_request_file",
-    python_callable=encrypt_request_file,
+    python_callable=_encrypt_request_file,
     op_kwargs={
         "s3_conn": s3_connection,
         "bucket_name": S3_BUCKET,
-        "download_key": "equifax/consumer/request_reviewed_by_risk/{{ var.value.equifax_consumer_request_filename }}",
-        "upload_key": "equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
+        "download_key": f"{DIR_PATH}/request_reviewed_by_risk/{{{{ var.value.equifax_consumer_request_filename }}}}",
+        "upload_key": f"{DIR_PATH}/outbox/{{{{ var.value.equifax_consumer_request_filename }}}}.pgp",
     },
     dag=dag,
 )
 
-task_is_outbox_file_available = S3KeySensor(
-    task_id="is_outbox_file_available",
-    bucket_key=f"s3://{S3_BUCKET}/equifax/consumer/outbox/{{{{ var.value.equifax_consumer_request_filename }}}}.pgp",
-    aws_conn_id=s3_connection,
-    poke_interval=5,
-    timeout=20,
-    on_failure_callback=sensor_timeout,
-    dag=dag,
-)
-
-task_create_s3_to_sftp_job = S3ToSFTPOperator(
+create_s3_to_sftp_job = S3ToSFTPOperator(
     task_id="create_s3_to_sftp_job",
     sftp_conn_id=sftp_connection,
     sftp_path="inbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
     s3_conn_id=s3_connection,
     s3_bucket=S3_BUCKET,
-    s3_key="equifax/consumer/outbox/{{ var.value.equifax_consumer_request_filename }}.pgp",
+    s3_key=f"{DIR_PATH}/outbox/{{{{ var.value.equifax_consumer_request_filename }}}}.pgp",
     on_success_callback=_mark_request_as_sent,
     dag=dag,
 )
 
 (
-    task_check_if_file_sent
-    >> task_is_request_file_available
-    >> task_encrypt_request_file
-    >> task_is_outbox_file_available
-    >> task_create_s3_to_sftp_job
+    check_if_file_sent
+    >> is_request_file_available
+    >> encrypt_request_file
+    >> create_s3_to_sftp_job
 )
