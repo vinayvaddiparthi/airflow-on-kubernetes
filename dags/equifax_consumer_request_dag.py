@@ -198,7 +198,7 @@ from final
 """
 
 
-def generate_file(
+def _generate_file(
     snowflake_conn: str,
     s3_conn: str,
     bucket: str,
@@ -266,7 +266,7 @@ def generate_file(
     return file_name
 
 
-def validate_file(
+def _validate_file(
     s3_conn: str,
     bucket: str,
     folder: str,
@@ -296,9 +296,9 @@ def validate_file(
         validation.validate(file)
 
 
-task_generate_file = PythonOperator(
+generate_file = PythonOperator(
     task_id="generate_file",
-    python_callable=generate_file,
+    python_callable=_generate_file,
     op_kwargs={
         "snowflake_conn": snowflake_connection,
         "s3_conn": s3_connection,
@@ -322,9 +322,9 @@ task_generate_file = PythonOperator(
     dag=dag,
 )
 
-task_validate_file = PythonOperator(
+validate_file = PythonOperator(
     task_id="validate_file",
-    python_callable=validate_file,
+    python_callable=_validate_file,
     op_kwargs={
         "s3_conn": s3_connection,
         "bucket": output_bucket,
@@ -335,4 +335,4 @@ task_validate_file = PythonOperator(
     dag=dag,
 )
 
-task_generate_file >> task_validate_file
+generate_file >> validate_file
