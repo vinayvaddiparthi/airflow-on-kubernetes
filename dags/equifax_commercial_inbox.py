@@ -1,11 +1,9 @@
 import datetime
 import logging
-import os
 from io import BytesIO
 
 from pathlib import Path
-from typing import Tuple, IO, List, Any
-from unittest.mock import patch, MagicMock
+from typing import IO, List, Any
 
 import pendulum
 from airflow import DAG
@@ -75,21 +73,6 @@ def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
         aws_access_key_id=aws_connection.extra_dejson["aws_access_key_id"],
         aws_secret_access_key=aws_connection.extra_dejson["aws_secret_access_key"],
     )
-
-
-def sync_s3fs_to_sshfs(aws_conn: str, sshfs_conn: str) -> None:
-    with SuspendAwsEnvVar():
-        s3fs, sshfs = _get_s3fs_from_conn(aws_conn), _get_sshfs_from_conn(sshfs_conn)
-
-        local_files = s3fs.listdir("outbox")
-
-        for file in local_files:
-            with s3fs.open(f"outbox/{file}", "rb") as origin_file, sshfs.open(
-                f"inbox/{file}.pgp", "wb"
-            ) as remote_file:
-                encrypted = encrypt(origin_file)
-                copy_file_data(encrypted, remote_file)
-                s3fs.remove(f"outbox/{file}")
 
 
 def sync_sshfs_to_s3fs(aws_conn: str, sshfs_conn: str) -> None:
@@ -187,118 +170,59 @@ def decrypt(fd: IO[bytes]) -> IO[bytes]:
     return BytesIO(decrypted_message.data)
 
 
-def create_dags() -> Tuple[DAG, DAG]:
-    with DAG(
-        "equifax_commercial_inbox",
-        start_date=pendulum.datetime(
-            2020, 11, 15, tzinfo=pendulum.timezone("America/Toronto")
-        ),
-        schedule_interval=None,
-        catchup=False,
-        on_failure_callback=slack_dag("slack_data_alerts"),
-    ) as inbox_dag:
-        (
-            inbox_dag
-            << PythonOperator(
-                task_id="sync_sshfs_to_s3fs",
-                python_callable=sync_sshfs_to_s3fs,
-                op_kwargs={
-                    "aws_conn": "s3_equifax_commercial",
-                    "sshfs_conn": "ssh_equifax_commercial",
-                },
-                retry_delay=datetime.timedelta(hours=1),
-                retries=3,
-                executor_config=EXECUTOR_CONFIG,
-            )
-            >> PythonOperator(
-                task_id="decrypt_received_files",
-                python_callable=decrypt_received_files,
-                op_kwargs={
-                    "aws_conn": "s3_equifax_commercial",
-                },
-                retry_delay=datetime.timedelta(hours=1),
-                retries=3,
-                executor_config=EXECUTOR_CONFIG,
-            )
-            >> PythonOperator(
-                task_id="convert_to_parquet",
-                python_callable=decode_decrypted_files,
-                op_kwargs={
-                    "aws_conn": "s3_equifax_commercial",
-                },
-                provide_context=True,
-                retry_delay=datetime.timedelta(hours=1),
-                retries=3,
-                executor_config=EXECUTOR_CONFIG,
-            )
-            >> PythonOperator(
-                task_id="create_table_from_stage",
-                python_callable=create_table_from_stage,
-                op_kwargs={
-                    "snowflake_conn": "airflow_production",
-                    "schema": "airflow.production",
-                    "stage": "equifax_commercial_inbox",
-                },
-                retry_delay=datetime.timedelta(hours=1),
-                retries=3,
-                executor_config=EXECUTOR_CONFIG,
-            )
-        )
-
-    with DAG(
-        "equifax_commercial_outbox",
-        start_date=pendulum.datetime(
-            2020, 11, 15, tzinfo=pendulum.timezone("America/Toronto")
-        ),
-        schedule_interval=None,
-        catchup=False,
-        on_failure_callback=slack_dag("slack_data_alerts"),
-    ) as outbox_dag:
-        outbox_dag << PythonOperator(
-            task_id="sync_s3fs_to_sshfs",
-            python_callable=sync_s3fs_to_sshfs,
+with DAG(
+    dag_id="equifax_commercial_inbox",
+    start_date=pendulum.datetime(
+        2020, 11, 15, tzinfo=pendulum.timezone("America/Toronto")
+    ),
+    schedule_interval=None,
+    catchup=False,
+    on_failure_callback=slack_dag("slack_data_alerts"),
+) as inbox_dag:
+    (
+        inbox_dag
+        << PythonOperator(
+            task_id="sync_sshfs_to_s3fs",
+            python_callable=sync_sshfs_to_s3fs,
             op_kwargs={
                 "aws_conn": "s3_equifax_commercial",
                 "sshfs_conn": "ssh_equifax_commercial",
             },
+            retry_delay=datetime.timedelta(hours=1),
+            retries=3,
             executor_config=EXECUTOR_CONFIG,
         )
-
-    return inbox_dag, outbox_dag
-
-
-if __name__ == "__main__":
-    aws_hook_mock = MagicMock()
-    aws_hook_mock.extra_dejson = {
-        "bucket": "tc-data-airflow-production",
-        "region": "ca-central-1",
-        "dir_path": "equifax/commercial",
-    }
-
-    ssh_hook_mock = MagicMock()
-    ssh_hook_mock.host = os.environ["SSHFS_HOSTNAME"]
-    ssh_hook_mock.login = os.environ["SSHFS_USERNAME"]
-    ssh_hook_mock.password = os.environ["SSHFS_PASSWORD"]
-
-    with patch(
-        "dags.equifax_commercial.AwsBaseHook.get_connection", return_value=aws_hook_mock
-    ), patch(
-        "dags.equifax_commercial.SSHHook.get_connection", return_value=ssh_hook_mock
-    ), patch(
-        "dags.equifax_commercial.Variable.get",
-        return_value=[
-            os.environ.get("EFX_PUBLIC_KEY"),
-            os.environ.get("TCAP_PUBLIC_KEY"),
-            os.environ.get("TCAP_PRIVATE_KEY"),
-        ],
-    ):
-        sync_s3fs_to_sshfs("aws_conn", "ssh_conn")
-        sync_sshfs_to_s3fs("aws_conn", "ssh_conn")
-        decrypt_received_files("aws_conn")
-        decode_decrypted_files(
-            "aws_conn", execution_date=Pendulum.now(), run_id="manual_local_test"
+        >> PythonOperator(
+            task_id="decrypt_received_files",
+            python_callable=decrypt_received_files,
+            op_kwargs={
+                "aws_conn": "s3_equifax_commercial",
+            },
+            retry_delay=datetime.timedelta(hours=1),
+            retries=3,
+            executor_config=EXECUTOR_CONFIG,
         )
-else:
-    inbox_dag, outbox_dag = create_dags()
-    globals()["inbox_dag"] = inbox_dag
-    globals()["outbox_dag"] = outbox_dag
+        >> PythonOperator(
+            task_id="convert_to_parquet",
+            python_callable=decode_decrypted_files,
+            op_kwargs={
+                "aws_conn": "s3_equifax_commercial",
+            },
+            provide_context=True,
+            retry_delay=datetime.timedelta(hours=1),
+            retries=3,
+            executor_config=EXECUTOR_CONFIG,
+        )
+        >> PythonOperator(
+            task_id="create_table_from_stage",
+            python_callable=create_table_from_stage,
+            op_kwargs={
+                "snowflake_conn": "airflow_production",
+                "schema": "airflow.production",
+                "stage": "equifax_commercial_inbox",
+            },
+            retry_delay=datetime.timedelta(hours=1),
+            retries=3,
+            executor_config=EXECUTOR_CONFIG,
+        )
+    )
