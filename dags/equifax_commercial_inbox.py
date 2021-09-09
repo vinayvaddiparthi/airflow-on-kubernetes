@@ -11,12 +11,14 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.ssh.hooks.ssh import SSHHook
 from airflow.providers.sftp.hooks.sftp import SFTPHook
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 import datetime
 import logging
 import pendulum
 from io import BytesIO
-from typing import IO, Any
+from typing import IO, Dict, Any
+from tempfile import NamedTemporaryFile
 from fs.sshfs import SSHFS
 from fs.tools import copy_file_data
 from fs_s3fs import S3FS
@@ -51,7 +53,9 @@ dag.doc_md = __doc__
 
 SFTP_CONN = "equifax_sftp"
 SNOWFLAKE_CONN = "airflow_production"
+S3_CONN = "s3_dataops"
 S3_BUCKET = f"tc-data-airflow-{'production' if Variable.get('environment') == 'production' else 'staging'}"
+DIR_PATH = "equifax/commercial"
 COMMERCIAL_FILENAME = ""
 EXECUTOR_CONFIG = {
     "KubernetesExecutor": {
@@ -71,13 +75,15 @@ def _check_if_file_downloaded() -> bool:
 
 
 def _check_if_response_available(ti: TaskInstance, **_: None) -> bool:
-    hook = SFTPHook(ftp_conn_id=SFTP_CONN)
-    files = hook.list_directory(path="outbox/")
+    sftp_hook = SFTPHook(ftp_conn_id=SFTP_CONN)
+    files = sftp_hook.list_directory(path="outbox/")
     if len(files) == 0:
         return False
     # can safely assume only 2 commercial files (e.g., dv and risk) will be available every odd month as Equifax clears
     # the directory after 7 days
-    filenames = [file for file in files if file.startswith("exthinkingpd.eqxcan.eqxcom")]
+    filenames = [
+        file for file in files if file.startswith("exthinkingpd.eqxcan.eqxcom")
+    ]
     if len(filenames) != 2:  # wait until both commercial files are ready
         return False
     filenames_no_filetype = []
@@ -86,9 +92,36 @@ def _check_if_response_available(ti: TaskInstance, **_: None) -> bool:
         filename_parts_no_filetype = filename_parts[:-2]
         filename_no_filetype = ".".join(filename_parts_no_filetype)
         filenames_no_filetype.append(filename_no_filetype)
-    logging.info(f"Following commercial response files are available to download: {filenames_no_filetype}")
+    logging.info(
+        f"Following commercial response files are available to download: {filenames_no_filetype}"
+    )
     ti.xcom_push(key="filenames", value=filenames_no_filetype)
     return True
+
+
+def _download_response_files(sftp_conn_id: str, s3_conn_id: str, dir_path: str, s3_bucket: str, ti: TaskInstance, **_: None):
+    """
+    As long as we send only one request file, we can safely assume only 2 commercial files (e.g., dv and risk) will be
+    available every odd month as Equifax clears the directory after 7 days.
+    """
+    sftp_hook = SFTPHook(ftp_conn_id=sftp_conn_id)
+    files = sftp_hook.list_directory(path="outbox/")
+    commercial_files = [
+        file for file in files if file.startswith("exthinkingpd.eqxcan.eqxcom")
+    ]
+    if len(commercial_files) != 2:  # wait until both commercial files are ready
+        logging.error("❌ Both commercial files are not yet available to download from the sftp server.")
+    s3_hook = S3Hook(aws_conn_id=s3_conn_id)
+    for commercial_file in commercial_files:
+        with NamedTemporaryFile(mode="w") as f:
+            sftp_hook.retrieve_file(remote_full_path=f"outbox/{commercial_file}", local_full_path=f.name)
+            s3_hook.load_file(filename=f.name, key=f"{dir_path}/inbox/{commercial_file}", replace=True)
+
+
+def _mark_response_as_downloaded(context: Dict) -> None:
+    Variable.set("equifax_commercial_response_downloaded", True)
+    logging.info(context["task_instance"].log_url)
+    logging.info("Response files successfully downloaded.")
 
 
 def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
@@ -113,25 +146,25 @@ def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
     )
 
 
-def _sync_sshfs_to_s3fs(aws_conn: str, sshfs_conn: str) -> None:
-    with SuspendAwsEnvVar():
-        s3fs, sshfs = _get_s3fs_from_conn(aws_conn), _get_sshfs_from_conn(sshfs_conn)
-
-        remote_files = sshfs.listdir("outbox")
-        commercial_remote_files = [
-            file
-            for file in remote_files
-            if file.startswith("exthinkingpd.eqxcan.eqxcom")
-        ]
-        local_files = set(s3fs.listdir("inbox"))  # cast to set for O(1) lookup
-
-        for file in (
-            file for file in commercial_remote_files if file not in local_files
-        ):
-            with sshfs.open(f"outbox/{file}", "rb") as origin_file, s3fs.open(
-                f"inbox/{file}", "wb"
-            ) as dest_file:
-                copy_file_data(origin_file, dest_file)
+# def _sync_sshfs_to_s3fs(aws_conn: str, sshfs_conn: str) -> None:
+#     with SuspendAwsEnvVar():
+#         s3fs, sshfs = _get_s3fs_from_conn(aws_conn), _get_sshfs_from_conn(sshfs_conn)
+#
+#         remote_files = sshfs.listdir("outbox")
+#         commercial_remote_files = [
+#             file
+#             for file in remote_files
+#             if file.startswith("exthinkingpd.eqxcan.eqxcom")
+#         ]
+#         local_files = set(s3fs.listdir("inbox"))  # cast to set for O(1) lookup
+#
+#         for file in (
+#             file for file in commercial_remote_files if file not in local_files
+#         ):
+#             with sshfs.open(f"outbox/{file}", "rb") as origin_file, s3fs.open(
+#                 f"inbox/{file}", "wb"
+#             ) as dest_file:
+#                 copy_file_data(origin_file, dest_file)
 
 
 def _decrypt_received_files(aws_conn: str) -> None:
@@ -222,6 +255,21 @@ check_if_response_available = ShortCircuitOperator(
     dag=dag,
 )
 
+download_response_files = PythonOperator(
+    task_id="download_response_files",
+    python_callable=_download_response_files,
+    op_kwargs={
+        "sftp_conn_id": SFTP_CONN,
+        "s3_conn_id": S3_CONN,
+        "dir_path": DIR_PATH,
+        "s3_bucket": S3_BUCKET,
+    },
+    provide_context=True,
+    on_success_callback=_mark_response_as_downloaded,
+    executor_config=EXECUTOR_CONFIG,
+    dag=dag,
+)
+
 sync_sshfs_to_s3fs = PythonOperator(
     task_id="sync_sshfs_to_s3fs",
     python_callable=_sync_sshfs_to_s3fs,
@@ -276,8 +324,8 @@ create_table_from_stage = PythonOperator(
 
 (
     check_if_file_downloaded
-    >> check_if_response_available
-    >> sync_sshfs_to_s3fs
+    # >> check_if_response_available
+    >> download_response_files
     >> decrypt_received_files
     >> decode_decrypted_files
     >> create_table_from_stage
