@@ -121,7 +121,7 @@ def copy_transactions(
     )
 
     merchant_documents = Table(
-        "merchant_documents",
+        "documents",
         metadata,
         autoload=True,
         schema=schema,
@@ -138,7 +138,7 @@ def copy_transactions(
         merchant_documents,
         merchants,
         func.get(merchants.c.fields, "id")
-        == func.get(merchant_documents.c.fields, "merchant_id"),
+        == func.get(merchant_documents.c.fields, "document_owner_id"),
     )
     merchant_documents_select = (
         select(
