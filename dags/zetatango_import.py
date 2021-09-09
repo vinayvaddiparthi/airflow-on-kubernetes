@@ -201,6 +201,11 @@ def decrypt_pii_columns(
         lambda loader, node: loader.construct_yaml_timestamp(node.value[0][1]),
     )
 
+    yaml.add_constructor(
+        "!ruby/hash:ActiveSupport::HashWithIndifferentAccess",
+        lambda loader, node: {e[0]: e[1] for e in loader.construct_pairs(node)},
+    )
+
     def _postprocess_marshal(field: Any) -> Any:
         return rubymarshal_loads(field) if field else None
 
