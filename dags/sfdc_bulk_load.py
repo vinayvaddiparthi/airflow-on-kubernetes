@@ -405,7 +405,7 @@ def create_dag(instances: List[str]) -> DAG:
                 task_id=f"import_{instance}",
                 python_callable=import_sfdc,
                 op_kwargs={
-                    "snowflake_conn": "airflow_production",
+                    "snowflake_conn": "airflow_role_test",
                     "salesforce_conn": f"salesforce_{instance}",
                     "database": "salesforce2",
                     "schema": instance,
