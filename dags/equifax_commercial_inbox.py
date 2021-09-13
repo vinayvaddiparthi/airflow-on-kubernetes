@@ -74,32 +74,14 @@ def _check_if_file_downloaded() -> bool:
     return Variable.get("equifax_commercial_response_downloaded") != "True"
 
 
-def _check_if_response_available(ti: TaskInstance, **_: None) -> bool:
-    sftp_hook = SFTPHook(ftp_conn_id=SFTP_CONN)
-    files = sftp_hook.list_directory(path="outbox/")
-    if len(files) == 0:
-        return False
-    # can safely assume only 2 commercial files (e.g., dv and risk) will be available every odd month as Equifax clears
-    # the directory after 7 days
-    filenames = [
-        file for file in files if file.startswith("exthinkingpd.eqxcan.eqxcom")
-    ]
-    if len(filenames) != 2:  # wait until both commercial files are ready
-        return False
-    filenames_no_filetype = []
-    for filename in filenames:
-        filename_parts = filename.split(".")
-        filename_parts_no_filetype = filename_parts[:-2]
-        filename_no_filetype = ".".join(filename_parts_no_filetype)
-        filenames_no_filetype.append(filename_no_filetype)
-    logging.info(
-        f"Following commercial response files are available to download: {filenames_no_filetype}"
-    )
-    ti.xcom_push(key="filenames", value=filenames_no_filetype)
-    return True
-
-
-def _download_response_files(sftp_conn_id: str, s3_conn_id: str, dir_path: str, s3_bucket: str, ti: TaskInstance, **_: None):
+def _download_response_files(
+    sftp_conn_id: str,
+    s3_conn_id: str,
+    dir_path: str,
+    s3_bucket: str,
+    ti: TaskInstance,
+    **_: None,
+) -> None:
     """
     As long as we send only one request file, we can safely assume only 2 commercial files (e.g., dv and risk) will be
     available every odd month as Equifax clears the directory after 7 days.
@@ -110,28 +92,60 @@ def _download_response_files(sftp_conn_id: str, s3_conn_id: str, dir_path: str, 
         file for file in files if file.startswith("exthinkingpd.eqxcan.eqxcom")
     ]
     if len(commercial_files) != 2:  # wait until both commercial files are ready
-        logging.error("❌ Both commercial files are not yet available to download from the sftp server.")
+        logging.error(
+            "❌ Both commercial files are not yet available to download from the sftp server."
+        )
+        return
+    ti.xcom_push(key="filenames", value=commercial_files)
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
     for commercial_file in commercial_files:
         with NamedTemporaryFile(mode="w") as f:
-            sftp_hook.retrieve_file(remote_full_path=f"outbox/{commercial_file}", local_full_path=f.name)
-            s3_hook.load_file(filename=f.name, key=f"{dir_path}/inbox/{commercial_file}", replace=True)
-
-
-def _mark_response_as_downloaded(context: Dict) -> None:
+            sftp_hook.retrieve_file(
+                remote_full_path=f"outbox/{commercial_file}", local_full_path=f.name
+            )
+            s3_hook.load_file(
+                filename=f.name,
+                key=f"{dir_path}/inbox/{commercial_file}",
+                bucket_name=s3_bucket,
+                replace=True,
+            )
     Variable.set("equifax_commercial_response_downloaded", True)
-    logging.info(context["task_instance"].log_url)
     logging.info("Response files successfully downloaded.")
 
 
-def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
-    ssh_connection = SSHHook.get_connection(ssh_conn)
+def _decrypt_response_files(
+    s3_conn_id: str, s3_bucket: str, dir_path: str, ti: TaskInstance, **_: None
+) -> None:
+    s3_hook = S3Hook(aws_conn_id=s3_conn_id)
+    filenames = ti.xcom_pull(task_ids="download_response_files", key="filenames")
+    gpg = init_gnupg()
+    passphrase = Variable.get("equifax_pgp_passphrase", deserialize_json=False)
+    for filename in filenames:
+        file = s3_hook.download_file(
+            key=f"{dir_path}/inbox/{filename}", bucket_name=s3_bucket
+        )
+        with open(file, "rb") as reader:
+            decrypted_message = gpg.decrypt_file(
+                reader, always_trust=True, passphrase=passphrase
+            )
+        with open(file, "wb") as writer:
+            writer.write(decrypted_message.data)
+            s3_hook.load_file(
+                filename=file,
+                key=f"{dir_path}/decrypted/{filename[:-4]}",
+                bucket_name=s3_bucket,
+                replace=True,
+            )
 
-    return SSHFS(
-        host=ssh_connection.host,
-        user=ssh_connection.login,
-        passwd=ssh_connection.password,
-    )
+
+# def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
+#     ssh_connection = SSHHook.get_connection(ssh_conn)
+#
+#     return SSHFS(
+#         host=ssh_connection.host,
+#         user=ssh_connection.login,
+#         passwd=ssh_connection.password,
+#     )
 
 
 def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
@@ -144,39 +158,6 @@ def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
         aws_access_key_id=aws_connection.extra_dejson["aws_access_key_id"],
         aws_secret_access_key=aws_connection.extra_dejson["aws_secret_access_key"],
     )
-
-
-# def _sync_sshfs_to_s3fs(aws_conn: str, sshfs_conn: str) -> None:
-#     with SuspendAwsEnvVar():
-#         s3fs, sshfs = _get_s3fs_from_conn(aws_conn), _get_sshfs_from_conn(sshfs_conn)
-#
-#         remote_files = sshfs.listdir("outbox")
-#         commercial_remote_files = [
-#             file
-#             for file in remote_files
-#             if file.startswith("exthinkingpd.eqxcan.eqxcom")
-#         ]
-#         local_files = set(s3fs.listdir("inbox"))  # cast to set for O(1) lookup
-#
-#         for file in (
-#             file for file in commercial_remote_files if file not in local_files
-#         ):
-#             with sshfs.open(f"outbox/{file}", "rb") as origin_file, s3fs.open(
-#                 f"inbox/{file}", "wb"
-#             ) as dest_file:
-#                 copy_file_data(origin_file, dest_file)
-
-
-def _decrypt_received_files(aws_conn: str) -> None:
-    with SuspendAwsEnvVar():
-        s3fs = _get_s3fs_from_conn(aws_conn)
-
-        for file in s3fs.listdir("inbox"):
-            with s3fs.open(f"inbox/{file}", "rb") as encrypted_file, s3fs.open(
-                f"decrypted/{file}"[:-4], "wb"
-            ) as decrypted_file:
-                decrypted = decrypt(encrypted_file)
-                copy_file_data(decrypted, decrypted_file)
 
 
 def _decode_decrypted_files(
@@ -248,13 +229,6 @@ check_if_file_downloaded = ShortCircuitOperator(
     dag=dag,
 )
 
-check_if_response_available = ShortCircuitOperator(
-    task_id="check_if_response_available",
-    python_callable=_check_if_response_available,
-    provide_context=True,
-    dag=dag,
-)
-
 download_response_files = PythonOperator(
     task_id="download_response_files",
     python_callable=_download_response_files,
@@ -265,32 +239,19 @@ download_response_files = PythonOperator(
         "s3_bucket": S3_BUCKET,
     },
     provide_context=True,
-    on_success_callback=_mark_response_as_downloaded,
     executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
 
-sync_sshfs_to_s3fs = PythonOperator(
-    task_id="sync_sshfs_to_s3fs",
-    python_callable=_sync_sshfs_to_s3fs,
+decrypt_response_files = PythonOperator(
+    task_id="decrypt_response_files",
+    python_callable=_decrypt_response_files,
     op_kwargs={
-        "aws_conn": "s3_equifax_commercial",
-        "sshfs_conn": "ssh_equifax_commercial",
+        "s3_conn_id": S3_CONN,
+        "s3_bucket": S3_BUCKET,
+        "dir_path": DIR_PATH,
     },
-    retry_delay=datetime.timedelta(hours=1),
-    retries=3,
-    executor_config=EXECUTOR_CONFIG,
-    dag=dag,
-)
-
-decrypt_received_files = PythonOperator(
-    task_id="decrypt_received_files",
-    python_callable=_decrypt_received_files,
-    op_kwargs={
-        "aws_conn": "s3_equifax_commercial",
-    },
-    retry_delay=datetime.timedelta(hours=1),
-    retries=3,
+    provide_context=True,
     executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
@@ -324,9 +285,8 @@ create_table_from_stage = PythonOperator(
 
 (
     check_if_file_downloaded
-    # >> check_if_response_available
     >> download_response_files
-    >> decrypt_received_files
+    >> decrypt_response_files
     >> decode_decrypted_files
     >> create_table_from_stage
 )
