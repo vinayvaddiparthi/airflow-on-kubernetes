@@ -40,7 +40,9 @@ class Address(Base):
     _sub_premise_type = column_property(address_table.c.sub_premise_type)
     _thoroughfare = column_property(address_table.c.thoroughfare)
     _rural_routes = column_property(address_table.c.rural_routes)
-    _rural_additional_content = column_property(address_table.c.rural_additional_content)
+    _rural_additional_content = column_property(
+        address_table.c.rural_additional_content
+    )
 
     @property  # type: ignore
     @transliterate("fr")
