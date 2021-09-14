@@ -112,17 +112,19 @@ with
     ),
     address as (
       select
-        fields:id::integer as address_id,
-        fields:city::string as city,
-        fields:country_alpha_3::string as country_alpha_3,
-        fields:post_box_number::string as post_box_number,
-        fields:post_box_type::string as post_box_type,
-        fields:postal_code::string as postal_code,
-        fields:premise_number::string as premise_number,
-        fields:state_province::string as state_province,
-        fields:sub_premise_number::string as sub_premise_number,
-        fields:sub_premise_type::string as sub_premise_type,
-        fields:thoroughfare::string as thoroughfare
+        fields:id::integer                      as address_id,
+        fields:city::string                     as city,
+        fields:country_alpha_3::string          as country_alpha_3,
+        fields:post_box_number::string          as post_box_number,
+        fields:post_box_type::string            as post_box_type,
+        fields:postal_code::string              as postal_code,
+        fields:premise_number::string           as premise_number,
+        fields:state_province::string           as state_province,
+        fields:sub_premise_number::string       as sub_premise_number,
+        fields:sub_premise_type::string         as sub_premise_type,
+        fields:thoroughfare::string             as thoroughfare,
+        fields:rural_routes::string             as rural_routes,
+        fields:rural_additional_content::string as rural_additional_content
       from "ZETATANGO"."KYC_PRODUCTION"."ADDRESSES"
     ),
     applicant_with_address as (
