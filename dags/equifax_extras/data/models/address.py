@@ -98,12 +98,12 @@ class Address(Base):
     def thoroughfare(self) -> str:
         return self._thoroughfare
 
-    @property
+    @property  # type: ignore
     @to_string
     def rural_routes(self) -> str:
         return self._rural_routes
 
-    @property
+    @property  # type: ignore
     @to_string
     def rural_additional_content(self) -> str:
         return self._rural_additional_content
