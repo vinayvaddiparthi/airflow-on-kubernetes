@@ -99,11 +99,13 @@ class Address(Base):
         return self._thoroughfare
 
     @property  # type: ignore
+    @transliterate("fr")
     @to_string
     def rural_routes(self) -> str:
         return self._rural_routes
 
     @property  # type: ignore
+    @transliterate("fr")
     @to_string
     def rural_additional_content(self) -> str:
         return self._rural_additional_content
