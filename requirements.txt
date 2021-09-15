@@ -8,7 +8,7 @@ pylint
 pipdeptree
 
 # runtime
-apache-airflow[crypto,postgres,ssh,kubernetes,snowflake,amazon,sftp]==1.10.15
+apache-airflow[crypto,postgres,ssh,kubernetes,snowflake,amazon]==1.10.15
 apache-airflow-backport-providers-amazon
 apache-airflow-backport-providers-sftp
 apache-airflow-backport-providers-ssh
