@@ -21,6 +21,8 @@ address_table = Table(
     Column("sub_premise_number"),
     Column("sub_premise_type"),
     Column("thoroughfare"),
+    Column("rural_routes"),
+    Column("rural_additional_content"),
 )
 
 
@@ -37,6 +39,10 @@ class Address(Base):
     _sub_premise_number = column_property(address_table.c.sub_premise_number)
     _sub_premise_type = column_property(address_table.c.sub_premise_type)
     _thoroughfare = column_property(address_table.c.thoroughfare)
+    _rural_routes = column_property(address_table.c.rural_routes)
+    _rural_additional_content = column_property(
+        address_table.c.rural_additional_content
+    )
 
     @property  # type: ignore
     @transliterate("fr")
@@ -92,6 +98,16 @@ class Address(Base):
     def thoroughfare(self) -> str:
         return self._thoroughfare
 
+    @property  # type: ignore
+    @to_string
+    def rural_routes(self) -> str:
+        return self._rural_routes
+
+    @property  # type: ignore
+    @to_string
+    def rural_additional_content(self) -> str:
+        return self._rural_additional_content
+
     @property
     def lines(self) -> List[str]:
         lines = []
@@ -99,6 +115,8 @@ class Address(Base):
             lines.append(self.civic_line)
         if self.post_box_line:
             lines.append(self.post_box_line)
+        if self.rural_line:
+            lines.append(self.rural_line)
         return lines
 
     @property
@@ -121,6 +139,15 @@ class Address(Base):
             return ""
 
         return f"{self.post_box_type} {self.post_box_number}"
+
+    @property
+    def rural_line(self) -> str:
+        if not self.rural_routes:
+            return ""
+        if self.rural_additional_content:
+            return f"{self.rural_additional_content} {self.rural_routes}"
+        else:
+            return f"{self.rural_routes}"
 
     @property
     def municipal_line(self) -> str:
