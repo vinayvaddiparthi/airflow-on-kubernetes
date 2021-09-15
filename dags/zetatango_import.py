@@ -390,6 +390,7 @@ def create_dag() -> DAG:
                                 "manual_sic_code",
                                 "manual_business_online",
                                 "selected_sales_volume_accounts",
+                                "selected_insights_bank_accounts",
                                 "merchant_black_flag",
                                 "merchant_black_flag_reason",
                                 "merchant_black_flag_date",
