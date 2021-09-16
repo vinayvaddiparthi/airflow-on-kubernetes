@@ -1,0 +1,15 @@
+default:
+      image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest #Docker image to use for build jobs
+
+CDK:
+  stage: test
+  only:
+    - master
+  before_script:
+    - apt-get -qq update
+    - pip3 install -r requirements.txt
+  script:
+    - cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_DEFAULT_REGION
+    - cdk synth
+    - cdk doctor
+    - cdk diff
