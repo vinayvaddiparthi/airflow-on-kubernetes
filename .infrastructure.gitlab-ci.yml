@@ -8,7 +8,7 @@ CDK:
   before_script:
     - apt-get -qq update
     - pip3 install -r requirements.txt
-    - pip install black
+    - pip3 install black
     - black --check . # python code formatter
 
   check_script:
