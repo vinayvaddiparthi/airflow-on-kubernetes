@@ -9,18 +9,14 @@ from airflow.models.taskinstance import TaskInstance
 from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
-from airflow.providers.ssh.hooks.ssh import SSHHook
 from airflow.providers.sftp.hooks.sftp import SFTPHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 import datetime
 import logging
 import pendulum
-from io import BytesIO
-from typing import IO, Dict, Any
+from typing import Any
 from tempfile import NamedTemporaryFile
-from fs.sshfs import SSHFS
-from fs.tools import copy_file_data
 from fs_s3fs import S3FS
 import pyarrow.csv as pv, pyarrow.parquet as pq
 from pendulum import Pendulum
@@ -138,16 +134,6 @@ def _decrypt_response_files(
             )
 
 
-# def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
-#     ssh_connection = SSHHook.get_connection(ssh_conn)
-#
-#     return SSHFS(
-#         host=ssh_connection.host,
-#         user=ssh_connection.login,
-#         passwd=ssh_connection.password,
-#     )
-
-
 def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
     aws_connection = AwsBaseHook.get_connection(aws_conn)
 
@@ -207,19 +193,6 @@ def _create_table_from_stage(snowflake_conn: str, schema: str, stage: str) -> No
         tx.execute(
             f"create or replace transient table {qualified_table} as {stmt}"  # nosec
         ).fetchall()
-
-
-def encrypt(fd: IO[bytes]) -> IO[bytes]:
-    gpg = init_gnupg()
-    encrypted_message = gpg.encrypt_file(fd, "sts@equifax.com", always_trust=True)
-    return BytesIO(encrypted_message.data)
-
-
-def decrypt(fd: IO[bytes]) -> IO[bytes]:
-    gpg = init_gnupg()
-    pass_phrase = Variable.get("equifax_pgp_passphrase", deserialize_json=False)
-    decrypted_message = gpg.decrypt_file(fd, always_trust=True, passphrase=pass_phrase)
-    return BytesIO(decrypted_message.data)
 
 
 check_if_file_downloaded = ShortCircuitOperator(
