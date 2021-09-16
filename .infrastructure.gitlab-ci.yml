@@ -13,8 +13,7 @@ cdk_test:
                    aws-cdk.aws-mwaa \
                    aws-cdk.core \
                    aws_cdk.aws-kms
-    - pip3 install black
-    - black --check . # python code formatter
+    - npm install -g aws-cdk ; cdk --version
 
   script:
   - cdk doctor #Check your set-up for potential problems
