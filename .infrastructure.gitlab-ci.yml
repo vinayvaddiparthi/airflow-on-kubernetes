@@ -3,8 +3,6 @@ default:
 
 CDK:
   stage: test
-  only:
-    - master
   before_script:
     - apt-get -qq update
     - pip3 install -r requirements.txt
