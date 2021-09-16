@@ -8,8 +8,9 @@ import aws_cdk.aws_kms as kms
 
 
 class MwaaCdkStackEnv(core.Stack):
-
-    def __init__(self, scope: core.Construct, id: str, vpc, mwaa_props,  **kwargs) -> None:
+    def __init__(
+        self, scope: core.Construct, id: str, vpc, mwaa_props, **kwargs
+    ) -> None:
         super().__init__(scope, id, **kwargs)
 
         # Create MWAA S3 Bucket and upload local dags
@@ -19,15 +20,17 @@ class MwaaCdkStackEnv(core.Stack):
             "mwaa-dags",
             bucket_name=f"{mwaa_props['dagss3location'].lower()}",
             versioned=True,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
         )
 
-        s3deploy.BucketDeployment(self, "DeployDAG",
-        sources=[s3deploy.Source.asset("./dags")],
-        destination_bucket=dags_bucket,
-        destination_key_prefix="dags",
-        prune=False,
-        retain_on_delete=False
+        s3deploy.BucketDeployment(
+            self,
+            "DeployDAG",
+            sources=[s3deploy.Source.asset("./dags")],
+            destination_bucket=dags_bucket,
+            destination_key_prefix="dags",
+            prune=False,
+            retain_on_delete=False,
         )
 
         dags_bucket_arn = dags_bucket.bucket_arn
@@ -39,27 +42,19 @@ class MwaaCdkStackEnv(core.Stack):
                 iam.PolicyStatement(
                     actions=["airflow:PublishMetrics"],
                     effect=iam.Effect.ALLOW,
-                    resources=[f"arn:aws:airflow:{self.region}:{self.account}:environment/{mwaa_props['mwaa_env']}"],
+                    resources=[
+                        f"arn:aws:airflow:{self.region}:{self.account}:environment/{mwaa_props['mwaa_env']}"
+                    ],
                 ),
                 iam.PolicyStatement(
-                    actions=[
-                        "s3:ListAllMyBuckets"
-                    ],
+                    actions=["s3:ListAllMyBuckets"],
                     effect=iam.Effect.DENY,
-                    resources=[
-                        f"{dags_bucket_arn}/*",
-                        f"{dags_bucket_arn}"
-                        ],
+                    resources=[f"{dags_bucket_arn}/*", f"{dags_bucket_arn}"],
                 ),
                 iam.PolicyStatement(
-                    actions=[
-                        "s3:*"
-                    ],
+                    actions=["s3:*"],
                     effect=iam.Effect.ALLOW,
-                    resources=[
-                        f"{dags_bucket_arn}/*",
-                        f"{dags_bucket_arn}"
-                        ],
+                    resources=[f"{dags_bucket_arn}/*", f"{dags_bucket_arn}"],
                 ),
                 iam.PolicyStatement(
                     actions=[
@@ -69,15 +64,15 @@ class MwaaCdkStackEnv(core.Stack):
                         "logs:GetLogEvents",
                         "logs:GetLogRecord",
                         "logs:GetLogGroupFields",
-                        "logs:GetQueryResults"
+                        "logs:GetQueryResults",
                     ],
                     effect=iam.Effect.ALLOW,
-                    resources=[f"arn:aws:logs:{self.region}:{self.account}:log-group:airflow-{mwaa_props['mwaa_env']}-*"],
+                    resources=[
+                        f"arn:aws:logs:{self.region}:{self.account}:log-group:airflow-{mwaa_props['mwaa_env']}-*"
+                    ],
                 ),
                 iam.PolicyStatement(
-                    actions=[
-                        "logs:DescribeLogGroups"
-                    ],
+                    actions=["logs:DescribeLogGroups"],
                     effect=iam.Effect.ALLOW,
                     resources=["*"],
                 ),
@@ -88,7 +83,7 @@ class MwaaCdkStackEnv(core.Stack):
                         "sqs:GetQueueAttributes",
                         "sqs:GetQueueUrl",
                         "sqs:ReceiveMessage",
-                        "sqs:SendMessage"
+                        "sqs:SendMessage",
                     ],
                     effect=iam.Effect.ALLOW,
                     resources=[f"arn:aws:sqs:{self.region}:*:airflow-celery-*"],
@@ -123,22 +118,18 @@ class MwaaCdkStackEnv(core.Stack):
                 iam.ServicePrincipal("airflow-env.amazonaws.com"),
             ),
             inline_policies={"CDKmwaaPolicyDocument": mwaa_policy_document},
-            path="/service-role/"
+            path="/service-role/",
         )
-
 
         # Create MWAA Security Group and get networking info
 
         security_group = ec2.SecurityGroup(
-            self,
-            id = "mwaa-sg",
-            vpc = vpc,
-            security_group_name = "mwaa-sg"
+            self, id="mwaa-sg", vpc=vpc, security_group_name="mwaa-sg"
         )
 
         security_group_id = security_group.security_group_id
 
-        security_group.connections.allow_internally(ec2.Port.all_traffic(),"MWAA")
+        security_group.connections.allow_internally(ec2.Port.all_traffic(), "MWAA")
 
         subnets = [subnet.subnet_id for subnet in vpc.private_subnets]
         network_configuration = mwaa.CfnEnvironment.NetworkConfigurationProperty(
@@ -149,24 +140,31 @@ class MwaaCdkStackEnv(core.Stack):
         # **OPTIONAL** Configure specific MWAA settings - you can externalise these if you want
 
         logging_configuration = mwaa.CfnEnvironment.LoggingConfigurationProperty(
-            task_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=True, log_level="INFO"),
-            worker_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=True, log_level="INFO"),
-            scheduler_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=True, log_level="INFO"),
-            dag_processing_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=True, log_level="INFO"),
-            webserver_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=True, log_level="INFO")
-            )
+            task_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(
+                enabled=True, log_level="INFO"
+            ),
+            worker_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(
+                enabled=True, log_level="INFO"
+            ),
+            scheduler_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(
+                enabled=True, log_level="INFO"
+            ),
+            dag_processing_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(
+                enabled=True, log_level="INFO"
+            ),
+            webserver_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(
+                enabled=True, log_level="INFO"
+            ),
+        )
 
         options = {
-            'core.load_default_connections': False,
-            'core.load_examples': False,
-            'webserver.dag_default_view': 'tree',
-            'webserver.dag_orientation': 'TB'
+            "core.load_default_connections": False,
+            "core.load_examples": False,
+            "webserver.dag_default_view": "tree",
+            "webserver.dag_orientation": "TB",
         }
 
-        tags = {
-            'env': f"{mwaa_props['mwaa_env']}",
-            'service': 'MWAA Apache AirFlow'
-        }
+        tags = {"env": f"{mwaa_props['mwaa_env']}", "service": "MWAA Apache AirFlow"}
 
         # **OPTIONAL** Create KMS key that MWAA will use for encryption
 
@@ -177,32 +175,32 @@ class MwaaCdkStackEnv(core.Stack):
 
         managed_airflow = mwaa.CfnEnvironment(
             scope=self,
-            id='tc-airflow-environment',
+            id="tc-airflow-environment",
             name=f"{mwaa_props['mwaa_env']}",
-            airflow_configuration_options={'core.default_timezone': 'utc'},
-            airflow_version='2.0.2',
+            airflow_configuration_options={"core.default_timezone": "utc"},
+            airflow_version="2.0.2",
             dag_s3_path="dags",
-            environment_class='mw1.small',
+            environment_class="mw1.small",
             execution_role_arn=mwaa_service_role.role_arn,
             # kms_key=key.key_id,
             # logging_configuration=logging_configuration,
             max_workers=5,
             network_configuration=network_configuration,
-            #plugins_s3_object_version=None,
-            #plugins_s3_path=None,
-            #requirements_s3_object_version=None,
-            #requirements_s3_path=None,
+            # plugins_s3_object_version=None,
+            # plugins_s3_path=None,
+            # requirements_s3_object_version=None,
+            # requirements_s3_path=None,
             source_bucket_arn=dags_bucket_arn,
-            webserver_access_mode='PUBLIC_ONLY',
-            #weekly_maintenance_window_start=None
+            webserver_access_mode="PUBLIC_ONLY",
+            # weekly_maintenance_window_start=None
         )
 
-        managed_airflow.add_override('Properties.AirflowConfigurationOptions', options)
-        managed_airflow.add_override('Properties.Tags', tags)
+        managed_airflow.add_override("Properties.AirflowConfigurationOptions", options)
+        managed_airflow.add_override("Properties.Tags", tags)
 
         core.CfnOutput(
             self,
             id="MWAASecurityGroup",
             value=security_group_id,
-            description="Security Group name used by MWAA"
+            description="Security Group name used by MWAA",
         )
