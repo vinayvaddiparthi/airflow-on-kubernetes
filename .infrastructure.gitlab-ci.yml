@@ -5,7 +5,13 @@ cdk_test:
   stage: test
   before_script:
     - apt-get -qq update
-    - pip3 install -r requirements.txt
+    - pip3 install aws-cdk.aws-ec2 \
+                   aws-cdk.aws-iam \
+                   aws-cdk.aws-s3 \
+                   aws-cdk.aws-s3-deployment \
+                   aws-cdk.aws-mwaa \
+                   aws-cdk.core \
+                   aws_cdk.aws-kms
     - pip3 install black
     - black --check . # python code formatter
 
