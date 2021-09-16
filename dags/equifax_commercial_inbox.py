@@ -229,7 +229,7 @@ decrypt_response_files = PythonOperator(
     dag=dag,
 )
 
-decode_decrypted_files = PythonOperator(
+convert_to_parquet = PythonOperator(
     task_id="convert_to_parquet",
     python_callable=_decode_decrypted_files,
     op_kwargs={
@@ -260,6 +260,6 @@ create_table_from_stage = PythonOperator(
     check_if_file_downloaded
     >> download_response_files
     >> decrypt_response_files
-    >> decode_decrypted_files
+    >> convert_to_parquet
     >> create_table_from_stage
 )
