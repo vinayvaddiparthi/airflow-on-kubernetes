@@ -1,5 +1,5 @@
 include:
-          - local: .infrastructure.gitlab-ci.yml
+  - local: .infrastructure.gitlab-ci.yml
 stages:
   - pre-test
   - test
