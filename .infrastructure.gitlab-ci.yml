@@ -1,7 +1,7 @@
 default:
       image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest #Docker image to use for build jobs
 
-CDK:
+cdk_test:
   stage: test
   before_script:
     - apt-get -qq update
