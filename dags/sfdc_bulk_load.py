@@ -237,12 +237,11 @@ def ensure_stage_and_table(
     destination_database: str,
     destination_schema: str,
     destination_table: str,
-    dev_env: bool,
 ) -> None:
     with engine_.begin() as tx:
         stmts = [
             f"use database {destination_database}",
-            f"create {'temporary stage' if dev_env else 'stage if not exists'} {destination_schema}.{destination_table} "  # nosec
+            f"create {'stage if not exists' if Variable.get('environment') == 'production' else 'temporary stage'} {destination_schema}.{destination_table} "  # nosec
             f"  file_format=(type=parquet)",  # nosec
             f"create or replace table {destination_schema}.{destination_table} as "  # nosec
             f"  select $1 as fields from @{destination_schema}.{destination_table}",  # nosec
@@ -258,7 +257,6 @@ def process_sobject(
     engine_: Engine,
     database: str,
     schema: str,
-    dev_env: bool,
 ) -> None:
     try:
         sobject = describe_sobject(salesforce, sobject_name)
@@ -302,7 +300,7 @@ def process_sobject(
 
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
-        ensure_stage_and_table(engine_, database, schema, destination_table, dev_env)
+        ensure_stage_and_table(engine_, database, schema, destination_table)
 
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
@@ -360,11 +358,10 @@ def import_sfdc(
     salesforce_conn: str,
     database: str,
     schema: str,
-    dev_env: bool,
 ) -> None:
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     salesforce_connection = BaseHook.get_connection(salesforce_conn)
-    domain_ = "test" if dev_env else "login"
+    domain_ = None if Variable.get("environment") == "production" else "test"
     salesforce = Salesforce(
         username=salesforce_connection.login,
         password=salesforce_connection.password,
@@ -388,7 +385,6 @@ def import_sfdc(
                 engine_,
                 database,
                 schema,
-                dev_env,
             )
             for sobject_name in (
                 x["name"] for x in salesforce.describe()["sobjects"] if x["queryable"]
@@ -411,28 +407,14 @@ def create_dag(instances: List[str]) -> DAG:
         max_active_runs=1,
     ) as dag:
         for instance in instances:
-
-            try:
-                if Variable.get("environment") == "production":
-                    dev_env_ = False
-                    task_id_ = f"import_{instance}"
-                    salesforce_conn_ = f"salesforce_{instance}"
-                    schema_ = instance
-            except Exception:
-                dev_env_ = True
-                task_id_ = f"import_{instance}_sandbox"
-                salesforce_conn_ = f"salesforce_{instance}_sandbox"
-                schema_ = f"{instance}_staging"
-
             dag << PythonOperator(
-                task_id=task_id_,
+                task_id=f"import_{instance}",
                 python_callable=import_sfdc,
                 op_kwargs={
                     "snowflake_conn": "airflow_production",
-                    "salesforce_conn": salesforce_conn_,
+                    "salesforce_conn": f"salesforce_{instance}",
                     "database": "salesforce2",
-                    "schema": schema_,
-                    "dev_env": dev_env_,
+                    "schema": f"{instance}{'' if Variable.get('environment') == 'production' else '_staging'}",
                 },
                 pool="sfdc_pool",
                 retry_delay=datetime.timedelta(hours=1),
@@ -488,7 +470,7 @@ if __name__ == "__main__":
             },
         ),
     ) as mock_engine:
-        import_sfdc("snowflake_conn", "salesforce_conn", database, "zetatango", True)
+        import_sfdc("snowflake_conn", "salesforce_conn", database, "zetatango")
 else:
     globals()["salesforce_bulk_import_dag"] = create_dag(
         Variable.get("salesforce_instances", deserialize_json=True)
