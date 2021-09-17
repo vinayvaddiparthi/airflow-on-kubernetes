@@ -11,10 +11,12 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.sftp.hooks.sftp import SFTPHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 
 import datetime
 import logging
 import pendulum
+import json
 from typing import Any
 from tempfile import NamedTemporaryFile
 from fs_s3fs import S3FS
@@ -24,7 +26,7 @@ from pyarrow._csv import ReadOptions
 from pyarrow.lib import ArrowInvalid, array
 
 from helpers.suspend_aws_env import SuspendAwsEnvVar
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_dag, sensor_timeout
 from utils.gpg import init_gnupg
 
 default_args = {
@@ -44,6 +46,7 @@ dag = DAG(
     dag_id="equifax_commercial_inbox",
     schedule_interval="@daily",
     default_args=default_args,
+    user_defined_macros={"json": json},
 )
 dag.doc_md = __doc__
 
@@ -52,7 +55,8 @@ SNOWFLAKE_CONN = "airflow_production"
 S3_CONN = "s3_dataops"
 S3_BUCKET = f"tc-data-airflow-{'production' if Variable.get('environment') == 'production' else 'staging'}"
 DIR_PATH = "equifax/commercial"
-COMMERCIAL_FILENAME = ""
+DV_FILENAME = "{{ json.loads(ti.xcom_pull(task_ids='download_response_files', key='filenames'))[0][:-8] }}"
+RISK_FILENAME = "{{ json.loads(ti.xcom_pull(task_ids='download_response_files', key='filenames'))[1][:-8] }}"
 EXECUTOR_CONFIG = {
     "KubernetesExecutor": {
         "annotations": {
@@ -67,7 +71,9 @@ EXECUTOR_CONFIG = {
 
 
 def _check_if_file_downloaded() -> bool:
-    return Variable.get("equifax_commercial_response_downloaded") != "True"
+    return not Variable.get("equifax_commercial", deserialize_json=True)[
+        "responses_downloaded"
+    ]
 
 
 def _download_response_files(
@@ -92,7 +98,7 @@ def _download_response_files(
             "❌ Both commercial files are not yet available to download from the sftp server."
         )
         return
-    ti.xcom_push(key="filenames", value=commercial_files)
+    ti.xcom_push(key="filenames", value=json.dumps(commercial_files))
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
     for commercial_file in commercial_files:
         with NamedTemporaryFile(mode="w") as f:
@@ -113,7 +119,9 @@ def _decrypt_response_files(
     s3_conn_id: str, s3_bucket: str, dir_path: str, ti: TaskInstance, **_: None
 ) -> None:
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
-    filenames = ti.xcom_pull(task_ids="download_response_files", key="filenames")
+    filenames = json.loads(
+        ti.xcom_pull(task_ids="download_response_files", key="filenames")
+    )
     gpg = init_gnupg()
     passphrase = Variable.get("equifax_pgp_passphrase", deserialize_json=False)
     for filename in filenames:
@@ -146,8 +154,8 @@ def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
     )
 
 
-def _decode_decrypted_files(
-    aws_conn: str, execution_date: Pendulum, run_id: str, **kwargs: Any
+def _convert_to_parquet(
+    aws_conn: str, execution_date: Pendulum, run_id: str, **_: None
 ) -> None:
     with SuspendAwsEnvVar():
         s3fs = _get_s3fs_from_conn(aws_conn)
@@ -195,7 +203,7 @@ def _create_table_from_stage(snowflake_conn: str, schema: str, stage: str) -> No
         ).fetchall()
 
 
-check_if_file_downloaded = ShortCircuitOperator(
+check_if_files_downloaded = ShortCircuitOperator(
     task_id="check_if_files_downloaded",
     python_callable=_check_if_file_downloaded,
     do_xcom_push=False,
@@ -231,7 +239,7 @@ decrypt_response_files = PythonOperator(
 
 convert_to_parquet = PythonOperator(
     task_id="convert_to_parquet",
-    python_callable=_decode_decrypted_files,
+    python_callable=_convert_to_parquet,
     op_kwargs={
         "aws_conn": "s3_equifax_commercial",
     },
@@ -242,11 +250,33 @@ convert_to_parquet = PythonOperator(
     dag=dag,
 )
 
+is_dv_parquet_available = S3KeySensor(
+    task_id="is_dv_parquet_available",
+    bucket_name=S3_BUCKET,
+    bucket_key=f"{DIR_PATH}/parquet/{DV_FILENAME}.parquet",
+    aws_conn_id=S3_CONN,
+    poke_interval=5,
+    timeout=20,
+    on_failure_callback=sensor_timeout,
+    dag=dag,
+)
+
+is_risk_parquet_available = S3KeySensor(
+    task_id="is_risk_parquet_available",
+    bucket_name=S3_BUCKET,
+    bucket_key=f"{DIR_PATH}/parquet/{RISK_FILENAME}.parquet",
+    aws_conn_id=S3_CONN,
+    poke_interval=5,
+    timeout=20,
+    on_failure_callback=sensor_timeout,
+    dag=dag,
+)
+
 create_table_from_stage = PythonOperator(
     task_id="create_table_from_stage",
     python_callable=_create_table_from_stage,
     op_kwargs={
-        "snowflake_conn": "airflow_production",
+        "snowflake_conn": SNOWFLAKE_CONN,
         "schema": "airflow.production",
         "stage": "equifax_commercial_inbox",
     },
@@ -257,9 +287,10 @@ create_table_from_stage = PythonOperator(
 )
 
 (
-    check_if_file_downloaded
+    check_if_files_downloaded
     >> download_response_files
     >> decrypt_response_files
     >> convert_to_parquet
+    >> [is_dv_parquet_available, is_risk_parquet_available]
     >> create_table_from_stage
 )
