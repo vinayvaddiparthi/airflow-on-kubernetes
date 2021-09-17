@@ -258,7 +258,7 @@ def process_sobject(
     engine_: Engine,
     database: str,
     schema: str,
-    dev_env: bool
+    dev_env: bool,
 ) -> None:
     try:
         sobject = describe_sobject(salesforce, sobject_name)
@@ -388,7 +388,7 @@ def import_sfdc(
                 engine_,
                 database,
                 schema,
-                dev_env
+                dev_env,
             )
             for sobject_name in (
                 x["name"] for x in salesforce.describe()["sobjects"] if x["queryable"]
