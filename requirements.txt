@@ -14,6 +14,7 @@ apache-airflow-backport-providers-sftp
 apache-airflow-backport-providers-ssh
 apache-airflow-backport-providers-http
 apache-airflow-backport-providers-postgres
+apache-airflow-backport-providers-snowflake
 flask-bcrypt  # required by airflow
 fab-oidc
 salesforce-bulk

@@ -1,0 +1,1 @@
+truncate table {{ params.table_name }};

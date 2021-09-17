@@ -56,11 +56,11 @@ EXECUTOR_CONFIG = {
 
 
 def _check_if_file_sent() -> bool:
-    return False if Variable.get("equifax_commercial_request_sent") == "True" else True
+    return not Variable.get("equifax_commercial_request_sent", deserialize_json=True)
 
 
 def _mark_request_as_sent(context: Dict) -> None:
-    Variable.set("equifax_commercial_request_sent", True)
+    Variable.set("equifax_commercial_request_sent", True, serialize_json=True)
     logging.info(context["task_instance"].log_url)
     logging.info("Commercial request file successfully sent to Equifax")
 

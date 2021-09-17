@@ -7,16 +7,17 @@ from airflow import DAG
 from airflow.models import Variable
 from airflow.models.taskinstance import TaskInstance
 from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.sftp.hooks.sftp import SFTPHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
+from airflow.providers.snowflake.transfers.s3_to_snowflake import S3ToSnowflakeOperator
+from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 
 import datetime
 import logging
 import pendulum
-import json
 from tempfile import NamedTemporaryFile
 from fs_s3fs import S3FS
 import pyarrow.csv as csv
@@ -46,17 +47,24 @@ dag = DAG(
     dag_id="equifax_commercial_inbox",
     schedule_interval="@daily",
     default_args=default_args,
-    user_defined_macros={"json": json},
+    template_searchpath="include/sql",
 )
 dag.doc_md = __doc__
 
+IS_PROD = Variable.get(key="environment") == "production"
 SFTP_CONN = "equifax_sftp"
 SNOWFLAKE_CONN = "airflow_production"
 S3_CONN = "s3_dataops"
-S3_BUCKET = f"tc-data-airflow-{'production' if Variable.get('environment') == 'production' else 'staging'}"
+S3_BUCKET = f"tc-data-airflow-{'production' if IS_PROD else 'staging'}"
 DIR_PATH = "equifax/commercial"
-DV_FILENAME = "{{ json.loads(ti.xcom_pull(task_ids='download_response_files', key='filenames'))[0][:-8] }}"
-RISK_FILENAME = "{{ json.loads(ti.xcom_pull(task_ids='download_response_files', key='filenames'))[1][:-8] }}"
+DV_FILENAME = (
+    "{{ ti.xcom_pull(task_ids='download_response_files', key='dv_filename') }}"
+)
+RISK_FILENAME = (
+    "{{ ti.xcom_pull(task_ids='download_response_files', key='risk_filename') }}"
+)
+DV_STAGE_NAME = f"equifax.{'public' if IS_PROD else 'test'}.equifax_comm_stage"
+RISK_STAGE_NAME = f"equifax.{'public' if IS_PROD else 'test'}.equifax_tcap_stage"
 EXECUTOR_CONFIG = {
     "KubernetesExecutor": {
         "annotations": {
@@ -71,9 +79,9 @@ EXECUTOR_CONFIG = {
 
 
 def _check_if_file_downloaded() -> bool:
-    return not Variable.get("equifax_commercial", deserialize_json=True)[
-        "responses_downloaded"
-    ]
+    return not Variable.get(
+        "equifax_commercial_response_downloaded", deserialize_json=True
+    )
 
 
 def _download_response_files(
@@ -98,7 +106,11 @@ def _download_response_files(
             "❌ Both commercial files are not yet available to download from the sftp server."
         )
         return
-    ti.xcom_push(key="filenames", value=json.dumps(commercial_files))
+    for file in commercial_files:
+        if "dv" in file:
+            ti.xcom_push(key="dv_filename", value=file[:-8])
+        else:
+            ti.xcom_push(key="risk_filename", value=file[:-8])
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
     for commercial_file in commercial_files:
         with NamedTemporaryFile(mode="w") as f:
@@ -111,7 +123,7 @@ def _download_response_files(
                 bucket_name=s3_bucket,
                 replace=True,
             )
-    Variable.set("equifax_commercial_response_downloaded", True)
+    Variable.set("equifax_commercial_response_downloaded", True, serialize_json=True)
     logging.info("Response files successfully downloaded.")
 
 
@@ -119,14 +131,13 @@ def _decrypt_response_files(
     s3_conn_id: str, s3_bucket: str, dir_path: str, ti: TaskInstance, **_: None
 ) -> None:
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
-    filenames = json.loads(
-        ti.xcom_pull(task_ids="download_response_files", key="filenames")
-    )
+    dv_filename = ti.xcom_pull(task_ids="download_response_files", key="dv_filename")
+    risk_filename = ti.xcom_pull(task_ids="download_response_files", key="dv_filename")
     gpg = init_gnupg()
     passphrase = Variable.get("equifax_pgp_passphrase", deserialize_json=False)
-    for filename in filenames:
+    for filename in [dv_filename, risk_filename]:
         file = s3_hook.download_file(
-            key=f"{dir_path}/inbox/{filename}", bucket_name=s3_bucket
+            key=f"{dir_path}/inbox/{filename}.csv.pgp", bucket_name=s3_bucket
         )
         with open(file, "rb") as reader:
             decrypted_message = gpg.decrypt_file(
@@ -136,64 +147,71 @@ def _decrypt_response_files(
             writer.write(decrypted_message.data)
             s3_hook.load_file(
                 filename=file,
-                key=f"{dir_path}/decrypted/{filename[:-4]}",
+                key=f"{dir_path}/decrypted/{filename}.csv",
                 bucket_name=s3_bucket,
                 replace=True,
             )
 
 
-def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
-    aws_connection = AwsBaseHook.get_connection(aws_conn)
-
-    return S3FS(
-        bucket_name=aws_connection.extra_dejson["bucket"],
-        region=aws_connection.extra_dejson["region"],
-        dir_path=aws_connection.extra_dejson["dir_path"],
-        aws_access_key_id=aws_connection.extra_dejson["aws_access_key_id"],
-        aws_secret_access_key=aws_connection.extra_dejson["aws_secret_access_key"],
-    )
-
-
 def _convert_to_parquet(
-    aws_conn: str,
+    s3_conn_id: str,
+    bucket_name: str,
+    snowflake_conn_id: str,
+    stage_names: dict,
     ds_nodash: str,
     ti: TaskInstance,
     **_: None,
 ) -> None:
-    with SuspendAwsEnvVar():
-        s3fs = _get_s3fs_from_conn(aws_conn)
-        filenames = json.loads(
-            ti.xcom_pull(task_ids="download_response_files", key="filenames")
+    snowflake_engine = SnowflakeHook(
+        snowflake_conn_id=snowflake_conn_id
+    ).get_sqlalchemy_engine()
+    s3_hook = S3Hook(aws_conn_id=s3_conn_id)
+    for filename in [
+        ti.xcom_pull(task_ids="download_response_files", key="dv_filename"),
+        ti.xcom_pull(task_ids="download_response_files", key="risk_filename"),
+    ]:
+        file = s3_hook.download_file(
+            key=f"{DIR_PATH}/decrypted/{filename}.csv", bucket_name=bucket_name
         )
-        for file in filenames:
-            with s3fs.open(f"decrypted/{file[:-4]}", "rb") as decrypted_file, s3fs.open(
-                f"parquet/{file[:-8]}.parquet", "wb"
-            ) as parquet_file:
-                try:
-                    table_ = csv.read_csv(
-                        decrypted_file,
-                        read_options=ReadOptions(block_size=8388608),
-                    )
-                    # add imported_file_name and import_month columns
-                    table_ = table_.append_column(
-                        field_="imported_file_name",
-                        column=array([f"{file[:-4]}.parquet"] * len(table_)),
-                    )
-                    table_ = table_.append_column(
-                        field_="import_month",
-                        column=array([get_import_month(ds_nodash)] * len(table_)),
-                    )
-
-                    if table_.num_rows == 0:
-                        logging.warning(f"📝️ Skipping empty file {decrypted_file}")
-                        continue
-
-                    pq.write_table(table_, parquet_file)
-
-                except ArrowInvalid as exc:
-                    logging.error(f"❌ Failed to read file {decrypted_file.name}: {exc}")
-
-                logging.info(f"📝️ Converted file {decrypted_file.name}")
+        with open(file, "rb") as reader:
+            try:
+                table_ = csv.read_csv(
+                    reader,
+                    read_options=ReadOptions(block_size=8388608),
+                )
+                # add imported_file_name and import_month columns
+                table_ = table_.append_column(
+                    field_="imported_file_name",
+                    column=array([f"{filename}.parquet"] * len(table_)),
+                )
+                table_ = table_.append_column(
+                    field_="import_month",
+                    column=array([get_import_month(ds_nodash)] * len(table_)),
+                )
+                if table_.num_rows == 0:
+                    logging.warning(f"📝️ Skipping empty file {reader.name}")
+                    continue
+            except ArrowInvalid as exc:
+                logging.error(f"❌ Failed to read file {reader.name}: {exc}")
+        with open(file, "wb") as writer:
+            pq.write_table(table=table_, where=writer)
+            logging.info(f"📝️ Converted file {filename}.csv")
+            s3_hook.load_file(
+                filename=file,
+                key=f"{DIR_PATH}/parquet/{filename}.parquet",
+                bucket_name=bucket_name,
+                replace=True,
+            )
+        with snowflake_engine.begin() as tx:
+            if "dv" in filename:
+                stage_name = stage_names["dv_stage_name"]
+            else:
+                stage_name = stage_names["risk_stage_name"]
+            tx.execute(f"drop stage if exists {stage_name}")
+            tx.execute(
+                f"create stage if not exists {stage_name} file_format=(type=parquet)"
+            )
+            tx.execute(f"put file://{file} @{stage_name}").fetchall()
 
 
 def _create_table_from_stage(snowflake_conn: str, schema: str, stage: str) -> None:
@@ -246,7 +264,13 @@ convert_to_parquet = PythonOperator(
     task_id="convert_to_parquet",
     python_callable=_convert_to_parquet,
     op_kwargs={
-        "aws_conn": "s3_equifax_commercial",
+        "snowflake_conn_id": SNOWFLAKE_CONN,
+        "s3_conn_id": S3_CONN,
+        "bucket_name": S3_BUCKET,
+        "stage_names": {
+            "dv_stage_name": DV_STAGE_NAME,
+            "risk_stage_name": RISK_STAGE_NAME,
+        },
     },
     provide_context=True,
     retry_delay=datetime.timedelta(hours=1),
@@ -274,6 +298,57 @@ is_risk_parquet_available = S3KeySensor(
     poke_interval=5,
     timeout=20,
     on_failure_callback=sensor_timeout,
+    dag=dag,
+)
+
+create_s3_stage = SnowflakeOperator(
+    task_id="create_s3_stage",
+    sql="snowflake/common/create_s3_stage.sql",
+    params={
+        "stage_name": "equifax_comm_stage",
+        "s3_key": f"s3://{S3_BUCKET}/{DIR_PATH}/parquet/{DV_FILENAME}.pgp",
+        "aws_key_id": "",
+        "aws_secret_key": "",
+        "file_format": "parquet",
+    },
+    schema="test",
+    database="equifax",
+    snowflake_conn_id=SNOWFLAKE_CONN,
+    dag=dag,
+)
+
+create_stage_table = SnowflakeOperator(
+    task_id="create_stage_table",
+    sql="snowflake/common/create_table.sql",
+    params={"table_name": "equifax_comm_staging", "stage_name": "equifax_comm_stage"},
+    schema="test",
+    database="equifax",
+    snowflake_conn_id=SNOWFLAKE_CONN,
+    dag=dag,
+)
+
+truncate_stage_table = SnowflakeOperator(
+    task_id="truncate_stage_table",
+    sql="snowflake/common/truncate_table.sql",
+    params={"table_name": "equifax_comm_staging"},
+    schema="test",
+    database="equifax",
+    snowflake_conn_id=SNOWFLAKE_CONN,
+    dag=dag,
+)
+
+copy_from_s3_to_snowflake = S3ToSnowflakeOperator(
+    task_id="copy_from_s3_to_snowflake",
+    s3_keys=[
+        f"s3://{S3_BUCKET}/{DIR_PATH}/parquet/exthinkingpd.eqxcan.eqxcom.efx_scores_dv_20210907_t1.parquet",
+    ],
+    stage="equifax_comm_stage",
+    file_format="(type=parquet)",
+    table="equifax_comm_staging",
+    schema="test",
+    database="equifax",
+    # warehouse="etl",
+    snowflake_conn_id=SNOWFLAKE_CONN,
     dag=dag,
 )
 
