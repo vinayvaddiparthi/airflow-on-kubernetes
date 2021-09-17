@@ -354,20 +354,38 @@ def process_sobject(
 
 
 def import_sfdc(
-    snowflake_conn: str, salesforce_conn: str, database: str, schema: str
+    snowflake_conn: str,
+    salesforce_conn: str,
+    database: str,
+    schema: str,
+    dev_env: bool = False,
 ) -> None:
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     salesforce_connection = BaseHook.get_connection(salesforce_conn)
-    salesforce = Salesforce(
-        username=salesforce_connection.login,
-        password=salesforce_connection.password,
-        security_token=salesforce_connection.extra_dejson["security_token"],
-    )
-    salesforce_bulk = SalesforceBulk(
-        username=salesforce_connection.login,
-        password=salesforce_connection.password,
-        security_token=salesforce_connection.extra_dejson["security_token"],
-    )
+    if dev_env:
+        salesforce = Salesforce(
+            username=salesforce_connection.login,
+            password=salesforce_connection.password,
+            security_token=salesforce_connection.extra_dejson["security_token"],
+            domain="test",
+        )
+        salesforce_bulk = SalesforceBulk(
+            username=salesforce_connection.login,
+            password=salesforce_connection.password,
+            security_token=salesforce_connection.extra_dejson["security_token"],
+            domain="test",
+        )
+    else:
+        salesforce = Salesforce(
+            username=salesforce_connection.login,
+            password=salesforce_connection.password,
+            security_token=salesforce_connection.extra_dejson["security_token"],
+        )
+        salesforce_bulk = SalesforceBulk(
+            username=salesforce_connection.login,
+            password=salesforce_connection.password,
+            security_token=salesforce_connection.extra_dejson["security_token"],
+        )
 
     with ThreadPoolExecutor(max_workers=4) as processing_executor:
         futures_ = [
@@ -401,24 +419,52 @@ def create_dag(instances: List[str]) -> DAG:
         max_active_runs=1,
     ) as dag:
         for instance in instances:
-            dag << PythonOperator(
-                task_id=f"import_{instance}",
-                python_callable=import_sfdc,
-                op_kwargs={
-                    "snowflake_conn": "airflow_production",
-                    "salesforce_conn": f"salesforce_{instance}",
-                    "database": "salesforce2",
-                    "schema": instance,
-                },
-                pool="sfdc_pool",
-                retry_delay=datetime.timedelta(hours=1),
-                retries=3,
-                executor_config={
-                    "resources": {
-                        "requests": {"memory": "8Gi"},
+
+            try:
+                if Variable.get("environment") == "production":
+                    dev_env = False
+            except Exception:
+                dev_env = True
+
+            if not dev_env:
+                dag << PythonOperator(
+                    task_id=f"import_{instance}",
+                    python_callable=import_sfdc,
+                    op_kwargs={
+                        "snowflake_conn": "airflow_production",
+                        "salesforce_conn": f"salesforce_{instance}",
+                        "database": "salesforce2",
+                        "schema": instance,
                     },
-                },
-            )
+                    pool="sfdc_pool",
+                    retry_delay=datetime.timedelta(hours=1),
+                    retries=3,
+                    executor_config={
+                        "resources": {
+                            "requests": {"memory": "8Gi"},
+                        },
+                    },
+                )
+            else:
+                dag << PythonOperator(
+                    task_id=f"import_{instance}_sandbox",
+                    python_callable=import_sfdc,
+                    op_kwargs={
+                        "snowflake_conn": "airflow_production",
+                        "salesforce_conn": f"salesforce_{instance}_sandbox",
+                        "database": "salesforce2",
+                        "schema": f"{instance}_staging",
+                        "dev_env": True,
+                    },
+                    pool="sfdc_pool",
+                    retry_delay=datetime.timedelta(hours=1),
+                    retries=3,
+                    executor_config={
+                        "resources": {
+                            "requests": {"memory": "8Gi"},
+                        },
+                    },
+                )
 
         return dag
 
