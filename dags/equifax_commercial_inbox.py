@@ -17,7 +17,6 @@ import datetime
 import logging
 import pendulum
 import json
-from typing import Any
 from tempfile import NamedTemporaryFile
 from fs_s3fs import S3FS
 import pyarrow.csv as pv, pyarrow.parquet as pq
