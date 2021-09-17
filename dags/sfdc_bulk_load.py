@@ -488,7 +488,7 @@ if __name__ == "__main__":
             },
         ),
     ) as mock_engine:
-        import_sfdc("snowflake_conn", "salesforce_conn", database, "zetatango")
+        import_sfdc("snowflake_conn", "salesforce_conn", database, "zetatango", True)
 else:
     globals()["salesforce_bulk_import_dag"] = create_dag(
         Variable.get("salesforce_instances", deserialize_json=True)
