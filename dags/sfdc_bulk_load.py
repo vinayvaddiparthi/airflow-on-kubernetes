@@ -232,7 +232,7 @@ def describe_sobject(
     )
 
 
-def ensure_stage_and_view(
+def ensure_stage_and_table(
     engine_: Engine,
     destination_database: str,
     destination_schema: str,
@@ -243,7 +243,7 @@ def ensure_stage_and_view(
             f"use database {destination_database}",
             f"create stage if not exists {destination_schema}.{destination_table} "  # nosec
             f"  file_format=(type=parquet)",  # nosec
-            f"create or replace view {destination_schema}.{destination_table} as "  # nosec
+            f"create or replace table {destination_schema}.{destination_table} as "  # nosec
             f"  select $1 as fields from @{destination_schema}.{destination_table}",  # nosec
         ]
 
@@ -300,7 +300,7 @@ def process_sobject(
 
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
-        ensure_stage_and_view(engine_, database, schema, destination_table)
+        ensure_stage_and_table(engine_, database, schema, destination_table)
 
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
