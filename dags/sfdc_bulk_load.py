@@ -237,11 +237,12 @@ def ensure_stage_and_table(
     destination_database: str,
     destination_schema: str,
     destination_table: str,
+    dev_env: bool,
 ) -> None:
     with engine_.begin() as tx:
         stmts = [
             f"use database {destination_database}",
-            f"create stage if not exists {destination_schema}.{destination_table} "  # nosec
+            f"create {'temporary stage' if dev_env else 'stage if not exists'} {destination_schema}.{destination_table} "  # nosec
             f"  file_format=(type=parquet)",  # nosec
             f"create or replace table {destination_schema}.{destination_table} as "  # nosec
             f"  select $1 as fields from @{destination_schema}.{destination_table}",  # nosec
@@ -257,6 +258,7 @@ def process_sobject(
     engine_: Engine,
     database: str,
     schema: str,
+    dev_env: bool
 ) -> None:
     try:
         sobject = describe_sobject(salesforce, sobject_name)
@@ -300,7 +302,7 @@ def process_sobject(
 
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
-        ensure_stage_and_table(engine_, database, schema, destination_table)
+        ensure_stage_and_table(engine_, database, schema, destination_table, dev_env)
 
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
@@ -358,34 +360,23 @@ def import_sfdc(
     salesforce_conn: str,
     database: str,
     schema: str,
-    dev_env: bool = False,
+    dev_env: bool,
 ) -> None:
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     salesforce_connection = BaseHook.get_connection(salesforce_conn)
-    if dev_env:
-        salesforce = Salesforce(
-            username=salesforce_connection.login,
-            password=salesforce_connection.password,
-            security_token=salesforce_connection.extra_dejson["security_token"],
-            domain="test",
-        )
-        salesforce_bulk = SalesforceBulk(
-            username=salesforce_connection.login,
-            password=salesforce_connection.password,
-            security_token=salesforce_connection.extra_dejson["security_token"],
-            domain="test",
-        )
-    else:
-        salesforce = Salesforce(
-            username=salesforce_connection.login,
-            password=salesforce_connection.password,
-            security_token=salesforce_connection.extra_dejson["security_token"],
-        )
-        salesforce_bulk = SalesforceBulk(
-            username=salesforce_connection.login,
-            password=salesforce_connection.password,
-            security_token=salesforce_connection.extra_dejson["security_token"],
-        )
+    domain_ = "test" if dev_env else "login"
+    salesforce = Salesforce(
+        username=salesforce_connection.login,
+        password=salesforce_connection.password,
+        security_token=salesforce_connection.extra_dejson["security_token"],
+        domain=domain_,
+    )
+    salesforce_bulk = SalesforceBulk(
+        username=salesforce_connection.login,
+        password=salesforce_connection.password,
+        security_token=salesforce_connection.extra_dejson["security_token"],
+        domain=domain_,
+    )
 
     with ThreadPoolExecutor(max_workers=4) as processing_executor:
         futures_ = [
@@ -397,6 +388,7 @@ def import_sfdc(
                 engine_,
                 database,
                 schema,
+                dev_env
             )
             for sobject_name in (
                 x["name"] for x in salesforce.describe()["sobjects"] if x["queryable"]
@@ -422,49 +414,35 @@ def create_dag(instances: List[str]) -> DAG:
 
             try:
                 if Variable.get("environment") == "production":
-                    dev_env = False
+                    dev_env_ = False
+                    task_id_ = f"import_{instance}"
+                    salesforce_conn_ = f"salesforce_{instance}"
+                    schema_ = instance
             except Exception:
-                dev_env = True
+                dev_env_ = True
+                task_id_ = f"import_{instance}_sandbox"
+                salesforce_conn_ = f"salesforce_{instance}_sandbox"
+                schema_ = f"{instance}_staging"
 
-            if not dev_env:
-                dag << PythonOperator(
-                    task_id=f"import_{instance}",
-                    python_callable=import_sfdc,
-                    op_kwargs={
-                        "snowflake_conn": "airflow_production",
-                        "salesforce_conn": f"salesforce_{instance}",
-                        "database": "salesforce2",
-                        "schema": instance,
+            dag << PythonOperator(
+                task_id=task_id_,
+                python_callable=import_sfdc,
+                op_kwargs={
+                    "snowflake_conn": "airflow_production",
+                    "salesforce_conn": salesforce_conn_,
+                    "database": "salesforce2",
+                    "schema": schema_,
+                    "dev_env": dev_env_,
+                },
+                pool="sfdc_pool",
+                retry_delay=datetime.timedelta(hours=1),
+                retries=3,
+                executor_config={
+                    "resources": {
+                        "requests": {"memory": "8Gi"},
                     },
-                    pool="sfdc_pool",
-                    retry_delay=datetime.timedelta(hours=1),
-                    retries=3,
-                    executor_config={
-                        "resources": {
-                            "requests": {"memory": "8Gi"},
-                        },
-                    },
-                )
-            else:
-                dag << PythonOperator(
-                    task_id=f"import_{instance}_sandbox",
-                    python_callable=import_sfdc,
-                    op_kwargs={
-                        "snowflake_conn": "airflow_production",
-                        "salesforce_conn": f"salesforce_{instance}_sandbox",
-                        "database": "salesforce2",
-                        "schema": f"{instance}_staging",
-                        "dev_env": True,
-                    },
-                    pool="sfdc_pool",
-                    retry_delay=datetime.timedelta(hours=1),
-                    retries=3,
-                    executor_config={
-                        "resources": {
-                            "requests": {"memory": "8Gi"},
-                        },
-                    },
-                )
+                },
+            )
 
         return dag
 
