@@ -19,14 +19,15 @@ import pendulum
 import json
 from tempfile import NamedTemporaryFile
 from fs_s3fs import S3FS
-import pyarrow.csv as pv, pyarrow.parquet as pq
-from pendulum import Pendulum
+import pyarrow.csv as csv
+import pyarrow.parquet as pq
 from pyarrow._csv import ReadOptions
 from pyarrow.lib import ArrowInvalid, array
 
 from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils.failure_callbacks import slack_dag, sensor_timeout
 from utils.gpg import init_gnupg
+from utils.equifax_helpers import get_import_month
 
 default_args = {
     "owner": "airflow",
@@ -154,29 +155,34 @@ def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
 
 
 def _convert_to_parquet(
-    aws_conn: str, execution_date: Pendulum, run_id: str, **_: None
+    aws_conn: str,
+    ds_nodash: str,
+    ti: TaskInstance,
+    **_: None,
 ) -> None:
     with SuspendAwsEnvVar():
         s3fs = _get_s3fs_from_conn(aws_conn)
-
-        for file in (
-            file
-            for file in s3fs.listdir("decrypted")
-            if f"{file[:-4]}.parquet" not in set(s3fs.listdir("parquet"))
-        ):
-            with s3fs.open(f"decrypted/{file}", "rb") as decrypted_file, s3fs.open(
-                f"parquet/{file[:-4]}.parquet", "wb"
+        filenames = json.loads(
+            ti.xcom_pull(task_ids="download_response_files", key="filenames")
+        )
+        for file in filenames:
+            with s3fs.open(f"decrypted/{file[:-4]}", "rb") as decrypted_file, s3fs.open(
+                f"parquet/{file[:-8]}.parquet", "wb"
             ) as parquet_file:
                 try:
-                    table_ = pv.read_csv(
+                    table_ = csv.read_csv(
                         decrypted_file,
                         read_options=ReadOptions(block_size=8388608),
                     )
-
+                    # add imported_file_name and import_month columns
                     table_ = table_.append_column(
-                        "__execution_date",
-                        array([execution_date.to_iso8601_string()] * len(table_)),
-                    ).append_column("__run_id", array([run_id] * len(table_)))
+                        field_="imported_file_name",
+                        column=array([f"{file[:-4]}.parquet"] * len(table_)),
+                    )
+                    table_ = table_.append_column(
+                        field_="import_month",
+                        column=array([get_import_month(ds_nodash)] * len(table_)),
+                    )
 
                     if table_.num_rows == 0:
                         logging.warning(f"📝️ Skipping empty file {decrypted_file}")
