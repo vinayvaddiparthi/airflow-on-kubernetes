@@ -207,9 +207,8 @@ def _convert_to_parquet(
                 stage_name = stage_names["dv_stage_name"]
             else:
                 stage_name = stage_names["risk_stage_name"]
-            tx.execute(f"drop stage if exists {stage_name}")
             tx.execute(
-                f"create stage if not exists {stage_name} file_format=(type=parquet)"
+                f"create or replace temporary stage {stage_name} file_format=(type=parquet)"
             )
             tx.execute(f"put file://{file} @{stage_name}").fetchall()
 
@@ -279,49 +278,59 @@ convert_to_parquet = PythonOperator(
     dag=dag,
 )
 
-is_dv_parquet_available = S3KeySensor(
-    task_id="is_dv_parquet_available",
-    bucket_name=S3_BUCKET,
-    bucket_key=f"{DIR_PATH}/parquet/{DV_FILENAME}.parquet",
-    aws_conn_id=S3_CONN,
-    poke_interval=5,
-    timeout=20,
-    on_failure_callback=sensor_timeout,
-    dag=dag,
-)
+# is_dv_parquet_available = S3KeySensor(
+#     task_id="is_dv_parquet_available",
+#     bucket_name=S3_BUCKET,
+#     bucket_key=f"{DIR_PATH}/parquet/{DV_FILENAME}.parquet",
+#     aws_conn_id=S3_CONN,
+#     poke_interval=5,
+#     timeout=20,
+#     on_failure_callback=sensor_timeout,
+#     dag=dag,
+# )
+#
+# is_risk_parquet_available = S3KeySensor(
+#     task_id="is_risk_parquet_available",
+#     bucket_name=S3_BUCKET,
+#     bucket_key=f"{DIR_PATH}/parquet/{RISK_FILENAME}.parquet",
+#     aws_conn_id=S3_CONN,
+#     poke_interval=5,
+#     timeout=20,
+#     on_failure_callback=sensor_timeout,
+#     dag=dag,
+# )
 
-is_risk_parquet_available = S3KeySensor(
-    task_id="is_risk_parquet_available",
-    bucket_name=S3_BUCKET,
-    bucket_key=f"{DIR_PATH}/parquet/{RISK_FILENAME}.parquet",
-    aws_conn_id=S3_CONN,
-    poke_interval=5,
-    timeout=20,
-    on_failure_callback=sensor_timeout,
-    dag=dag,
-)
+# create_s3_stage = SnowflakeOperator(
+#     task_id="create_s3_stage",
+#     sql="snowflake/common/create_s3_stage.sql",
+#     params={
+#         "stage_name": "equifax_comm_stage",
+#         "s3_key": f"s3://{S3_BUCKET}/{DIR_PATH}/parquet/{DV_FILENAME}.pgp",
+#         "aws_key_id": "",
+#         "aws_secret_key": "",
+#         "file_format": "parquet",
+#     },
+#     schema="test",
+#     database="equifax",
+#     snowflake_conn_id=SNOWFLAKE_CONN,
+#     dag=dag,
+# )
 
-create_s3_stage = SnowflakeOperator(
-    task_id="create_s3_stage",
-    sql="snowflake/common/create_s3_stage.sql",
-    params={
-        "stage_name": "equifax_comm_stage",
-        "s3_key": f"s3://{S3_BUCKET}/{DIR_PATH}/parquet/{DV_FILENAME}.pgp",
-        "aws_key_id": "",
-        "aws_secret_key": "",
-        "file_format": "parquet",
-    },
-    schema="test",
+create_stage_table_dv = SnowflakeOperator(
+    task_id=f"create_stage_table_dv",
+    sql="equifax/create_staging_table_dv.sql",
+    params={"table_name": "equifax_comm_staging"},
+    schema=f"{'public' if IS_PROD else 'test'}",
     database="equifax",
     snowflake_conn_id=SNOWFLAKE_CONN,
     dag=dag,
 )
 
-create_stage_table = SnowflakeOperator(
-    task_id="create_stage_table",
-    sql="snowflake/common/create_table.sql",
-    params={"table_name": "equifax_comm_staging", "stage_name": "equifax_comm_stage"},
-    schema="test",
+create_stage_table_risk = SnowflakeOperator(
+    task_id=f"create_stage_table_risk",
+    sql="equifax/create_table.sql",
+    params={"table_name": "equifax_tcap_staging", "stage_name": "equifax_tcap_stage"},
+    schema=f"{'public' if IS_PROD else 'test'}",
     database="equifax",
     snowflake_conn_id=SNOWFLAKE_CONN,
     dag=dag,
@@ -331,26 +340,26 @@ truncate_stage_table = SnowflakeOperator(
     task_id="truncate_stage_table",
     sql="snowflake/common/truncate_table.sql",
     params={"table_name": "equifax_comm_staging"},
-    schema="test",
+    schema=f"{'public' if IS_PROD else 'test'}",
     database="equifax",
     snowflake_conn_id=SNOWFLAKE_CONN,
     dag=dag,
 )
 
-copy_from_s3_to_snowflake = S3ToSnowflakeOperator(
-    task_id="copy_from_s3_to_snowflake",
-    s3_keys=[
-        f"s3://{S3_BUCKET}/{DIR_PATH}/parquet/exthinkingpd.eqxcan.eqxcom.efx_scores_dv_20210907_t1.parquet",
-    ],
-    stage="equifax_comm_stage",
-    file_format="(type=parquet)",
-    table="equifax_comm_staging",
-    schema="test",
-    database="equifax",
-    # warehouse="etl",
-    snowflake_conn_id=SNOWFLAKE_CONN,
-    dag=dag,
-)
+# copy_from_s3_to_snowflake = S3ToSnowflakeOperator(
+#     task_id="copy_from_s3_to_snowflake",
+#     s3_keys=[
+#         f"s3://{S3_BUCKET}/{DIR_PATH}/parquet/exthinkingpd.eqxcan.eqxcom.efx_scores_dv_20210907_t1.parquet",
+#     ],
+#     stage="equifax_comm_stage",
+#     file_format="(type=parquet)",
+#     table="equifax_comm_staging",
+#     schema="test",
+#     database="equifax",
+#     # warehouse="etl",
+#     snowflake_conn_id=SNOWFLAKE_CONN,
+#     dag=dag,
+# )
 
 create_table_from_stage = PythonOperator(
     task_id="create_table_from_stage",
@@ -371,6 +380,5 @@ create_table_from_stage = PythonOperator(
     >> download_response_files
     >> decrypt_response_files
     >> convert_to_parquet
-    >> [is_dv_parquet_available, is_risk_parquet_available]
-    >> create_table_from_stage
+    >> [create_stage_table_dv, create_stage_table_risk]
 )
