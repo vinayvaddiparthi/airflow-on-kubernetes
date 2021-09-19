@@ -57,14 +57,8 @@ SNOWFLAKE_CONN = "airflow_production"
 S3_CONN = "s3_dataops"
 S3_BUCKET = f"tc-data-airflow-{'production' if IS_PROD else 'staging'}"
 DIR_PATH = "equifax/commercial"
-DV_FILENAME = (
-    "{{ ti.xcom_pull(task_ids='download_response_files', key='dv_filename') }}"
-)
-RISK_FILENAME = (
-    "{{ ti.xcom_pull(task_ids='download_response_files', key='risk_filename') }}"
-)
-DV_STAGE_NAME = f"equifax.{'public' if IS_PROD else 'test'}.equifax_comm_stage"
-RISK_STAGE_NAME = f"equifax.{'public' if IS_PROD else 'test'}.equifax_tcap_stage"
+RISK_STAGE_NAME = f"equifax.{'public' if IS_PROD else 'test'}.equifax_comm_stage"
+DV_STAGE_NAME = f"equifax.{'public' if IS_PROD else 'test'}.equifax_tcap_stage"
 EXECUTOR_CONFIG = {
     "KubernetesExecutor": {
         "annotations": {
@@ -107,10 +101,10 @@ def _download_response_files(
         )
         return
     for file in commercial_files:
-        if "dv" in file:
-            ti.xcom_push(key="dv_filename", value=file[:-8])
-        else:
+        if "risk" in file:
             ti.xcom_push(key="risk_filename", value=file[:-8])
+        else:
+            ti.xcom_push(key="dv_filename", value=file[:-8])
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
     for commercial_file in commercial_files:
         with NamedTemporaryFile(mode="w") as f:
@@ -131,11 +125,11 @@ def _decrypt_response_files(
     s3_conn_id: str, s3_bucket: str, dir_path: str, ti: TaskInstance, **_: None
 ) -> None:
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
+    risk_filename = ti.xcom_pull(task_ids="download_response_files", key="risk_filename")
     dv_filename = ti.xcom_pull(task_ids="download_response_files", key="dv_filename")
-    risk_filename = ti.xcom_pull(task_ids="download_response_files", key="dv_filename")
     gpg = init_gnupg()
     passphrase = Variable.get("equifax_pgp_passphrase", deserialize_json=False)
-    for filename in [dv_filename, risk_filename]:
+    for filename in [risk_filename, dv_filename]:
         file = s3_hook.download_file(
             key=f"{dir_path}/inbox/{filename}.csv.pgp", bucket_name=s3_bucket
         )
@@ -167,8 +161,8 @@ def _convert_to_parquet(
     ).get_sqlalchemy_engine()
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
     for filename in [
-        ti.xcom_pull(task_ids="download_response_files", key="dv_filename"),
         ti.xcom_pull(task_ids="download_response_files", key="risk_filename"),
+        ti.xcom_pull(task_ids="download_response_files", key="dv_filename"),
     ]:
         file = s3_hook.download_file(
             key=f"{DIR_PATH}/decrypted/{filename}.csv", bucket_name=bucket_name
@@ -203,26 +197,14 @@ def _convert_to_parquet(
                 replace=True,
             )
         with snowflake_engine.begin() as tx:
-            if "dv" in filename:
-                stage_name = stage_names["dv_stage_name"]
-            else:
+            if "risk" in filename:
                 stage_name = stage_names["risk_stage_name"]
+            else:
+                stage_name = stage_names["dv_stage_name"]
             tx.execute(
                 f"create or replace temporary stage {stage_name} file_format=(type=parquet)"
             )
             tx.execute(f"put file://{file} @{stage_name}").fetchall()
-
-
-def _create_table_from_stage(snowflake_conn: str, schema: str, stage: str) -> None:
-    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
-    qualified_table = f"{schema}.{stage}"
-
-    with engine.begin() as tx:
-        stmt = f"select $1 as fields from @{qualified_table}"  # nosec
-
-        tx.execute(
-            f"create or replace transient table {qualified_table} as {stmt}"  # nosec
-        ).fetchall()
 
 
 check_if_files_downloaded = ShortCircuitOperator(
@@ -267,8 +249,8 @@ convert_to_parquet = PythonOperator(
         "s3_conn_id": S3_CONN,
         "bucket_name": S3_BUCKET,
         "stage_names": {
-            "dv_stage_name": DV_STAGE_NAME,
             "risk_stage_name": RISK_STAGE_NAME,
+            "dv_stage_name": DV_STAGE_NAME,
         },
     },
     provide_context=True,
@@ -278,107 +260,55 @@ convert_to_parquet = PythonOperator(
     dag=dag,
 )
 
-# is_dv_parquet_available = S3KeySensor(
-#     task_id="is_dv_parquet_available",
-#     bucket_name=S3_BUCKET,
-#     bucket_key=f"{DIR_PATH}/parquet/{DV_FILENAME}.parquet",
-#     aws_conn_id=S3_CONN,
-#     poke_interval=5,
-#     timeout=20,
-#     on_failure_callback=sensor_timeout,
-#     dag=dag,
-# )
-#
-# is_risk_parquet_available = S3KeySensor(
-#     task_id="is_risk_parquet_available",
-#     bucket_name=S3_BUCKET,
-#     bucket_key=f"{DIR_PATH}/parquet/{RISK_FILENAME}.parquet",
-#     aws_conn_id=S3_CONN,
-#     poke_interval=5,
-#     timeout=20,
-#     on_failure_callback=sensor_timeout,
-#     dag=dag,
-# )
-
-# create_s3_stage = SnowflakeOperator(
-#     task_id="create_s3_stage",
-#     sql="snowflake/common/create_s3_stage.sql",
-#     params={
-#         "stage_name": "equifax_comm_stage",
-#         "s3_key": f"s3://{S3_BUCKET}/{DIR_PATH}/parquet/{DV_FILENAME}.pgp",
-#         "aws_key_id": "",
-#         "aws_secret_key": "",
-#         "file_format": "parquet",
-#     },
-#     schema="test",
-#     database="equifax",
-#     snowflake_conn_id=SNOWFLAKE_CONN,
-#     dag=dag,
-# )
-
-create_stage_table_dv = SnowflakeOperator(
-    task_id=f"create_stage_table_dv",
-    sql="equifax/create_staging_table_dv.sql",
+create_stage_table_risk = SnowflakeOperator(
+    task_id="create_stage_table_risk",
+    sql="equifax/staging/create_staging_table_risk.sql",
     params={"table_name": "equifax_comm_staging"},
     schema=f"{'public' if IS_PROD else 'test'}",
     database="equifax",
     snowflake_conn_id=SNOWFLAKE_CONN,
+    executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
 
-create_stage_table_risk = SnowflakeOperator(
-    task_id=f"create_stage_table_risk",
-    sql="equifax/create_table.sql",
+create_stage_table_dv = SnowflakeOperator(
+    task_id="create_stage_table_dv",
+    sql="equifax/staging/create_staging_table_dv.sql",
+    params={"table_name": "equifax_tcap_staging"},
+    schema=f"{'public' if IS_PROD else 'test'}",
+    database="equifax",
+    snowflake_conn_id=SNOWFLAKE_CONN,
+    executor_config=EXECUTOR_CONFIG,
+    dag=dag,
+)
+
+load_data_from_stage_risk = SnowflakeOperator(
+    task_id="load_data_from_stage_risk",
+    sql="equifax/load/load_data_risk.sql",
+    params={"table_name": "equifax_comm_staging", "stage_name": "equifax_comm_stage"},
+    schema=f"{'public' if IS_PROD else 'test'}",
+    database="equifax",
+    snowflake_conn_id=SNOWFLAKE_CONN,
+    executor_config=EXECUTOR_CONFIG,
+    dag=dag,
+)
+
+load_data_from_stage_dv = SnowflakeOperator(
+    task_id="load_data_from_stage_dv",
+    sql="equifax/load/load_data_dv.sql",
     params={"table_name": "equifax_tcap_staging", "stage_name": "equifax_tcap_stage"},
     schema=f"{'public' if IS_PROD else 'test'}",
     database="equifax",
     snowflake_conn_id=SNOWFLAKE_CONN,
-    dag=dag,
-)
-
-truncate_stage_table = SnowflakeOperator(
-    task_id="truncate_stage_table",
-    sql="snowflake/common/truncate_table.sql",
-    params={"table_name": "equifax_comm_staging"},
-    schema=f"{'public' if IS_PROD else 'test'}",
-    database="equifax",
-    snowflake_conn_id=SNOWFLAKE_CONN,
-    dag=dag,
-)
-
-# copy_from_s3_to_snowflake = S3ToSnowflakeOperator(
-#     task_id="copy_from_s3_to_snowflake",
-#     s3_keys=[
-#         f"s3://{S3_BUCKET}/{DIR_PATH}/parquet/exthinkingpd.eqxcan.eqxcom.efx_scores_dv_20210907_t1.parquet",
-#     ],
-#     stage="equifax_comm_stage",
-#     file_format="(type=parquet)",
-#     table="equifax_comm_staging",
-#     schema="test",
-#     database="equifax",
-#     # warehouse="etl",
-#     snowflake_conn_id=SNOWFLAKE_CONN,
-#     dag=dag,
-# )
-
-create_table_from_stage = PythonOperator(
-    task_id="create_table_from_stage",
-    python_callable=_create_table_from_stage,
-    op_kwargs={
-        "snowflake_conn": SNOWFLAKE_CONN,
-        "schema": "airflow.production",
-        "stage": "equifax_commercial_inbox",
-    },
-    retry_delay=datetime.timedelta(hours=1),
-    retries=3,
     executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
+
+
 
 (
     check_if_files_downloaded
     >> download_response_files
     >> decrypt_response_files
     >> convert_to_parquet
-    >> [create_stage_table_dv, create_stage_table_risk]
 )
