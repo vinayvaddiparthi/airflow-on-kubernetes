@@ -189,12 +189,15 @@ def put_resps_on_snowflake(
                     parse_options=ParseOptions(newlines_in_values=True),
                 )
                 pq.write_table(table, f"{pq_filepath}")
+                load_data_stmts = [
+                    f"create or replace temporary stage {destination_schema}.{destination_table} "  # nosec
+                    f"  file_format=(type=parquet)",
+                    f"put file://{pq_filepath} @{destination_database}.{destination_schema}.{destination_table}",
+                    f"copy into {destination_database}.{destination_schema}.{destination_table}"
+                    f"  from @{destination_database}.{destination_schema}.{destination_table}",
+                ]
 
-                print(
-                    tx.execute(
-                        f"put file://{pq_filepath} @{destination_database}.{destination_schema}.{destination_table}"
-                    ).fetchall()
-                )
+                print([tx.execute(stmt).fetchall() for stmt in load_data_stmts])
 
 
 def describe_sobject(
@@ -241,9 +244,9 @@ def ensure_stage_and_table(
     with engine_.begin() as tx:
         stmts = [
             f"use database {destination_database}",
-            f"create {'stage if not exists' if Variable.get('environment') == 'production' else 'temporary stage'} {destination_schema}.{destination_table} "  # nosec
+            f"create or replace temporary stage {destination_schema}.{destination_table} "  # nosec
             f"  file_format=(type=parquet)",  # nosec
-            f"create or replace table {destination_schema}.{destination_table} as "  # nosec
+            f"create table if not exists {destination_schema}.{destination_table} as "  # nosec
             f"  select $1 as fields from @{destination_schema}.{destination_table}",  # nosec
         ]
 
