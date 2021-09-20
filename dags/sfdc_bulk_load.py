@@ -243,6 +243,7 @@ def ensure_stage_and_table(
             f"use database {destination_database}",
             f"create {'stage if not exists' if Variable.get('environment') == 'production' else 'temporary stage'} {destination_schema}.{destination_table} "  # nosec
             f"  file_format=(type=parquet)",  # nosec
+            f"drop view if exists {destination_schema}.{destination_table}",
             f"create or replace table {destination_schema}.{destination_table} as "  # nosec
             f"  select $1 as fields from @{destination_schema}.{destination_table}",  # nosec
         ]
