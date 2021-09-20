@@ -254,14 +254,12 @@ convert_to_parquet = PythonOperator(
         },
     },
     provide_context=True,
-    retry_delay=datetime.timedelta(hours=1),
-    retries=3,
     executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
 
-create_stage_table_risk = SnowflakeOperator(
-    task_id="create_stage_table_risk",
+create_staging_table_risk = SnowflakeOperator(
+    task_id="create_staging_table_risk",
     sql="equifax/staging/create_staging_table_risk.sql",
     params={"table_name": "equifax_comm_staging"},
     schema=f"{'public' if IS_PROD else 'test'}",
@@ -271,8 +269,29 @@ create_stage_table_risk = SnowflakeOperator(
     dag=dag,
 )
 
-create_stage_table_dv = SnowflakeOperator(
-    task_id="create_stage_table_dv",
+load_from_stage_risk = SnowflakeOperator(
+    task_id="load_from_stage_risk",
+    sql="equifax/load/load_from_stage_risk.sql",
+    params={"table_name": "equifax_comm_staging", "stage_name": "equifax_comm_stage"},
+    schema=f"{'public' if IS_PROD else 'test'}",
+    database="equifax",
+    snowflake_conn_id=SNOWFLAKE_CONN,
+    executor_config=EXECUTOR_CONFIG,
+    dag=dag,
+)
+
+insert_from_staging_table_risk = SnowflakeOperator(
+    task_id="insert_from_staging_table_risk",
+    sql="snowflake/common/insert_into_table.sql",
+    params={"table_name": "equifax_comm", "source_table_name": "equifax_comm_staging"},
+    schema=f"{'public' if IS_PROD else 'test'}",
+    database="equifax",
+    snowflake_conn_id=SNOWFLAKE_CONN,
+    executor_config=EXECUTOR_CONFIG,
+    dag=dag,)
+
+create_staging_table_dv = SnowflakeOperator(
+    task_id="create_staging_table_dv",
     sql="equifax/staging/create_staging_table_dv.sql",
     params={"table_name": "equifax_tcap_staging"},
     schema=f"{'public' if IS_PROD else 'test'}",
@@ -282,20 +301,9 @@ create_stage_table_dv = SnowflakeOperator(
     dag=dag,
 )
 
-load_data_from_stage_risk = SnowflakeOperator(
-    task_id="load_data_from_stage_risk",
-    sql="equifax/load/load_data_risk.sql",
-    params={"table_name": "equifax_comm_staging", "stage_name": "equifax_comm_stage"},
-    schema=f"{'public' if IS_PROD else 'test'}",
-    database="equifax",
-    snowflake_conn_id=SNOWFLAKE_CONN,
-    executor_config=EXECUTOR_CONFIG,
-    dag=dag,
-)
-
-load_data_from_stage_dv = SnowflakeOperator(
-    task_id="load_data_from_stage_dv",
-    sql="equifax/load/load_data_dv.sql",
+load_from_stage_dv = SnowflakeOperator(
+    task_id="load_from_stage_dv",
+    sql="equifax/load/load_from_stage_dv.sql",
     params={"table_name": "equifax_tcap_staging", "stage_name": "equifax_tcap_stage"},
     schema=f"{'public' if IS_PROD else 'test'}",
     database="equifax",
