@@ -8,25 +8,19 @@ from airflow.models import Variable
 from airflow.models.taskinstance import TaskInstance
 from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.sftp.hooks.sftp import SFTPHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
-from airflow.providers.snowflake.transfers.s3_to_snowflake import S3ToSnowflakeOperator
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 
-import datetime
 import logging
 import pendulum
 from tempfile import NamedTemporaryFile
-from fs_s3fs import S3FS
 import pyarrow.csv as csv
 import pyarrow.parquet as pq
 from pyarrow._csv import ReadOptions
 from pyarrow.lib import ArrowInvalid, array
 
-from helpers.suspend_aws_env import SuspendAwsEnvVar
-from utils.failure_callbacks import slack_dag, sensor_timeout
+from utils.failure_callbacks import slack_dag
 from utils.gpg import init_gnupg
 from utils.equifax_helpers import get_import_month
 
