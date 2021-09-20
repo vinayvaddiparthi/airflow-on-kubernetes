@@ -19,7 +19,7 @@ import logging
 import boto3
 import pandas as pd
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Any
 
 from helpers.aws_hack import hack_clear_aws_keys
