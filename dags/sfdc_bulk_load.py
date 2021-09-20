@@ -232,7 +232,7 @@ def describe_sobject(
     )
 
 
-def ensure_stage_and_view(
+def ensure_stage_and_table(
     engine_: Engine,
     destination_database: str,
     destination_schema: str,
@@ -241,9 +241,9 @@ def ensure_stage_and_view(
     with engine_.begin() as tx:
         stmts = [
             f"use database {destination_database}",
-            f"create stage if not exists {destination_schema}.{destination_table} "  # nosec
+            f"create {'stage if not exists' if Variable.get('environment') == 'production' else 'temporary stage'} {destination_schema}.{destination_table} "  # nosec
             f"  file_format=(type=parquet)",  # nosec
-            f"create or replace view {destination_schema}.{destination_table} as "  # nosec
+            f"create or replace table {destination_schema}.{destination_table} as "  # nosec
             f"  select $1 as fields from @{destination_schema}.{destination_table}",  # nosec
         ]
 
@@ -300,7 +300,7 @@ def process_sobject(
 
     for i, fields in enumerate(chunks):
         destination_table = f"{sobject.name}___PART_{i}"
-        ensure_stage_and_view(engine_, database, schema, destination_table)
+        ensure_stage_and_table(engine_, database, schema, destination_table)
 
         stmt = select(
             columns=[func.max(text(f'fields:"{max_date_col}"::datetime'))],
@@ -354,19 +354,25 @@ def process_sobject(
 
 
 def import_sfdc(
-    snowflake_conn: str, salesforce_conn: str, database: str, schema: str
+    snowflake_conn: str,
+    salesforce_conn: str,
+    database: str,
+    schema: str,
 ) -> None:
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     salesforce_connection = BaseHook.get_connection(salesforce_conn)
+    domain_ = None if Variable.get("environment") == "production" else "test"
     salesforce = Salesforce(
         username=salesforce_connection.login,
         password=salesforce_connection.password,
         security_token=salesforce_connection.extra_dejson["security_token"],
+        domain=domain_,
     )
     salesforce_bulk = SalesforceBulk(
         username=salesforce_connection.login,
         password=salesforce_connection.password,
         security_token=salesforce_connection.extra_dejson["security_token"],
+        domain=domain_,
     )
 
     with ThreadPoolExecutor(max_workers=4) as processing_executor:
@@ -408,7 +414,7 @@ def create_dag(instances: List[str]) -> DAG:
                     "snowflake_conn": "airflow_production",
                     "salesforce_conn": f"salesforce_{instance}",
                     "database": "salesforce2",
-                    "schema": instance,
+                    "schema": f"{instance}{'' if Variable.get('environment') == 'production' else '_staging'}",
                 },
                 pool="sfdc_pool",
                 retry_delay=datetime.timedelta(hours=1),
