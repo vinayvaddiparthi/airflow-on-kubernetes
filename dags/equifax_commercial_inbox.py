@@ -41,6 +41,7 @@ default_args = {
     "on_failure_callback": slack_dag("slack_data_alerts"),
     "tags": ["equifax"],
     "description": "A workflow to download and process the commercial batch response file from Equifax",
+    "default_view": "graph",
 }
 
 dag = DAG(
@@ -125,7 +126,9 @@ def _decrypt_response_files(
     s3_conn_id: str, s3_bucket: str, dir_path: str, ti: TaskInstance, **_: None
 ) -> None:
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
-    risk_filename = ti.xcom_pull(task_ids="download_response_files", key="risk_filename")
+    risk_filename = ti.xcom_pull(
+        task_ids="download_response_files", key="risk_filename"
+    )
     dv_filename = ti.xcom_pull(task_ids="download_response_files", key="dv_filename")
     gpg = init_gnupg()
     passphrase = Variable.get("equifax_pgp_passphrase", deserialize_json=False)
@@ -258,65 +261,56 @@ convert_to_parquet = PythonOperator(
     dag=dag,
 )
 
-create_staging_table_risk = SnowflakeOperator(
-    task_id="create_staging_table_risk",
-    sql="equifax/staging/create_staging_table_risk.sql",
-    params={"table_name": "equifax_comm_staging"},
-    schema=f"{'public' if IS_PROD else 'test'}",
-    database="equifax",
-    snowflake_conn_id=SNOWFLAKE_CONN,
-    executor_config=EXECUTOR_CONFIG,
-    dag=dag,
-)
-
-load_from_stage_risk = SnowflakeOperator(
-    task_id="load_from_stage_risk",
-    sql="equifax/load/load_from_stage_risk.sql",
-    params={"table_name": "equifax_comm_staging", "stage_name": "equifax_comm_stage"},
-    schema=f"{'public' if IS_PROD else 'test'}",
-    database="equifax",
-    snowflake_conn_id=SNOWFLAKE_CONN,
-    executor_config=EXECUTOR_CONFIG,
-    dag=dag,
-)
-
-insert_from_staging_table_risk = SnowflakeOperator(
-    task_id="insert_from_staging_table_risk",
-    sql="snowflake/common/insert_into_table.sql",
-    params={"table_name": "equifax_comm", "source_table_name": "equifax_comm_staging"},
-    schema=f"{'public' if IS_PROD else 'test'}",
-    database="equifax",
-    snowflake_conn_id=SNOWFLAKE_CONN,
-    executor_config=EXECUTOR_CONFIG,
-    dag=dag,)
-
-create_staging_table_dv = SnowflakeOperator(
-    task_id="create_staging_table_dv",
-    sql="equifax/staging/create_staging_table_dv.sql",
-    params={"table_name": "equifax_tcap_staging"},
-    schema=f"{'public' if IS_PROD else 'test'}",
-    database="equifax",
-    snowflake_conn_id=SNOWFLAKE_CONN,
-    executor_config=EXECUTOR_CONFIG,
-    dag=dag,
-)
-
-load_from_stage_dv = SnowflakeOperator(
-    task_id="load_from_stage_dv",
-    sql="equifax/load/load_from_stage_dv.sql",
-    params={"table_name": "equifax_tcap_staging", "stage_name": "equifax_tcap_stage"},
-    schema=f"{'public' if IS_PROD else 'test'}",
-    database="equifax",
-    snowflake_conn_id=SNOWFLAKE_CONN,
-    executor_config=EXECUTOR_CONFIG,
-    dag=dag,
-)
-
-
-
 (
     check_if_files_downloaded
     >> download_response_files
     >> decrypt_response_files
     >> convert_to_parquet
 )
+
+for file, table in [("risk", "comm"), ("dv", "tcap")]:
+    create_staging_table = SnowflakeOperator(
+        task_id=f"create_staging_table_{file}",
+        sql=f"equifax/staging/create_staging_table_{file}.sql",
+        params={"table_name": f"equifax_{table}_staging"},
+        schema=f"{'public' if IS_PROD else 'test'}",
+        database="equifax",
+        snowflake_conn_id=SNOWFLAKE_CONN,
+        executor_config=EXECUTOR_CONFIG,
+        dag=dag,
+    )
+
+    load_from_stage = SnowflakeOperator(
+        task_id=f"load_from_stage_{file}",
+        sql=f"equifax/load/load_from_stage_{file}.sql",
+        params={
+            "table_name": f"equifax_{table}_staging",
+            "stage_name": f"equifax_{table}_stage",
+        },
+        schema=f"{'public' if IS_PROD else 'test'}",
+        database="equifax",
+        snowflake_conn_id=SNOWFLAKE_CONN,
+        executor_config=EXECUTOR_CONFIG,
+        dag=dag,
+    )
+
+    insert_from_staging_table = SnowflakeOperator(
+        task_id=f"insert_from_staging_table_{file}",
+        sql="snowflake/common/insert_into_table.sql",
+        params={
+            "table_name": f"equifax_{table}",
+            "source_table_name": f"equifax_{table}_staging",
+        },
+        schema=f"{'public' if IS_PROD else 'test'}",
+        database="equifax",
+        snowflake_conn_id=SNOWFLAKE_CONN,
+        executor_config=EXECUTOR_CONFIG,
+        dag=dag,
+    )
+
+    (
+        convert_to_parquet
+        >> create_staging_table
+        >> load_from_stage
+        >> insert_from_staging_table
+    )
