@@ -1,33 +1,59 @@
-import datetime
-import logging
-from io import BytesIO
-
-from pathlib import Path
-from typing import IO, List, Any
-
-import pendulum
+"""
+### Description
+This workflow processes the commercial response file from Equifax. Once the response file is downloaded, the encrypted
+response file will be processed and uploaded to Snowflake.
+"""
 from airflow import DAG
-from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.providers.ssh.hooks.ssh import SSHHook
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
-from fs.sshfs import SSHFS
-from fs.tools import copy_file_data
-from fs_s3fs import S3FS
+from airflow.models.taskinstance import TaskInstance
+from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
+from airflow.providers.sftp.hooks.sftp import SFTPHook
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 
-import pyarrow.csv as pv, pyarrow.parquet as pq
-from pendulum import Pendulum
+import logging
+import pendulum
+from tempfile import NamedTemporaryFile
+import pyarrow.csv as csv
+import pyarrow.parquet as pq
 from pyarrow._csv import ReadOptions
 from pyarrow.lib import ArrowInvalid, array
 
-from helpers.suspend_aws_env import SuspendAwsEnvVar
-
-import gnupg
-
 from utils.failure_callbacks import slack_dag
+from utils.gpg import init_gnupg
+from utils.equifax_helpers import get_import_month
 
+default_args = {
+    "owner": "airflow",
+    "depends_on_past": False,
+    "start_date": pendulum.datetime(
+        2020, 11, 15, tzinfo=pendulum.timezone("America/Toronto")
+    ),
+    "retries": 0,
+    "catchup": False,
+    "on_failure_callback": slack_dag("slack_data_alerts"),
+    "tags": ["equifax"],
+    "description": "A workflow to download and process the commercial batch response file from Equifax",
+    "default_view": "graph",
+}
 
+dag = DAG(
+    dag_id="equifax_commercial_inbox",
+    schedule_interval="@daily",
+    default_args=default_args,
+    template_searchpath="include/sql",
+)
+dag.doc_md = __doc__
+
+IS_PROD = Variable.get(key="environment") == "production"
+SFTP_CONN = "equifax_sftp"
+SNOWFLAKE_CONN = "airflow_production"
+S3_CONN = "s3_dataops"
+S3_BUCKET = f"tc-data-airflow-{'production' if IS_PROD else 'staging'}"
+DIR_PATH = "equifax/commercial"
+RISK_STAGE_NAME = f"equifax.{'public' if IS_PROD else 'test'}.equifax_comm_stage"
+DV_STAGE_NAME = f"equifax.{'public' if IS_PROD else 'test'}.equifax_tcap_stage"
 EXECUTOR_CONFIG = {
     "KubernetesExecutor": {
         "annotations": {
@@ -41,188 +67,244 @@ EXECUTOR_CONFIG = {
 }
 
 
-def _init_gnupg() -> gnupg.GPG:
-    path_ = Path("~/.gnupg")
-    path_.mkdir(parents=True, exist_ok=True)
-    gpg = gnupg.GPG(gnupghome=path_)
-
-    keys: List[str] = Variable.get("equifax_pgp_keys", deserialize_json=True)
-    for key in keys:
-        gpg.import_keys(key)
-
-    return gpg
-
-
-def _get_sshfs_from_conn(ssh_conn: str) -> SSHFS:
-    ssh_connection = SSHHook.get_connection(ssh_conn)
-
-    return SSHFS(
-        host=ssh_connection.host,
-        user=ssh_connection.login,
-        passwd=ssh_connection.password,
+def _check_if_file_downloaded() -> bool:
+    return not Variable.get(
+        "equifax_commercial_response_downloaded", deserialize_json=True
     )
 
 
-def _get_s3fs_from_conn(aws_conn: str) -> S3FS:
-    aws_connection = AwsBaseHook.get_connection(aws_conn)
-
-    return S3FS(
-        bucket_name=aws_connection.extra_dejson["bucket"],
-        region=aws_connection.extra_dejson["region"],
-        dir_path=aws_connection.extra_dejson["dir_path"],
-        aws_access_key_id=aws_connection.extra_dejson["aws_access_key_id"],
-        aws_secret_access_key=aws_connection.extra_dejson["aws_secret_access_key"],
-    )
-
-
-def sync_sshfs_to_s3fs(aws_conn: str, sshfs_conn: str) -> None:
-    with SuspendAwsEnvVar():
-        s3fs, sshfs = _get_s3fs_from_conn(aws_conn), _get_sshfs_from_conn(sshfs_conn)
-
-        remote_files = sshfs.listdir("outbox")
-        commercial_remote_files = [
-            file
-            for file in remote_files
-            if file.startswith("exthinkingpd.eqxcan.eqxcom")
-        ]
-        local_files = set(s3fs.listdir("inbox"))  # cast to set for O(1) lookup
-
-        for file in (
-            file for file in commercial_remote_files if file not in local_files
-        ):
-            with sshfs.open(f"outbox/{file}", "rb") as origin_file, s3fs.open(
-                f"inbox/{file}", "wb"
-            ) as dest_file:
-                copy_file_data(origin_file, dest_file)
-
-
-def decrypt_received_files(aws_conn: str) -> None:
-    with SuspendAwsEnvVar():
-        s3fs = _get_s3fs_from_conn(aws_conn)
-
-        for file in s3fs.listdir("inbox"):
-            with s3fs.open(f"inbox/{file}", "rb") as encrypted_file, s3fs.open(
-                f"decrypted/{file}"[:-4], "wb"
-            ) as decrypted_file:
-                decrypted = decrypt(encrypted_file)
-                copy_file_data(decrypted, decrypted_file)
-
-
-def decode_decrypted_files(
-    aws_conn: str, execution_date: Pendulum, run_id: str, **kwargs: Any
+def _download_response_files(
+    sftp_conn_id: str,
+    s3_conn_id: str,
+    dir_path: str,
+    s3_bucket: str,
+    ti: TaskInstance,
+    **_: None,
 ) -> None:
-    with SuspendAwsEnvVar():
-        s3fs = _get_s3fs_from_conn(aws_conn)
-
-        for file in (
-            file
-            for file in s3fs.listdir("decrypted")
-            if f"{file[:-6]}.parquet" not in set(s3fs.listdir("parquet"))
-        ):
-            with s3fs.open(f"decrypted/{file}", "rb") as decrypted_file, s3fs.open(
-                f"parquet/{file[:-6]}.parquet", "wb"
-            ) as parquet_file:
-                try:
-                    table_ = pv.read_csv(
-                        decrypted_file,
-                        read_options=ReadOptions(block_size=8388608),
-                    )
-
-                    table_ = table_.append_column(
-                        "__execution_date",
-                        array([execution_date.to_iso8601_string()] * len(table_)),
-                    ).append_column("__run_id", array([run_id] * len(table_)))
-
-                    if table_.num_rows == 0:
-                        logging.warning(f"📝️ Skipping empty file {decrypted_file}")
-                        continue
-
-                    pq.write_table(table_, parquet_file)
-
-                except ArrowInvalid as exc:
-                    logging.error(f"❌ Failed to read file {decrypted_file.name}: {exc}")
-
-                logging.info(f"📝️ Converted file {decrypted_file.name}")
-
-
-def create_table_from_stage(snowflake_conn: str, schema: str, stage: str) -> None:
-    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
-    qualified_table = f"{schema}.{stage}"
-
-    with engine.begin() as tx:
-        stmt = f"select $1 as fields from @{qualified_table}"  # nosec
-
-        tx.execute(
-            f"create or replace transient table {qualified_table} as {stmt}"  # nosec
-        ).fetchall()
+    """
+    As long as we send only one request file, we can safely assume only 2 commercial files (e.g., dv and risk) will be
+    available every odd month as Equifax clears the directory after 7 days.
+    """
+    sftp_hook = SFTPHook(ftp_conn_id=sftp_conn_id)
+    files = sftp_hook.list_directory(path="outbox/")
+    commercial_files = [
+        file for file in files if file.startswith("exthinkingpd.eqxcan.eqxcom")
+    ]
+    if len(commercial_files) != 2:  # wait until both commercial files are ready
+        logging.error(
+            "❌ Both commercial files are not yet available to download from the sftp server."
+        )
+        return
+    for file in commercial_files:
+        if "risk" in file:
+            ti.xcom_push(key="risk_filename", value=file[:-8])
+        else:
+            ti.xcom_push(key="dv_filename", value=file[:-8])
+    s3_hook = S3Hook(aws_conn_id=s3_conn_id)
+    for commercial_file in commercial_files:
+        with NamedTemporaryFile(mode="w") as f:
+            sftp_hook.retrieve_file(
+                remote_full_path=f"outbox/{commercial_file}", local_full_path=f.name
+            )
+            s3_hook.load_file(
+                filename=f.name,
+                key=f"{dir_path}/inbox/{commercial_file}",
+                bucket_name=s3_bucket,
+                replace=True,
+            )
+    Variable.set("equifax_commercial_response_downloaded", True, serialize_json=True)
+    logging.info("Response files successfully downloaded.")
 
 
-def encrypt(fd: IO[bytes]) -> IO[bytes]:
-    gpg = _init_gnupg()
-    encrypted_message = gpg.encrypt_file(fd, "sts@equifax.com", always_trust=True)
-    return BytesIO(encrypted_message.data)
+def _decrypt_response_files(
+    s3_conn_id: str, s3_bucket: str, dir_path: str, ti: TaskInstance, **_: None
+) -> None:
+    s3_hook = S3Hook(aws_conn_id=s3_conn_id)
+    risk_filename = ti.xcom_pull(
+        task_ids="download_response_files", key="risk_filename"
+    )
+    dv_filename = ti.xcom_pull(task_ids="download_response_files", key="dv_filename")
+    gpg = init_gnupg()
+    passphrase = Variable.get("equifax_pgp_passphrase", deserialize_json=False)
+    for filename in [risk_filename, dv_filename]:
+        file = s3_hook.download_file(
+            key=f"{dir_path}/inbox/{filename}.csv.pgp", bucket_name=s3_bucket
+        )
+        with open(file, "rb") as reader:
+            decrypted_message = gpg.decrypt_file(
+                reader, always_trust=True, passphrase=passphrase
+            )
+        with open(file, "wb") as writer:
+            writer.write(decrypted_message.data)
+            s3_hook.load_file(
+                filename=file,
+                key=f"{dir_path}/decrypted/{filename}.csv",
+                bucket_name=s3_bucket,
+                replace=True,
+            )
 
 
-def decrypt(fd: IO[bytes]) -> IO[bytes]:
-    gpg = _init_gnupg()
-    pass_phrase = Variable.get("equifax_pgp_passphrase", deserialize_json=False)
-    decrypted_message = gpg.decrypt_file(fd, always_trust=True, passphrase=pass_phrase)
-    return BytesIO(decrypted_message.data)
+def _convert_to_parquet(
+    s3_conn_id: str,
+    bucket_name: str,
+    snowflake_conn_id: str,
+    stage_names: dict,
+    ds_nodash: str,
+    ti: TaskInstance,
+    **_: None,
+) -> None:
+    snowflake_engine = SnowflakeHook(
+        snowflake_conn_id=snowflake_conn_id
+    ).get_sqlalchemy_engine()
+    s3_hook = S3Hook(aws_conn_id=s3_conn_id)
+    for filename in [
+        ti.xcom_pull(task_ids="download_response_files", key="risk_filename"),
+        ti.xcom_pull(task_ids="download_response_files", key="dv_filename"),
+    ]:
+        file = s3_hook.download_file(
+            key=f"{DIR_PATH}/decrypted/{filename}.csv", bucket_name=bucket_name
+        )
+        with open(file, "rb") as reader:
+            try:
+                table_ = csv.read_csv(
+                    reader,
+                    read_options=ReadOptions(block_size=8388608),
+                )
+                # add imported_file_name and import_month columns
+                table_ = table_.append_column(
+                    field_="imported_file_name",
+                    column=array([f"{filename}.parquet"] * len(table_)),
+                )
+                table_ = table_.append_column(
+                    field_="import_month",
+                    column=array([get_import_month(ds_nodash)] * len(table_)),
+                )
+                if table_.num_rows == 0:
+                    logging.warning(f"📝️ Skipping empty file {reader.name}")
+                    continue
+            except ArrowInvalid as exc:
+                logging.error(f"❌ Failed to read file {reader.name}: {exc}")
+        with open(file, "wb") as writer:
+            pq.write_table(table=table_, where=writer)
+            logging.info(f"📝️ Converted file {filename}.csv")
+            s3_hook.load_file(
+                filename=file,
+                key=f"{DIR_PATH}/parquet/{filename}.parquet",
+                bucket_name=bucket_name,
+                replace=True,
+            )
+        with snowflake_engine.begin() as tx:
+            if "risk" in filename:
+                stage_name = stage_names["risk_stage_name"]
+            else:
+                stage_name = stage_names["dv_stage_name"]
+            tx.execute(
+                f"create or replace temporary stage {stage_name} file_format=(type=parquet)"
+            )
+            tx.execute(f"put file://{file} @{stage_name}").fetchall()
 
 
-with DAG(
-    dag_id="equifax_commercial_inbox",
-    start_date=pendulum.datetime(
-        2020, 11, 15, tzinfo=pendulum.timezone("America/Toronto")
-    ),
-    schedule_interval=None,
-    catchup=False,
-    on_failure_callback=slack_dag("slack_data_alerts"),
-) as inbox_dag:
+check_if_files_downloaded = ShortCircuitOperator(
+    task_id="check_if_files_downloaded",
+    python_callable=_check_if_file_downloaded,
+    do_xcom_push=False,
+    dag=dag,
+)
+
+download_response_files = PythonOperator(
+    task_id="download_response_files",
+    python_callable=_download_response_files,
+    op_kwargs={
+        "sftp_conn_id": SFTP_CONN,
+        "s3_conn_id": S3_CONN,
+        "dir_path": DIR_PATH,
+        "s3_bucket": S3_BUCKET,
+    },
+    provide_context=True,
+    executor_config=EXECUTOR_CONFIG,
+    dag=dag,
+)
+
+decrypt_response_files = PythonOperator(
+    task_id="decrypt_response_files",
+    python_callable=_decrypt_response_files,
+    op_kwargs={
+        "s3_conn_id": S3_CONN,
+        "s3_bucket": S3_BUCKET,
+        "dir_path": DIR_PATH,
+    },
+    provide_context=True,
+    executor_config=EXECUTOR_CONFIG,
+    dag=dag,
+)
+
+convert_to_parquet = PythonOperator(
+    task_id="convert_to_parquet",
+    python_callable=_convert_to_parquet,
+    op_kwargs={
+        "snowflake_conn_id": SNOWFLAKE_CONN,
+        "s3_conn_id": S3_CONN,
+        "bucket_name": S3_BUCKET,
+        "stage_names": {
+            "risk_stage_name": RISK_STAGE_NAME,
+            "dv_stage_name": DV_STAGE_NAME,
+        },
+    },
+    provide_context=True,
+    executor_config=EXECUTOR_CONFIG,
+    dag=dag,
+)
+
+(
+    check_if_files_downloaded
+    >> download_response_files
+    >> decrypt_response_files
+    >> convert_to_parquet
+)
+
+for file, table in [("risk", "comm"), ("dv", "tcap")]:
+    create_staging_table = SnowflakeOperator(
+        task_id=f"create_staging_table_{file}",
+        sql=f"equifax/staging/create_staging_table_{file}.sql",
+        params={"table_name": f"equifax_{table}_staging"},
+        schema=f"{'public' if IS_PROD else 'test'}",
+        database="equifax",
+        snowflake_conn_id=SNOWFLAKE_CONN,
+        executor_config=EXECUTOR_CONFIG,
+        dag=dag,
+    )
+
+    load_from_stage = SnowflakeOperator(
+        task_id=f"load_from_stage_{file}",
+        sql=f"equifax/load/load_from_stage_{file}.sql",
+        params={
+            "table_name": f"equifax_{table}_staging",
+            "stage_name": f"equifax_{table}_stage",
+        },
+        schema=f"{'public' if IS_PROD else 'test'}",
+        database="equifax",
+        snowflake_conn_id=SNOWFLAKE_CONN,
+        executor_config=EXECUTOR_CONFIG,
+        dag=dag,
+    )
+
+    insert_from_staging_table = SnowflakeOperator(
+        task_id=f"insert_from_staging_table_{file}",
+        sql="snowflake/common/insert_into_table.sql",
+        params={
+            "table_name": f"equifax_{table}",
+            "source_table_name": f"equifax_{table}_staging",
+        },
+        schema=f"{'public' if IS_PROD else 'test'}",
+        database="equifax",
+        snowflake_conn_id=SNOWFLAKE_CONN,
+        executor_config=EXECUTOR_CONFIG,
+        dag=dag,
+    )
+
     (
-        inbox_dag
-        << PythonOperator(
-            task_id="sync_sshfs_to_s3fs",
-            python_callable=sync_sshfs_to_s3fs,
-            op_kwargs={
-                "aws_conn": "s3_equifax_commercial",
-                "sshfs_conn": "ssh_equifax_commercial",
-            },
-            retry_delay=datetime.timedelta(hours=1),
-            retries=3,
-            executor_config=EXECUTOR_CONFIG,
-        )
-        >> PythonOperator(
-            task_id="decrypt_received_files",
-            python_callable=decrypt_received_files,
-            op_kwargs={
-                "aws_conn": "s3_equifax_commercial",
-            },
-            retry_delay=datetime.timedelta(hours=1),
-            retries=3,
-            executor_config=EXECUTOR_CONFIG,
-        )
-        >> PythonOperator(
-            task_id="convert_to_parquet",
-            python_callable=decode_decrypted_files,
-            op_kwargs={
-                "aws_conn": "s3_equifax_commercial",
-            },
-            provide_context=True,
-            retry_delay=datetime.timedelta(hours=1),
-            retries=3,
-            executor_config=EXECUTOR_CONFIG,
-        )
-        >> PythonOperator(
-            task_id="create_table_from_stage",
-            python_callable=create_table_from_stage,
-            op_kwargs={
-                "snowflake_conn": "airflow_production",
-                "schema": "airflow.production",
-                "stage": "equifax_commercial_inbox",
-            },
-            retry_delay=datetime.timedelta(hours=1),
-            retries=3,
-            executor_config=EXECUTOR_CONFIG,
-        )
+        convert_to_parquet
+        >> create_staging_table
+        >> load_from_stage
+        >> insert_from_staging_table
     )
