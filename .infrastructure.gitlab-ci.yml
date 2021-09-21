@@ -1,5 +1,5 @@
 default:
-      image: registry.gitlab.com/gitlab-org/cloud-deploy/  #Docker image to use for build jobs
+      image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest #Docker image to use for build jobs
 
 cdk_test:
   environment:
