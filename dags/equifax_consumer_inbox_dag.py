@@ -19,13 +19,14 @@ import logging
 import boto3
 import pandas as pd
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Any
 
 from helpers.aws_hack import hack_clear_aws_keys
 from utils.failure_callbacks import slack_dag, sensor_timeout
 from utils.gpg import init_gnupg
 from utils.reference_data import result_dict, date_columns, personal_info
+from utils.equifax_helpers import get_import_month
 
 default_args = {
     "owner": "airflow",
@@ -227,12 +228,6 @@ def _insert_snowflake(
         snowflake.execute(copy)
 
 
-def _get_import_month(ds_nodash: str) -> str:
-    return (
-        datetime.strptime(ds_nodash, "%Y%m%d").replace(day=1) - timedelta(days=1)
-    ).strftime("%Y%m")
-
-
 def _insert_snowflake_raw(
     table_name_raw: str,
     table_name_raw_history: str,
@@ -242,7 +237,7 @@ def _insert_snowflake_raw(
 ) -> None:
     _insert_snowflake(table=table_name_raw, download_key=download_key)
     _insert_snowflake(
-        table=f"{table_name_raw_history}_{_get_import_month(ds_nodash)}",
+        table=f"{table_name_raw_history}_{get_import_month(ds_nodash)}",
         download_key=download_key,
     )
 
@@ -297,7 +292,7 @@ def _insert_snowflake_stage(
 ) -> None:
     _insert_snowflake(table=table_name, download_key=download_key, date_formatted=True)
     _insert_snowflake(
-        table=f"{table_name_history}_{_get_import_month(ds_nodash)}",
+        table=f"{table_name_history}_{get_import_month(ds_nodash)}",
         download_key=download_key,
         date_formatted=True,
     )
@@ -319,7 +314,7 @@ def _insert_snowflake_public(
     sql = f"""
         insert into {destination_table}({columns_string})
         select
-        '{_get_import_month((ds_nodash))}' as import_month,
+        '{get_import_month((ds_nodash))}' as import_month,
         null as accountid,
         null as contractid,
         null as business_name,
