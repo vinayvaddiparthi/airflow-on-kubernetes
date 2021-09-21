@@ -17,7 +17,7 @@ cdk_test:
 
   script:
   - cdk doctor #Check your set-up for potential problems
-  - cdk synth > cloudformation_template.yaml #Synthesizes and prints the CloudFormation template for this stack
+  # - cdk synth > cloudformation_template.yaml #Synthesizes and prints the CloudFormation template for this stack
   - cdk diff # Compares the specified stack with the deployed stack or a local template file, and returns with status 1 if any difference is found
   - cdk ls # Lists all stacks in the app
   # - cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_DEFAULT_REGION #Deploys the CDK toolkit stack into an AWS environment

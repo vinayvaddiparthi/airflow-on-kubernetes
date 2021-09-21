@@ -17,7 +17,7 @@ variables:
   APP_NAME: "airflow"
   AIRFLOW_GPL_UNIDECODE: "yes"
 
-black:
+.black:
   stage: pre-test
   tags:
     - k8s
@@ -26,7 +26,7 @@ black:
     - pip install black
     - black --check .
 
-mypy:
+.mypy:
   stage: test
   tags:
     - k8s
@@ -43,7 +43,7 @@ mypy:
     variables:
       - $TEST_DISABLED
 
-flakes:
+.flakes:
   stage: test
   tags:
     - k8s
@@ -60,7 +60,7 @@ flakes:
     variables:
       - $TEST_DISABLED
 
-test:
+.test:
   stage: test
   tags:
     - docker
@@ -76,7 +76,7 @@ test:
       cobertura: cov.xml
   coverage: /^TOTAL.+?(\d+\%)$/
 
-sast:
+.sast:
   stage: test
   tags:
     - k8s
@@ -91,7 +91,7 @@ sast:
     reports:
       junit: sast.xml
 
-check_dependencies:
+.check_dependencies:
   stage: test
   tags:
     - k8s
@@ -100,7 +100,7 @@ check_dependencies:
     - pip install -r requirements.txt --use-deprecated=legacy-resolver
     - safety check -i 40459 -i 40630 -i 41002
 
-build_image:
+.build_image:
   stage: build
   tags:
     - docker
@@ -115,7 +115,7 @@ build_image:
   only:
     - master
 
-deploy_production:
+.deploy_production:
   stage: deploy
   tags:
     - k8s
