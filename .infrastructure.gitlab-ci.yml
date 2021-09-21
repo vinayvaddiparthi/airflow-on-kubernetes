@@ -1,11 +1,12 @@
 default:
-      image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest #Docker image to use for build jobs
+      image: registry.gitlab.com/gitlab-org/cloud-deploy/  #Docker image to use for build jobs
 
 cdk_test:
+  environment:
+    name: development
   stage: test
   before_script:
-    - apt-get -qq update
-    - apt-get -qq install python3-pip npm
+    - apt-get -qq update && apt-get -qq install python3-pip npm
     - pip3 install aws-cdk.aws-ec2 \
                    aws-cdk.aws-iam \
                    aws-cdk.aws-s3 \
