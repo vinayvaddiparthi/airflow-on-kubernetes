@@ -5,7 +5,7 @@ cdk_test:
   stage: test
   before_script:
     - apt-get -qq update
-    - apt-get -qq -y install python3-pip npm
+    - apt-get -qqy install python3-pip npm
     - pip3 install aws-cdk.aws-ec2 \
                    aws-cdk.aws-iam \
                    aws-cdk.aws-s3 \
