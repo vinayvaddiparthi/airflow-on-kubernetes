@@ -234,8 +234,8 @@ def _generate_file(
     logging.info(f"Uploading {file_name} to {bucket}/{folder}.")
     copy.copy_file(src_fs, file_name, dest_fs, file_name)
     Variable.set("equifax_commercial_request_filename", file_name)
-    Variable.set("equifax_commercial_request_sent", False)
-    Variable.set("equifax_commercial_response_downloaded", False)
+    Variable.set("equifax_commercial_request_sent", False, serialize_json=True)
+    Variable.set("equifax_commercial_response_downloaded", False, serialize_json=True)
 
 
 generate_file = PythonOperator(
