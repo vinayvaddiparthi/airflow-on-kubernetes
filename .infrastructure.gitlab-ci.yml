@@ -1,8 +1,29 @@
 default:
       image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest #Docker image to use for build jobs
+
 cdk_test:
-  environment:
-    name: development
+  # environment:
+  #   name: development
   stage: test
+  before_script:
+    - apt-get -qq update && apt-get -qq install python3-pip npm > apt-get-output.txt
+  #   - pip3 install aws-cdk.aws-ec2 \
+  #                  aws-cdk.aws-iam \
+  #                  aws-cdk.aws-s3 \
+  #                  aws-cdk.aws-s3-deployment \
+  #                  aws-cdk.aws-mwaa \
+  #                  aws-cdk.core \
+  #                  aws_cdk.aws-kms
+  #   - npm install -g aws-cdk ; cdk --version
+
   script:
-  - echo $AWS_ACCESS_KEY_ID
+    - echo $AWS_ACCESS_KEY_ID
+  # - cdk doctor #Check your set-up for potential problems
+  # # - cdk synth > cloudformation_template.yaml #Synthesizes and prints the CloudFormation template for this stack
+  # - cdk diff # Compares the specified stack with the deployed stack or a local template file, and returns with status 1 if any difference is found
+  # - cdk ls # Lists all stacks in the app
+  # - cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_DEFAULT_REGION #Deploys the CDK toolkit stack into an AWS environment
+  # artifacts:
+  #   cloudformation_template:
+  #     - cloudformation_template.yaml
+  #   expire_in: 1 week
