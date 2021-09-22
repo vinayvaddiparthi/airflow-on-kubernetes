@@ -5,8 +5,8 @@ cdk_test:
   # environment:
   #   name: development
   stage: test
-  before_script:
-    - apt-get -qq update && apt-get -qq install python3-pip npm > apt-get-output.txt
+  # before_script:
+  #   - apt-get -qq update && apt-get -qq install python3-pip npm > apt-get-output.txt
   #   - pip3 install aws-cdk.aws-ec2 \
   #                  aws-cdk.aws-iam \
   #                  aws-cdk.aws-s3 \
@@ -17,7 +17,7 @@ cdk_test:
   #   - npm install -g aws-cdk ; cdk --version
 
   script:
-    - echo $AWS_ACCESS_KEY_ID
+    - env $AWS_ACCESS_KEY_ID
   # - cdk doctor #Check your set-up for potential problems
   # # - cdk synth > cloudformation_template.yaml #Synthesizes and prints the CloudFormation template for this stack
   # - cdk diff # Compares the specified stack with the deployed stack or a local template file, and returns with status 1 if any difference is found
