@@ -106,7 +106,7 @@ build_image:
     - docker:stable-dind
   image: docker:stable
   script:
-    - apk add -U python3 && python3 -m ensurepip && pip3 install awscli
+    - apk add -U python3 && python3 -m ensurepip && pip3 install awscli==1.20.44
     - $(aws ecr get-login --no-include-email --region ca-central-1)
     - docker build --build-arg GIT_USERNAME=gitlab-ci-token --build-arg GIT_PASSWORD=${CI_JOB_TOKEN} -t ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG} .
     - docker push ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG}
