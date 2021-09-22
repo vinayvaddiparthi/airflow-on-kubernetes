@@ -302,7 +302,7 @@ with DAG(
             task_id=f"task_{report}",
             python_callable=process,
             op_kwargs={
-                "conn": "airflow_production_test",
+                "conn": "airflow_production",
                 "table": report,
             },
             provide_context=True,
