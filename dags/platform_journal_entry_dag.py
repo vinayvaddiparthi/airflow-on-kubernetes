@@ -135,7 +135,7 @@ def create_journal_entry_for_transaction(ds: datetime, **kwargs: Any) -> None:
         ),
     ).where(cast(column("created_at"), Date) == text(f"'{created_date}'"))
 
-    with SnowflakeHook("airflow_production").get_sqlalchemy_engine().begin() as tx:
+    with SnowflakeHook("airflow_production_test").get_sqlalchemy_engine().begin() as tx:
         df = pd.read_sql(
             selectable,
             tx,
