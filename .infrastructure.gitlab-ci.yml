@@ -1,19 +1,20 @@
 default:
       image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest #Docker image to use for build jobs
 variables:
-  AWS_ACCESS_KEY_ID: $DEVELOPMENT_AWS_ACCESS_KEY_ID
-  AWS_SECRET_ACCESS_KEY: $DEVELOPMENT_AWS_SECRET_ACCESS_KEY
-  AWS_DEFAULT_REGION: $DEVELOPMENT_AWS_DEFAULT_REGION
+  AWS_ACCESS_KEY_ID: "$DEVELOPMENT_AWS_ACCESS_KEY_ID"
+  AWS_SECRET_ACCESS_KEY: "$DEVELOPMENT_AWS_SECRET_ACCESS_KEY"
+  AWS_DEFAULT_REGION: "$DEVELOPMENT_AWS_DEFAULT_REGION"
 
 cdk_test:
   environment:
     name: development
   stage: test
   before_script:
-    - export AWS_ACCESS_KEY_ID=$DEVELOPMENT_AWS_ACCESS_KEY_ID \
-             AWS_SECRET_ACCESS_KEY=$DEVELOPMENT_AWS_SECRET_ACCESS_KEY \
-             AWS_DEFAULT_REGION=$DEVELOPMENT_AWS_DEFAULT_REGION
-    # - apt-get -qq update && apt-get -qq install python3-pip npm > apt-get-output.txt
+    - echo Hi
+    # - export AWS_ACCESS_KEY_ID=$DEVELOPMENT_AWS_ACCESS_KEY_ID \
+    #          AWS_SECRET_ACCESS_KEY=$DEVELOPMENT_AWS_SECRET_ACCESS_KEY \
+    #          AWS_DEFAULT_REGION=$DEVELOPMENT_AWS_DEFAULT_REGION
+    # # - apt-get -qq update && apt-get -qq install python3-pip npm > apt-get-output.txt
   #   - pip3 install aws-cdk.aws-ec2 \
   #                  aws-cdk.aws-iam \
   #                  aws-cdk.aws-s3 \
@@ -26,7 +27,7 @@ cdk_test:
   script:
     - echo $AWS_ACCESS_KEY_ID
     - echo $DEVELOPMENT_AWS_ACCESS_KEY_ID
-    - env | grep -i AWS
+    - env | grep -i AWS_
   # - cdk doctor #Check your set-up for potential problems
   # # - cdk synth > cloudformation_template.yaml #Synthesizes and prints the CloudFormation template for this stack
   # - cdk diff # Compares the specified stack with the deployed stack or a local template file, and returns with status 1 if any difference is found
