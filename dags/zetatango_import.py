@@ -251,6 +251,7 @@ def decrypt_pii_columns(
     for spec in decryption_specs:
         dst_stage = random_identifier()
         dst_table = f"{target_schema}.{spec.schema}${spec.table}"
+        spec.schema = f"ZETATANGO.{spec.schema}"
 
         with engine.begin() as tx:
             tx.execute(
@@ -362,8 +363,8 @@ def create_dag() -> DAG:
             op_kwargs={
                 "heroku_app": "zt-production-elt-core",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
-                "snowflake_connection": "snowflake_zetatango_production",
-                "snowflake_schema": "CORE_PRODUCTION",
+                "snowflake_connection": "airflow_role_test",
+                "snowflake_schema": "ZETATANGO.CORE_PRODUCTION",
             },
             executor_config={
                 "resources": {
@@ -376,7 +377,7 @@ def create_dag() -> DAG:
             task_id="zt-production-elt-core__pii_decryption",
             python_callable=decrypt_pii_columns,
             op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_production",
+                "snowflake_connection": "airflow_role_test",
                 "decryption_specs": [
                     DecryptionSpec(
                         schema="CORE_PRODUCTION",
@@ -440,7 +441,7 @@ def create_dag() -> DAG:
                         ],
                     ),
                 ],
-                "target_schema": "PII_PRODUCTION",
+                "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
             executor_config={
                 "KubernetesExecutor": {
@@ -461,8 +462,8 @@ def create_dag() -> DAG:
             op_kwargs={
                 "heroku_app": "zt-production-elt-idp",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0DB594617CE5BEC42_URL",
-                "snowflake_connection": "snowflake_zetatango_production",
-                "snowflake_schema": "IDP_PRODUCTION",
+                "snowflake_connection": "airflow_role_test",
+                "snowflake_schema": "ZETATANGO.IDP_PRODUCTION",
             },
             executor_config={
                 "resources": {
@@ -511,8 +512,8 @@ def create_dag() -> DAG:
             op_kwargs={
                 "heroku_app": "zt-production-elt-kyc",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0467EC30D24A2723A_URL",
-                "snowflake_connection": "snowflake_zetatango_production",
-                "snowflake_schema": "KYC_PRODUCTION",
+                "snowflake_connection": "airflow_role_test",
+                "snowflake_schema": "ZETATANGO.KYC_PRODUCTION",
             },
             executor_config={
                 "resources": {
@@ -525,7 +526,7 @@ def create_dag() -> DAG:
             task_id="zt-production-elt-kyc__pii_decryption",
             python_callable=decrypt_pii_columns,
             op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_production",
+                "snowflake_connection": "airflow_role_test",
                 "decryption_specs": [
                     DecryptionSpec(
                         schema="KYC_PRODUCTION",
@@ -562,7 +563,7 @@ def create_dag() -> DAG:
                         ),
                     ),
                 ],
-                "target_schema": "PII_PRODUCTION",
+                "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
             executor_config={
                 "KubernetesExecutor": {
@@ -640,7 +641,7 @@ if __name__ == "__main__":
                     whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
                 )
             ],
-            target_schema="PII_STAGING",
+            target_schema="ZETATANGO.PII_STAGING",
         )
 
 else:
