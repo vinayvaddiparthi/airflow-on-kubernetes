@@ -22,7 +22,7 @@ cdk_test:
 
   script:
     - echo $AWS_ACCESS_KEY_ID
-    - aws configure
+    - cat .aws/config
   # - cdk doctor #Check your set-up for potential problems
   # # - cdk synth > cloudformation_template.yaml #Synthesizes and prints the CloudFormation template for this stack
   # - cdk diff # Compares the specified stack with the deployed stack or a local template file, and returns with status 1 if any difference is found
