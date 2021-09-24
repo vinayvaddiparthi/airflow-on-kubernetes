@@ -10,7 +10,8 @@ cdk_test:
     name: development
   stage: test
   before_script:
-    - apt-get -qq update && apt-get -qq install python3-pip npm > apt-get-output.txt
+    - echo HI
+    # - apt-get -qq update && apt-get -qq install python3-pip npm > apt-get-output.txt
   #   - pip3 install aws-cdk.aws-ec2 \
   #                  aws-cdk.aws-iam \
   #                  aws-cdk.aws-s3 \
