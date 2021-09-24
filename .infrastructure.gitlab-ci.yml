@@ -1,5 +1,9 @@
 default:
       image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest #Docker image to use for build jobs
+variables:
+  AWS_ACCESS_KEY_ID: $DEVELOPMENT_AWS_ACCESS_KEY_ID
+  AWS_SECRET_ACCESS_KEY: $DEVELOPMENT_AWS_SECRET_ACCESS_KEY
+  AWS_DEFAULT_REGION: $DEVELOPMENT_AWS_DEFAULT_REGION
 
 cdk_test:
   # environment:
