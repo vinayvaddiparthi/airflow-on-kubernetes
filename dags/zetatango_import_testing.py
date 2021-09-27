@@ -362,7 +362,7 @@ def create_dag() -> DAG:
             op_kwargs={
                 "heroku_app": "zt-production-elt-core",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
-                "snowflake_connection": "snowflake_zetatango_production",
+                "snowflake_connection": "airflow_production_test",
                 "snowflake_schema": "ZETATANGO.CORE_PRODUCTION_TEST",
             },
             executor_config={
@@ -405,16 +405,6 @@ def create_dag() -> DAG:
         )
 
         dag << import_core_prod >> decrypt_core_prod
-        # (
-        #     [
-        #         decrypt_core_prod,
-        #         decrypt_kyc_prod,
-        #         decrypt_idp_prod,
-        #     ]
-        #     >> dbt_run
-        #     >> dbt_snapshot
-        #     >> dbt_test
-        # )
 
     return dag
 
