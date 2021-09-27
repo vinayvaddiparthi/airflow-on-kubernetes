@@ -332,9 +332,9 @@ def decrypt_pii_columns(
 
 def create_dag() -> DAG:
     with DAG(
-        dag_id="zetatango_import",
+        dag_id="zetatango_import_testing",
         start_date=pendulum.datetime(
-            2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
+            2021, 9, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
         schedule_interval=None,
         default_args={"retries": 1, "retry_delay": timedelta(minutes=5)},
