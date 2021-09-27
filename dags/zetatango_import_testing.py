@@ -31,9 +31,7 @@ from sqlalchemy import (
     text,
     func,
     create_engine,
-    column,
     literal_column,
-    literal,
     and_,
     union_all,
 )
@@ -83,21 +81,6 @@ def export_to_snowflake(
         )
     )
 
-    with source_engine.begin() as tx:
-        tables = (
-            x[0]
-            for x in tx.execute(
-                Select(
-                    columns=[column("table_name")],
-                    from_obj=text('"information_schema"."tables"'),
-                    whereclause=and_(
-                        literal_column("table_schema") == literal(source_schema),
-                        literal_column("table_type") == literal("BASE TABLE"),
-                    ),
-                )
-            ).fetchall()
-        )
-
     source_raw_conn: connection = source_engine.raw_connection()
     try:
         source_raw_conn.set_isolation_level(ISOLATION_LEVEL_REPEATABLE_READ)
@@ -109,7 +92,12 @@ def export_to_snowflake(
                 snowflake_schema,
                 table,
             )
-            for table in tables
+            for table in (
+                "merchants",
+                "documents",
+                "flinks_raw_responses",
+                "lending_adjudications",
+            )
         ]
         print(*output, sep="\n")
     finally:
