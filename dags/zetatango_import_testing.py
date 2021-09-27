@@ -43,9 +43,6 @@ from sqlalchemy.sql import Select, ClauseElement
 
 from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils import random_identifier
-from dbt_extras.dbt_operator import DbtOperator
-from dbt_extras.dbt_action import DbtAction
-from utils.failure_callbacks import slack_dag
 
 
 @attr.s
