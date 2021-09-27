@@ -111,12 +111,13 @@ def copy_transactions(
     **kwargs: Any,
 ) -> None:
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-    metadata = MetaData(bind=snowflake_engine)
+    metadata = MetaData()
 
     merchants = Table(
         "merchants",
         metadata,
         autoload=True,
+        autoload_with=snowflake_engine,
         schema=schema,
     )
 
@@ -124,6 +125,7 @@ def copy_transactions(
         "documents",
         metadata,
         autoload=True,
+        autoload_with=snowflake_engine,
         schema=schema,
     )
 
@@ -131,6 +133,7 @@ def copy_transactions(
         "flinks_raw_responses",
         metadata,
         autoload=True,
+        autoload_with=snowflake_engine,
         schema=schema,
     )
 
