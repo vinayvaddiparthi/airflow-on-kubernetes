@@ -246,7 +246,7 @@ def create_dag() -> DAG:
                 python_callable=copy_transactions,
                 provide_context=True,
                 op_kwargs={
-                    "snowflake_connection": "snowflake_zetatango_production",
+                    "snowflake_connection": "airflow_production_test",
                     "schema": "CORE_PRODUCTION",
                     "bucket_name": "ario-documents-production",
                     "num_threads": 10,
