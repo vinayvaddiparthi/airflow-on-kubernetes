@@ -68,7 +68,6 @@ def store_flinks_response(
     flinks_raw_responses = Table(
         "flinks_raw_responses",
         metadata,
-        autoload=True,
         autoload_with=snowflake_engine,
         schema=schema,
     )
@@ -116,7 +115,6 @@ def copy_transactions(
     merchants = Table(
         "merchants",
         metadata,
-        autoload=True,
         autoload_with=snowflake_engine,
         schema=schema,
     )
@@ -124,7 +122,6 @@ def copy_transactions(
     merchant_documents = Table(
         "documents",
         metadata,
-        autoload=True,
         autoload_with=snowflake_engine,
         schema=schema,
     )
@@ -132,7 +129,6 @@ def copy_transactions(
     flinks_raw_responses = Table(
         "flinks_raw_responses",
         metadata,
-        autoload=True,
         autoload_with=snowflake_engine,
         schema=schema,
     )
