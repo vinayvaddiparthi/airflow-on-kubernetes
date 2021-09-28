@@ -113,7 +113,9 @@ with
         fields:state_province::string as state_province,
         fields:sub_premise_number::string as sub_premise_number,
         fields:sub_premise_type::string as sub_premise_type,
-        fields:thoroughfare::string as thoroughfare
+        fields:thoroughfare::string as thoroughfare,
+        fields:rural_routes::string as rural_routes,
+        fields:rural_additional_content::string as rural_additional_content
       from "ZETATANGO"."KYC_PRODUCTION"."ADDRESSES"
     ),
     merchant_with_address as (
@@ -171,6 +173,8 @@ with
         sub_premise_number,
         sub_premise_type,
         thoroughfare,
+        rural_routes,
+        rural_additional_content,
         encrypted_file_number
       from eligible_merchant
       left join merchant_with_address on
