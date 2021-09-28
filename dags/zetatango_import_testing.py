@@ -95,7 +95,6 @@ def export_to_snowflake(
             for table in (
                 "merchants",
                 "documents",
-                "flinks_raw_responses",
                 "lending_adjudications",
             )
         ]
@@ -361,7 +360,7 @@ def create_dag() -> DAG:
             task_id="zt-production-elt-core__pii_decryption",
             python_callable=decrypt_pii_columns,
             op_kwargs={
-                "snowflake_connection": "snowflake_zetatango_production",
+                "snowflake_connection": "airflow_production_test",
                 "decryption_specs": [
                     DecryptionSpec(
                         schema="CORE_PRODUCTION_TEST",
