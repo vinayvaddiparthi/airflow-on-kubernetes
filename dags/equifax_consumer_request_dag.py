@@ -185,7 +185,9 @@ with
         state_province,
         sub_premise_number,
         sub_premise_type,
-        thoroughfare
+        thoroughfare,
+        rural_routes,
+        rural_additional_content
       from eligible_applicant
       left join applicant_with_attributes on
         eligible_applicant.applicant_guid = applicant_with_attributes.applicant_guid
