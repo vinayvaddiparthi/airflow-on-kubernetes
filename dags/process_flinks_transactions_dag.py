@@ -68,7 +68,6 @@ def store_flinks_response(
     flinks_raw_responses = Table(
         "flinks_raw_responses",
         metadata,
-        autoload=True,
         autoload_with=snowflake_engine,
         schema=schema,
     )
@@ -111,26 +110,26 @@ def copy_transactions(
     **kwargs: Any,
 ) -> None:
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-    metadata = MetaData(bind=snowflake_engine)
+    metadata = MetaData()
 
     merchants = Table(
         "merchants",
         metadata,
-        autoload=True,
+        autoload_with=snowflake_engine,
         schema=schema,
     )
 
     merchant_documents = Table(
         "documents",
         metadata,
-        autoload=True,
+        autoload_with=snowflake_engine,
         schema=schema,
     )
 
     flinks_raw_responses = Table(
         "flinks_raw_responses",
         metadata,
-        autoload=True,
+        autoload_with=snowflake_engine,
         schema=schema,
     )
 
@@ -243,7 +242,7 @@ def create_dag() -> DAG:
                 python_callable=copy_transactions,
                 provide_context=True,
                 op_kwargs={
-                    "snowflake_connection": "snowflake_zetatango_production",
+                    "snowflake_connection": "airflow_production_test",
                     "schema": "CORE_PRODUCTION",
                     "bucket_name": "ario-documents-production",
                     "num_threads": 10,
