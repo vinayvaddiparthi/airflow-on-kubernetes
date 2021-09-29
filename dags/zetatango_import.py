@@ -487,6 +487,8 @@ def create_dag() -> DAG:
                                 "merchant",
                                 "applicant",
                                 "applicants",
+                                "insights_preference",
+                                "product_preference",
                             ]
                         ),
                     ),
