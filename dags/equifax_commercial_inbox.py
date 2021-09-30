@@ -48,7 +48,7 @@ dag.doc_md = __doc__
 
 IS_PROD = Variable.get(key="environment") == "production"
 SFTP_CONN = "equifax_sftp"
-SNOWFLAKE_CONN = "airflow_production"
+SNOWFLAKE_CONN = "airflow_production_test"
 S3_CONN = "s3_dataops"
 S3_BUCKET = f"tc-data-airflow-{'production' if IS_PROD else 'staging'}"
 DIR_PATH = "equifax/commercial"
