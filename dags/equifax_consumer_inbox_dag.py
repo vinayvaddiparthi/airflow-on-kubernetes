@@ -48,7 +48,7 @@ dag = DAG(
 )
 dag.doc_md = __doc__
 
-snowflake_connection = "airflow_production_test"
+snowflake_connection = "snowflake_production"
 s3_connection = "s3_dataops"
 S3_BUCKET = "tc-data-airflow-production"
 aws_hook = AwsBaseHook(aws_conn_id=s3_connection, client_type="s3")
