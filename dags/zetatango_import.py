@@ -363,7 +363,7 @@ def create_dag() -> DAG:
             op_kwargs={
                 "heroku_app": "zt-production-elt-core",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
-                "snowflake_connection": "airflow_production_test",
+                "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.CORE_PRODUCTION",
             },
             executor_config={
@@ -377,7 +377,7 @@ def create_dag() -> DAG:
             task_id="zt-production-elt-core__pii_decryption",
             python_callable=decrypt_pii_columns,
             op_kwargs={
-                "snowflake_connection": "airflow_production_test",
+                "snowflake_connection": "snowflake_production",
                 "decryption_specs": [
                     DecryptionSpec(
                         schema="CORE_PRODUCTION",
@@ -462,7 +462,7 @@ def create_dag() -> DAG:
             op_kwargs={
                 "heroku_app": "zt-production-elt-idp",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0DB594617CE5BEC42_URL",
-                "snowflake_connection": "airflow_production_test",
+                "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.IDP_PRODUCTION",
             },
             executor_config={
@@ -476,7 +476,7 @@ def create_dag() -> DAG:
             task_id="zt-production-elt-idp__pii_decryption",
             python_callable=decrypt_pii_columns,
             op_kwargs={
-                "snowflake_connection": "airflow_production_test",
+                "snowflake_connection": "snowflake_production",
                 "decryption_specs": [
                     DecryptionSpec(
                         schema="IDP_PRODUCTION",
@@ -514,7 +514,7 @@ def create_dag() -> DAG:
             op_kwargs={
                 "heroku_app": "zt-production-elt-kyc",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0467EC30D24A2723A_URL",
-                "snowflake_connection": "airflow_production_test",
+                "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.KYC_PRODUCTION",
             },
             executor_config={
@@ -528,7 +528,7 @@ def create_dag() -> DAG:
             task_id="zt-production-elt-kyc__pii_decryption",
             python_callable=decrypt_pii_columns,
             op_kwargs={
-                "snowflake_connection": "airflow_production_test",
+                "snowflake_connection": "snowflake_production",
                 "decryption_specs": [
                     DecryptionSpec(
                         schema="KYC_PRODUCTION",
