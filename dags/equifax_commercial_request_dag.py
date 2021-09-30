@@ -39,7 +39,7 @@ dag = DAG(
     schedule_interval="0 0 1 1-11/2 *",
 )
 
-snowflake_connection = "airflow_production_test"
+snowflake_connection = "snowflake_production"
 s3_connection = "s3_dataops"
 output_bucket = f"tc-data-airflow-{'production' if Variable.get('environment') == 'production' else 'staging'}"
 output_folder = "equifax/commercial/request"
