@@ -45,7 +45,7 @@ dag = DAG(
 )
 dag.doc_md = __doc__
 
-snowflake_connection = "airflow_production_test"
+snowflake_connection = "snowflake_production"
 s3_connection = "s3_dataops"
 output_bucket = "tc-data-airflow-production"
 output_folder = "equifax/consumer/request"

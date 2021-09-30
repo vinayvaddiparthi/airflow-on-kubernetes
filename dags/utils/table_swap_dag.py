@@ -69,7 +69,7 @@ def create_table_swap_dag(
                     task_id=f'swap__{table["src"]["schema"]}__{table["src"]["table"]}',
                     python_callable=swap,
                     op_kwargs={
-                        "conn": "airflow_production",
+                        "conn": "snowflake_production_creditgenie",
                         "output_database": output_database,
                         "dst": table["dst"],
                     },
