@@ -40,7 +40,7 @@ default_args = {
 
 dag = DAG(
     dag_id="equifax_commercial_inbox",
-    schedule_interval="@daily",
+    schedule_interval="0 12 * * *",
     default_args=default_args,
     template_searchpath="include/sql",
 )
@@ -149,7 +149,7 @@ def _convert_to_parquet(
     bucket_name: str,
     snowflake_conn_id: str,
     stage_names: dict,
-    ds_nodash: str,
+    next_ds_nodash: str,
     ti: TaskInstance,
     **_: None,
 ) -> None:
@@ -177,7 +177,7 @@ def _convert_to_parquet(
                 )
                 table_ = table_.append_column(
                     field_="import_month",
-                    column=array([get_import_month(ds_nodash)] * len(table_)),
+                    column=array([get_import_month(next_ds_nodash)] * len(table_)),
                 )
                 if table_.num_rows == 0:
                     logging.warning(f"📝️ Skipping empty file {reader.name}")
