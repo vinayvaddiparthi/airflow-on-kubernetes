@@ -35,7 +35,7 @@ default_args = {
 dag = DAG(
     dag_id="equifax_consumer_outbox",
     default_args=default_args,
-    schedule_interval="@daily",
+    schedule_interval="0 8 * * *",
 )
 dag.doc_md = __doc__
 
