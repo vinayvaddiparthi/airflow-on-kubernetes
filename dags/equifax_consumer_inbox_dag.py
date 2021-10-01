@@ -43,7 +43,7 @@ default_args = {
 
 dag = DAG(
     dag_id="equifax_consumer_inbox",
-    schedule_interval="@daily",
+    schedule_interval="0 12 * * *",
     default_args=default_args,
 )
 dag.doc_md = __doc__
@@ -232,12 +232,12 @@ def _insert_snowflake_raw(
     table_name_raw: str,
     table_name_raw_history: str,
     download_key: str,
-    ds_nodash: str,
+    next_ds_nodash: str,
     **_: None,
 ) -> None:
     _insert_snowflake(table=table_name_raw, download_key=download_key)
     _insert_snowflake(
-        table=f"{table_name_raw_history}_{get_import_month(ds_nodash)}",
+        table=f"{table_name_raw_history}_{get_import_month(next_ds_nodash)}",
         download_key=download_key,
     )
 
@@ -287,19 +287,19 @@ def _insert_snowflake_stage(
     table_name: str,
     table_name_history: str,
     download_key: str,
-    ds_nodash: str,
+    next_ds_nodash: str,
     **_: None,
 ) -> None:
     _insert_snowflake(table=table_name, download_key=download_key, date_formatted=True)
     _insert_snowflake(
-        table=f"{table_name_history}_{get_import_month(ds_nodash)}",
+        table=f"{table_name_history}_{get_import_month(next_ds_nodash)}",
         download_key=download_key,
         date_formatted=True,
     )
 
 
 def _insert_snowflake_public(
-    source_table: str, destination_table: str, ds_nodash: str, **_: None
+    source_table: str, destination_table: str, next_ds_nodash: str, **_: None
 ) -> None:
     columns = [
         "import_month",
@@ -314,7 +314,7 @@ def _insert_snowflake_public(
     sql = f"""
         insert into {destination_table}({columns_string})
         select
-        '{get_import_month((ds_nodash))}' as import_month,
+        '{get_import_month(next_ds_nodash)}' as import_month,
         null as accountid,
         null as contractid,
         null as business_name,
