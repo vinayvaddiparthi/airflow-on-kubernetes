@@ -41,11 +41,11 @@ class DbtOperator(BashOperator):
                 "SNOWFLAKE_USERNAME": snowflake_hook.login,
                 "SNOWFLAKE_PASSWORD": snowflake_hook.password,
                 "SNOWFLAKE_ACCOUNT": snowflake_hook.extra_dejson.get("account"),
-                "SNOWFLAKE_DATABASE": snowflake_hook.extra_dejson.get("database"),
+                "DBT_SNOWFLAKE_DATABASE": snowflake_hook.extra_dejson.get("database"),
                 "SNOWFLAKE_SCHEMA": snowflake_hook.extra_dejson.get("schema"),
                 "SNOWFLAKE_ROLE": snowflake_hook.extra_dejson.get("role"),
                 "SNOWFLAKE_WAREHOUSE": snowflake_hook.extra_dejson.get("warehouse"),
-                "ZETATANGO_ENV": "PRODUCTION",
+                "DBT_ZETATANGO_ENV": "PRODUCTION",
                 "GITLAB_USER": gitlab_user,
                 "GITLAB_TOKEN": gitlab_token,
             }
