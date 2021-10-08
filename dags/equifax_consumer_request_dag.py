@@ -302,7 +302,7 @@ def _validate_file(
     )
     with dest_fs.open(filename, mode="r", encoding="windows-1252") as file:
         error = validation.validate(file)
-        print(error)
+        logging.error(error)
 
     keys = []
     for key in error:
@@ -314,7 +314,9 @@ def _validate_file(
             f"s3://{credentials.access_key}:{credentials.secret_key}@{bucket}/{validated_folder}"
         )
         copy.copy_file(dest_fs, filename, validated_fs, filename)
-        print(f"Successfully uploaded request file to {bucket}/{validated_folder}")
+        logging.info(
+            f"Successfully uploaded request file to {bucket}/{validated_folder}"
+        )
     else:
         SlackWebhookHook(
             http_conn_id="slack_data_alerts",
