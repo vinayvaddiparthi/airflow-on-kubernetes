@@ -3,6 +3,7 @@ import tempfile
 from typing import Any, Dict
 from pathlib import Path
 import pendulum
+from datetime import timedelta
 from airflow import DAG
 from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -12,7 +13,7 @@ from googleapiclient.discovery import build as AnalyticsBuild
 from oauth2client.service_account import ServiceAccountCredentials
 
 from utils import random_identifier
-from utils.failure_callbacks import slack_ti
+from utils.failure_callbacks import slack_dag
 
 # view_id from GA: Overall - IP and spam filtered
 VIEW_ID = "102376443"
@@ -206,10 +207,12 @@ with DAG(
     "google_analytics_import",
     max_active_runs=1,
     schedule_interval="@daily",
+    default_args={"retries": 2, "retry_delay": timedelta(minutes=5)},
     catchup=True,
     start_date=pendulum.datetime(
         2020, 8, 24, tzinfo=pendulum.timezone("America/Toronto")
     ),
+    on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
 
     def build_deduplicate_query(dest_db: str, dest_schema: str, table: str) -> str:
@@ -306,5 +309,4 @@ with DAG(
                 "table": report,
             },
             provide_context=True,
-            on_failure_callback=slack_ti("tc_failure_conn"),
         )
