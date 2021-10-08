@@ -302,13 +302,9 @@ def _validate_file(
     )
     with dest_fs.open(filename, mode="r", encoding="windows-1252") as file:
         error = validation.validate(file)
-        logging.error(error)
 
     keys = []
-    for key in error:
-        if error[key]:
-            keys.append(key)
-            print(f"{key} errors: {len(error[key])}")
+    [keys.append(key) for key in error if error[key]]
     if not len(keys):
         validated_fs = open_fs(
             f"s3://{credentials.access_key}:{credentials.secret_key}@{bucket}/{validated_folder}"
@@ -318,6 +314,7 @@ def _validate_file(
             f"Successfully uploaded request file to {bucket}/{validated_folder}"
         )
     else:
+        [logging.error(f"{key}: {error[key]}") for key in keys]
         SlackWebhookHook(
             http_conn_id="slack_data_alerts",
             message=f":equifax: *Equifax consumer request file validation failed on* {keys}\n"
