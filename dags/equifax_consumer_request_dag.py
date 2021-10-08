@@ -319,7 +319,7 @@ def _validate_file(
         SlackWebhookHook(
             http_conn_id="slack_data_alerts",
             message=f":equifax: *Equifax consumer request file validation failed on* {keys}\n"
-            f"*Execution Time*: {task_instance}\n"
+            f"*Task*: {task_instance}\n"
             f"*Log Url*: {task_instance.log_url}",
         ).execute()
 
