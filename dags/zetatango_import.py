@@ -489,6 +489,8 @@ def create_dag() -> DAG:
                                 "applicants",
                                 "insights_preference",
                                 "product_preference",
+                                "phone_number",
+                                "mfa_mode",
                             ]
                         ),
                     ),
