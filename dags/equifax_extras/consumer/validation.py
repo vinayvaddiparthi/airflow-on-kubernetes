@@ -55,6 +55,12 @@ def check_dob(dob: str) -> Any:
     return None
 
 
+def check_address(address: str) -> Any:
+    if not address.strip(" "):
+        return address
+    return None
+
+
 def check_city(city: str) -> Any:
     if not city.strip(" "):
         return city
@@ -97,12 +103,13 @@ def check_footer(footer: str, count: int) -> Any:
 
 def validate(
     file: IO,
-) -> None:
+) -> Dict:
     error: Dict[str, Any] = {
         "length": [],
         "header": [],
         "footer": [],
         "dob": [],
+        "address": [],
         "city": [],
         "province": [],
         "postal": [],
@@ -122,22 +129,15 @@ def validate(
 
         data = convert_line(line)
         if check_sin(data[6]):
-            error["sin"].append({data[13].rstrip("\n").rstrip(" "): check_sin(data[6])})
+            error["sin"].append({data[13].rstrip("\n").rstrip(" "): data[6]})
         if check_dob(data[7]):
-            error["dob"].append({data[13].rstrip("\n").rstrip(" "): check_dob(data[7])})
+            error["dob"].append({data[13].rstrip("\n").rstrip(" "): data[7]})
+        if check_address(data[8]):
+            error["address"].append({data[13].rstrip("\n").rstrip(" "): data[8]})
         if check_city(data[9]):
-            error["city"].append(
-                {data[13].rstrip("\n").rstrip(" "): check_dob(data[9])}
-            )
+            error["city"].append({data[13].rstrip("\n").rstrip(" "): data[9]})
         if check_province(data[10]):
-            error["province"].append(
-                {data[13].rstrip("\n").rstrip(" "): check_dob(data[10])}
-            )
+            error["province"].append({data[13].rstrip("\n").rstrip(" "): data[10]})
         if check_postal_code(data[11]):
-            error["postal"].append(
-                {data[13].rstrip("\n").rstrip(" "): check_dob(data[11])}
-            )
-    print(error)
-    for key in error:
-        if error[key]:
-            print(f"{key} errors: {len(error[key])}")
+            error["postal"].append({data[13].rstrip("\n").rstrip(" "): data[11]})
+    return error
