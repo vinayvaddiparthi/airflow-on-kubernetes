@@ -10,6 +10,7 @@ from airflow.models.taskinstance import TaskInstance
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.exceptions import AirflowFailException
 
 import logging
 import tempfile
@@ -49,6 +50,7 @@ snowflake_connection = "snowflake_production"
 s3_connection = "s3_dataops"
 output_bucket = "tc-data-airflow-production"
 output_folder = "equifax/consumer/request"
+validated_folder = "equifax/consumer/request_validated"
 
 statement_template = """
 with
@@ -274,6 +276,7 @@ def _validate_file(
     s3_conn: str,
     bucket: str,
     folder: str,
+    validated_folder: str,
     task_instance: TaskInstance,
     **_: None,
 ) -> None:
@@ -285,8 +288,9 @@ def _validate_file(
     5. check content: [
         I: SIN: all numeric, or all empty space
         II: Date of Birth: all numeric, month between 1~12, day between 1~31
-        III: City/Province: all alphabet
-        IV: Postal code: alphanumeric, regex match [a-zA-Z]\\d[a-zA-Z]\\d[a-zA-Z]\\d
+        III: Address: not empty
+        IV: City/Province: all alphabet
+        V: Postal code: alphanumeric, regex match [a-zA-Z]\\d[a-zA-Z]\\d[a-zA-Z]\\d
     ]
     If any of those above is wrong, tell the contact person in Risk let them decide if file is good to use
     """
@@ -297,7 +301,23 @@ def _validate_file(
         f"s3://{credentials.access_key}:{credentials.secret_key}@{bucket}/{folder}"
     )
     with dest_fs.open(filename, mode="r", encoding="windows-1252") as file:
-        validation.validate(file)
+        error = validation.validate(file)
+
+    keys = []
+    for key in error:
+        if error[key]:
+            keys.append(key)
+            logging.error(f"{key}: {error[key]}")
+    if not len(keys):
+        validated_fs = open_fs(
+            f"s3://{credentials.access_key}:{credentials.secret_key}@{bucket}/{validated_folder}"
+        )
+        copy.copy_file(dest_fs, filename, validated_fs, filename)
+        logging.info(
+            f"Successfully uploaded request file to {bucket}/{validated_folder}"
+        )
+    else:
+        raise AirflowFailException("Failed to validate request file")
 
 
 generate_file = PythonOperator(
@@ -333,6 +353,7 @@ validate_file = PythonOperator(
         "s3_conn": s3_connection,
         "bucket": output_bucket,
         "folder": output_folder,
+        "validated_folder": validated_folder,
     },
     execution_timeout=timedelta(hours=3),
     provide_context=True,
