@@ -210,7 +210,11 @@ def decrypt_pii_columns(
         return rubymarshal_loads(field) if field else None
 
     def _postprocess_yaml(field: Any) -> Optional[str]:
-        return json_dumps(yaml.load(field), default=str) if field else None  # nosec
+        return (
+            json_dumps(yaml.load(field, Loader=yaml.FullLoader), default=str)
+            if field
+            else None
+        )  # nosec
 
     def _postprocess_passthrough(field: Any) -> Any:
         return field if field else None
