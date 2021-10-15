@@ -211,10 +211,10 @@ def decrypt_pii_columns(
 
     def _postprocess_yaml(field: Any) -> Optional[str]:
         return (
-            json_dumps(yaml.load(field, Loader=yaml.FullLoader), default=str)
+            json_dumps(yaml.load(field, Loader=yaml.FullLoader), default=str)  # nosec
             if field
             else None
-        )  # nosec
+        )
 
     def _postprocess_passthrough(field: Any) -> Any:
         return field if field else None
