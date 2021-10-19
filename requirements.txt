@@ -19,8 +19,8 @@ flask-bcrypt  # required by airflow
 fab-oidc
 salesforce-bulk
 zeep
-snowflake-sqlalchemy==1.2.4 # pinned as the next patch version introduces a hard dependency on sqlalchemy>=1.4.0
-sqlalchemy>=1.3.18, <1.4
+snowflake-sqlalchemy
+sqlalchemy
 rubymarshal
 PyYAML
 PyNaCl
