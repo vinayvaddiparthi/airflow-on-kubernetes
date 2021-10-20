@@ -153,5 +153,5 @@ reports: Dict[str, Any] = {
                 }
             ]
         },
-    }
+    },
 }
