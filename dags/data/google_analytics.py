@@ -95,6 +95,7 @@ reports: Dict[str, Any] = {
                         {"name": "ga:eventAction"},
                         {"name": "ga:eventCategory"},
                         {"name": "ga:dimension1"},  # millisecond timestamp
+                        {"name": "ga:dateHourMinute"},
                     ],
                     "pageToken": "0",
                     "pageSize": ROW_LIMIT,
