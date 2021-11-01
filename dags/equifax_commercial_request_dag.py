@@ -36,7 +36,7 @@ default_args = {
 dag = DAG(
     dag_id="equifax_commercial_request",
     default_args=default_args,
-    schedule_interval="0 0 1 1-11/2 *",
+    schedule_interval="0 0 1 */2 *",
 )
 
 snowflake_connection = "snowflake_production"
