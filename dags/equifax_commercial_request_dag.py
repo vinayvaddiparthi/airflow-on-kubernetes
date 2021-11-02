@@ -198,7 +198,7 @@ def _generate_file(
     s3_conn: str,
     bucket: str,
     folder: str,
-    ds_nodash: str,
+    next_ds_nodash: str,
     **_: None,
 ) -> None:
     engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
@@ -211,7 +211,7 @@ def _generate_file(
     results = query.all()
 
     local_dir = Path(tempfile.gettempdir()) / "equifax_batch" / "commercial"
-    file_name = f"eqxcom.exthinkingpd.TCAP.{ds_nodash}.csv"
+    file_name = f"eqxcom.exthinkingpd.TCAP.{next_ds_nodash}.csv"
     request_file = RequestFile(local_dir / file_name)
 
     request_file.write_header()
