@@ -591,12 +591,20 @@ def create_dag() -> DAG:
             task_id="dbt_run",
             execution_timeout=timedelta(hours=1),
             action=DbtAction.run,
+            exclude="tag:cleaned_snapshots",
         )
 
         dbt_snapshot = DbtOperator(
             task_id="dbt_snapshot",
             execution_timeout=timedelta(hours=1),
             action=DbtAction.snapshot,
+        )
+
+        dbt_clean_snapshots = DbtOperator(
+            task_id="dbt_clean_snapshots",
+            execution_timeout=timedelta(hours=1),
+            action=DbtAction.run,
+            models="tag:cleaned_snapshots",
         )
 
         dbt_test = DbtOperator(
@@ -616,6 +624,7 @@ def create_dag() -> DAG:
             ]
             >> dbt_run
             >> dbt_snapshot
+            >> dbt_clean_snapshots
             >> dbt_test
         )
 
