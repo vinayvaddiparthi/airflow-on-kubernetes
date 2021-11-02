@@ -26,6 +26,7 @@ class DbtOperator(BashOperator):
         target_args: str = "prod",
         env: Optional[Dict] = None,
         models: Optional[str] = None,
+        exclude: Optional[str] = None,
         snowflake_conn: Optional[str] = None,
         *args: Any,
         **kwargs: Any,
@@ -54,11 +55,13 @@ class DbtOperator(BashOperator):
         )
 
         model_argument = f"--models {models}" if models else ""
+        exclude_argument = f"--exclude {exclude}" if exclude else ""
+        argument = " ".join([model_argument, exclude_argument])
 
         profiles = f"--profiles-dir {profiles_args}"
         target = f"--target {target_args}"
         deps = " ".join(["dbt", DbtAction.deps.name, profiles, target])
-        command = " ".join(["dbt", action.name, profiles, target, model_argument])
+        command = " ".join(["dbt", action.name, profiles, target, argument])
 
         logging.info(f"Execute command: {command}")
 
