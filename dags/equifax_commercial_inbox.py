@@ -199,7 +199,7 @@ def _convert_to_parquet(
             else:
                 stage_name = stage_names["dv_stage_name"]
             tx.execute(
-                f"create or replace temporary stage {stage_name} file_format=(type=parquet)"
+                f"create or replace stage {stage_name} file_format=(type=parquet)"
             )
             tx.execute(f"put file://{file} @{stage_name}").fetchall()
 
