@@ -42,7 +42,7 @@ dag = DAG(
     dag_id="equifax_commercial_inbox",
     schedule_interval="0 12 * * *",
     default_args=default_args,
-    template_searchpath="include/sql",
+    template_searchpath="dags/sql",
 )
 dag.doc_md = __doc__
 
