@@ -25,9 +25,7 @@ cdk_test:
   #   - npm install -g aws-cdk ; cdk --version
 
   script:
-    - export AWS_ACCESS_KEY_ID = "$DEVELOPMENT_AWS_ACCESS_KEY_ID"
-    - export AWS_SECRET_ACCESS_KEY = "$DEVELOPMENT_AWS_SECRET_ACCESS_KEY"
-    - export AWS_DEFAULT_REGION = "$DEVELOPMENT_AWS_DEFAULT_REGION"
+    - echo AWS_ACCESS_KEY_ID
     - echo $AWS_ACCESS_KEY_ID
     - echo $DEVELOPMENT_AWS_ACCESS_KEY_ID
     - env | grep -i AWS_
