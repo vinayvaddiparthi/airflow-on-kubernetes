@@ -3,51 +3,27 @@ import tempfile
 from typing import Any, Dict
 from pathlib import Path
 import pendulum
-from datetime import timedelta
+from datetime import timedelta, datetime
 from airflow import DAG
-from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
+from airflow.models import Variable
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
-from airflow.operators.python_operator import PythonOperator
-from googleapiclient.discovery import build as AnalyticsBuild
-from oauth2client.service_account import ServiceAccountCredentials
+from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
 
 from utils import random_identifier
 from utils.failure_callbacks import slack_dag
 from data.google_analytics import reports
+from google_analytics_import import initialize_analytics_reporting, get_report, next_page_token
 
 
-def initialize_analytics_reporting() -> Any:
-    hook = GoogleCloudBaseHook(gcp_conn_id="google_analytics_default")
-    key = json.loads(hook._get_field("keyfile_dict"))
-    credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-        key, scopes=["https://www.googleapis.com/auth/analytics.readonly"]
-    )
-    analytics = AnalyticsBuild(
-        "analyticsreporting", "v4", credentials=credentials, cache_discovery=False
-    )
-    return analytics
+def if_all_imported(report: str, end_date: str) -> bool:
+    return False if Variable.get(f"{report}_date") <= end_date else True
 
 
-def get_report(analytics: Any, table: str, ds: str, page_token: Any) -> Any:
-    print(f"Current page_token: {page_token}")
-    payload: Dict[str, Any] = reports[table]["payload"]
-    payload["reportRequests"][0]["dateRanges"][0]["startDate"] = ds
-    payload["reportRequests"][0]["dateRanges"][0]["endDate"] = ds
-    if page_token:
-        print(f"Overwrite page_token: {page_token}")
-        payload["reportRequests"][0]["pageToken"] = page_token
-    return analytics.reports().batchGet(body=payload).execute()
-
-
-def next_page_token(response: Any) -> Any:
-    page_token = None
-    report_results = response.get("reports", [])
-    if report_results:
-        if "nextPageToken" in report_results[0]:
-            page_token = report_results[0]["nextPageToken"]
-            print(f"nextPageToken: {page_token}")
-    return page_token
+def set_to_previous_day(report: str, date: str) -> None:
+    pre = (datetime.strptime(date, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
+    Variable.set(f"{report}_date", pre)
+    print(f"✔️ Set Variable {report}_date = {pre}")
 
 
 def transform_raw_json(raw: Dict, ds: str) -> Any:
@@ -63,7 +39,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
             date_range_values = row.get("metrics", [])
             d = {}
             for i, values in enumerate(date_range_values):
-                d["date"] = ds
+                d["batch_import_date"] = ds
                 for header, dimension in zip(dimension_headers, dimensions):
                     d[header.replace("ga:", "")] = dimension
                 for metricHeader, value in zip(metric_headers, values.get("values")):
@@ -75,7 +51,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
 
 
 with DAG(
-    dag_id="google_analytics_import",
+    dag_id="historical_google_analytics_import",
     max_active_runs=1,
     schedule_interval="@daily",
     default_args={"retries": 2, "retry_delay": timedelta(minutes=5)},
@@ -94,9 +70,11 @@ with DAG(
         query += "when matched then delete"
         return query
 
-    def process(table: str, conn: str, **context: Any) -> None:
+    def process(table: str, conn: str, days: int, **context: Any) -> None:
         ds = context["ds"]
-        print(f"Date Range: {ds}")
+        end_date = Variable.get(f"{table}_date")  # end date of the range
+        start_date = (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=(days-1))).strftime('%Y-%m-%d')
+        print(f"Date Range: {start_date} - {end_date}")
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
         dest_db = google_analytics_hook.extra_dejson.get("dest_db")
@@ -109,13 +87,13 @@ with DAG(
                 f"create or replace stage {dest_schema}.{stage_guid} file_format=(type=json)"
             ).fetchall()
             print(
-                f"create or replace temporary stage {dest_schema}.{stage_guid} "
+                f"create or replace stage {dest_schema}.{stage_guid} "
                 f"file_format=(type=csv)"
             )
             print("Initialize page_token")
             page_token: Any = "0"
             while page_token:
-                response = get_report(analytics, table, ds, page_token)
+                response = get_report(analytics, table, start_date, end_date, page_token)
                 if response:
                     res_json = transform_raw_json(response, ds)
                     token = next_page_token(response)
@@ -129,55 +107,47 @@ with DAG(
                             tx.execute(
                                 f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
                             ).fetchall()
-
-                        # df.to_sql(
-                        #     table, tx, if_exists="append", method="multi", index=False
-                        # )
                     print(f"{table} row count: {len(response)}")
                 if token:
                     page_token = str(token)
                 else:
                     page_token = None
 
-            # check for new report
-            result = tx.execute(
-                f"show tables like '{table}' in {dest_db}.{dest_schema}"  # nosec
-            ).fetchall()
-            if len(result) > 0:
-                # merge into existing report
-                tx.execute(
-                    f"create or replace table {dest_db}.{dest_schema}.{table}_stage as "  # nosec
-                    f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
-                )
-                if "primary_keys" in reports[table]:  # type: ignore
-                    tx.execute(build_deduplicate_query(dest_db, dest_schema, table))
-                tx.execute(
-                    f"insert into {dest_db}.{dest_schema}.{table} "  # nosec
-                    f"select * from {dest_db}.{dest_schema}.{table}_stage"  # nosec
-                )
-                tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
-            else:
-                # create table for new report
-                tx.execute(
-                    f"create or replace table {dest_db}.{dest_schema}.{table} as "  # nosec
-                    f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
-                )
             tx.execute(
-                f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_DEVELOPMENT"
+                f"create or replace table {dest_db}.{dest_schema}.{table}_stage as "  # nosec
+                f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
             )
+            if "primary_keys" in reports[table]:  # type: ignore
+                tx.execute(build_deduplicate_query(dest_db, dest_schema, table))
             tx.execute(
-                f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_PRODUCTION"
+                f"insert into {dest_db}.{dest_schema}.{table} "  # nosec
+                f"select * from {dest_db}.{dest_schema}.{table}_stage"  # nosec
             )
-            print(f"✔️ Successfully grant access to tables in {dest_db}.{dest_schema}")
-            print(f"✔️ Successfully loaded table {table} for {ds}")
+            tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
 
-    for report in reports:
-        dag << PythonOperator(
-            task_id=f"task_{report}",
-            python_callable=process,
-            op_kwargs={
-                "conn": "snowflake_production",
-                "table": report,
-            },
-            provide_context=True,
-        )
+            print(f"✔️ Successfully loaded historical {table} for {start_date} - {end_date} on {ds}")
+
+            set_to_previous_day(table, start_date)
+
+    check_if_all_acquisition_funnel_imported = ShortCircuitOperator(
+        task_id="check_if_all_acquisition_funnel_imported",
+        python_callable=if_all_imported,
+        op_kwargs={
+            "report": "acquisition_funnel",
+            "end_date": "2021-07-04"
+        },
+        do_xcom_push=False,
+    )
+
+    import_acquisition_funnel = PythonOperator(
+        task_id=f"import_acquisition_funnel",
+        python_callable=process,
+        op_kwargs={
+            "conn": "snowflake_production",
+            "table": "acquisition_funnel",
+            "days": 1,
+        },
+        provide_context=True,
+    )
+
+    dag << check_if_all_acquisition_funnel_imported >> import_acquisition_funnel
