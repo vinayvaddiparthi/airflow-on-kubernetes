@@ -13,7 +13,11 @@ from airflow.operators.python_operator import PythonOperator, ShortCircuitOperat
 from utils import random_identifier
 from utils.failure_callbacks import slack_dag
 from data.google_analytics import reports
-from google_analytics_import import initialize_analytics_reporting, get_report, next_page_token
+from google_analytics_import import (
+    initialize_analytics_reporting,
+    get_report,
+    next_page_token,
+)
 
 
 def if_all_imported(report: str, end_date: str) -> bool:
@@ -21,7 +25,7 @@ def if_all_imported(report: str, end_date: str) -> bool:
 
 
 def set_to_previous_day(report: str, date: str) -> None:
-    pre = (datetime.strptime(date, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
+    pre = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
     Variable.set(f"{report}_date", pre)
     print(f"✔️ Set Variable {report}_date = {pre}")
 
@@ -72,8 +76,10 @@ with DAG(
 
     def process(table: str, conn: str, days: int, **context: Any) -> None:
         ds = context["ds"]
-        end_date = Variable.get(f"{table}_date")  # end date of the range
-        start_date = (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=(days-1))).strftime('%Y-%m-%d')
+        end_date = Variable.get(f"{table}_date")
+        start_date = (
+            datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=(days - 1))
+        ).strftime("%Y-%m-%d")
         print(f"Date Range: {start_date} - {end_date}")
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
@@ -93,7 +99,9 @@ with DAG(
             print("Initialize page_token")
             page_token: Any = "0"
             while page_token:
-                response = get_report(analytics, table, start_date, end_date, page_token)
+                response = get_report(
+                    analytics, table, start_date, end_date, page_token
+                )
                 if response:
                     res_json = transform_raw_json(response, ds)
                     token = next_page_token(response)
@@ -107,7 +115,7 @@ with DAG(
                             tx.execute(
                                 f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
                             ).fetchall()
-                    print(f"{table} row count: {len(response)}")
+                    print(f"{table} row count: {len(res_json)}")
                 if token:
                     page_token = str(token)
                 else:
@@ -125,17 +133,16 @@ with DAG(
             )
             tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
 
-            print(f"✔️ Successfully loaded historical {table} for {start_date} - {end_date} on {ds}")
+            print(
+                f"✔️ Successfully loaded historical {table} for {start_date} - {end_date} on {ds}"
+            )
 
             set_to_previous_day(table, start_date)
 
     check_if_all_acquisition_funnel_imported = ShortCircuitOperator(
         task_id="check_if_all_acquisition_funnel_imported",
         python_callable=if_all_imported,
-        op_kwargs={
-            "report": "acquisition_funnel",
-            "end_date": "2021-07-04"
-        },
+        op_kwargs={"report": "acquisition_funnel", "end_date": "2021-07-04"},
         do_xcom_push=False,
     )
 
@@ -145,7 +152,7 @@ with DAG(
         op_kwargs={
             "conn": "snowflake_production",
             "table": "acquisition_funnel",
-            "days": 1,
+            "days": 3,
         },
         provide_context=True,
     )

@@ -29,7 +29,9 @@ def initialize_analytics_reporting() -> Any:
     return analytics
 
 
-def get_report(analytics: Any, table: str, start_date: str, end_date: str, page_token: Any) -> Any:
+def get_report(
+    analytics: Any, table: str, start_date: str, end_date: str, page_token: Any
+) -> Any:
     print(f"Current page_token: {page_token}")
     payload: Dict[str, Any] = reports[table]["payload"]
     payload["reportRequests"][0]["dateRanges"][0]["startDate"] = start_date
