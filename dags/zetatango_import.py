@@ -47,6 +47,8 @@ from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
 from utils.failure_callbacks import slack_dag
 
+from data import zetatango_configs
+
 
 @attr.s
 class DecryptionSpec:
@@ -370,11 +372,7 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.CORE_PRODUCTION",
             },
-            executor_config={
-                "resources": {
-                    "requests": {"memory": "4Gi"},
-                },
-            },
+            executor_config=zetatango_configs.core_import_executor_config,
         )
 
         decrypt_core_prod = PythonOperator(
@@ -382,82 +380,10 @@ def create_dag() -> DAG:
             python_callable=decrypt_pii_columns,
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
-                "decryption_specs": [
-                    DecryptionSpec(
-                        schema="CORE_PRODUCTION",
-                        table="MERCHANT_ATTRIBUTES",
-                        columns=["value"],
-                        whereclause=literal_column("$1:key").in_(
-                            [
-                                "industry",
-                                "bank_connection_required",
-                                "selected_bank_account",
-                                "manual_sic_code",
-                                "manual_business_online",
-                                "selected_sales_volume_accounts",
-                                "selected_insights_bank_accounts",
-                                "merchant_black_flag",
-                                "merchant_black_flag_reason",
-                                "merchant_black_flag_date",
-                                "merchant_red_flag",
-                                "merchant_red_flag_reason",
-                                "merchant_red_flag_date",
-                                "merchant_on_hold_flag",
-                                "merchant_on_hold_flag_reason",
-                                "merchant_on_hold_flag_date",
-                            ]
-                        ),
-                    ),
-                    DecryptionSpec(
-                        schema="CORE_PRODUCTION",
-                        table="LENDING_ADJUDICATIONS",
-                        columns=[
-                            "offer_results",
-                            "adjudication_results",
-                            "notes",
-                        ],
-                        format=["yaml", "yaml", None],
-                    ),
-                    DecryptionSpec(
-                        schema="CORE_PRODUCTION",
-                        table="LENDING_ADJUDICATION_DECISIONS",
-                        columns=["notes"],
-                    ),
-                    DecryptionSpec(
-                        schema="CORE_PRODUCTION",
-                        table="LENDING_LOAN_ATTRIBUTES",
-                        columns=["value"],
-                        whereclause=literal_column("$1:key").in_(["external_id"]),
-                    ),
-                    DecryptionSpec(
-                        schema="CORE_PRODUCTION",
-                        table="QUICKBOOKS_ACCOUNTING_TRANSACTIONS",
-                        columns=["account", "split"],
-                    ),
-                    DecryptionSpec(
-                        schema="CORE_PRODUCTION",
-                        table="LEADS",
-                        columns=[
-                            "applicant_email",
-                            "applicant_first_name",
-                            "applicant_last_name",
-                            "merchant_name",
-                        ],
-                    ),
-                ],
+                "decryption_specs": zetatango_configs.core_decrption_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
-            executor_config={
-                "KubernetesExecutor": {
-                    "annotations": {
-                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                        "KubernetesAirflowProductionZetatangoPiiRole"
-                    }
-                },
-                "resources": {
-                    "requests": {"memory": "2Gi"},
-                },
-            },
+            executor_config=zetatango_configs.decryption_executor_config,
         )
 
         import_idp_prod = PythonOperator(
@@ -469,11 +395,7 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.IDP_PRODUCTION",
             },
-            executor_config={
-                "resources": {
-                    "requests": {"memory": "2Gi"},
-                },
-            },
+            executor_config=zetatango_configs.generic_import_executor_config,
         )
 
         decrypt_idp_prod = PythonOperator(
@@ -481,38 +403,10 @@ def create_dag() -> DAG:
             python_callable=decrypt_pii_columns,
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
-                "decryption_specs": [
-                    DecryptionSpec(
-                        schema="IDP_PRODUCTION",
-                        table="POLY_PROPERTIES",
-                        columns=["value"],
-                        whereclause=literal_column("$1:key").in_(
-                            [
-                                "merchant",
-                                "applicant",
-                                "applicants",
-                                "insights_preference",
-                                "product_preference",
-                                "phone_number",
-                                "mfa_mode",
-                                "role",
-                            ]
-                        ),
-                    ),
-                ],
+                "decryption_specs": zetatango_configs.idp_decrpytion_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
-            executor_config={
-                "KubernetesExecutor": {
-                    "annotations": {
-                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                        "KubernetesAirflowProductionZetatangoPiiRole"
-                    }
-                },
-                "resources": {
-                    "requests": {"memory": "2Gi"},
-                },
-            },
+            executor_config=zetatango_configs.decryption_executor_config,
         )
 
         import_kyc_prod = PythonOperator(
@@ -524,11 +418,7 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.KYC_PRODUCTION",
             },
-            executor_config={
-                "resources": {
-                    "requests": {"memory": "2Gi"},
-                },
-            },
+            executor_config=zetatango_configs.generic_import_executor_config,
         )
 
         decrypt_kyc_prod = PythonOperator(
@@ -536,55 +426,10 @@ def create_dag() -> DAG:
             python_callable=decrypt_pii_columns,
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
-                "decryption_specs": [
-                    DecryptionSpec(
-                        schema="KYC_PRODUCTION",
-                        table="INDIVIDUALS_APPLICANTS",
-                        columns=[
-                            "date_of_birth",
-                            "first_name",
-                            "last_name",
-                            "middle_name",
-                        ],
-                    ),
-                    DecryptionSpec(
-                        schema="KYC_PRODUCTION",
-                        table="INDIVIDUAL_ATTRIBUTES",
-                        columns=["value"],
-                        format="marshal",
-                        whereclause=literal_column("$1:key").in_(
-                            ["default_beacon_score"]
-                        ),
-                    ),
-                    DecryptionSpec(
-                        schema="KYC_PRODUCTION",
-                        table="ENTITIES_BANK_ACCOUNT_ATTRIBUTES",
-                        columns=["value"],
-                        whereclause=literal_column("$1:key").in_(
-                            [
-                                "transit_number",
-                                "institution_number",
-                                "account_number",
-                                "flinks_account_type",
-                                "flinks_account_id",
-                                "stale",
-                            ]
-                        ),
-                    ),
-                ],
+                "decryption_specs": zetatango_configs.kyc_decryption_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
-            executor_config={
-                "KubernetesExecutor": {
-                    "annotations": {
-                        "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                        "KubernetesAirflowProductionZetatangoPiiRole"
-                    }
-                },
-                "resources": {
-                    "requests": {"memory": "2Gi"},
-                },
-            },
+            executor_config=zetatango_configs.decryption_executor_config,
         )
 
         dbt_run = DbtOperator(
