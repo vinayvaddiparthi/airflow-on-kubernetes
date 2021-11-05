@@ -47,7 +47,7 @@ from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
 from utils.failure_callbacks import slack_dag
 
-from data import zetatango_configs
+from data import zetatango
 
 
 @attr.s
@@ -372,7 +372,7 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.CORE_PRODUCTION",
             },
-            executor_config=zetatango_configs.core_import_executor_config,
+            executor_config=zetatango.core_import_executor_config,
         )
 
         decrypt_core_prod = PythonOperator(
@@ -380,10 +380,10 @@ def create_dag() -> DAG:
             python_callable=decrypt_pii_columns,
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
-                "decryption_specs": zetatango_configs.core_decrption_spec,
+                "decryption_specs": zetatango.core_decrption_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
-            executor_config=zetatango_configs.decryption_executor_config,
+            executor_config=zetatango.decryption_executor_config,
         )
 
         import_idp_prod = PythonOperator(
@@ -395,7 +395,7 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.IDP_PRODUCTION",
             },
-            executor_config=zetatango_configs.generic_import_executor_config,
+            executor_config=zetatango.generic_import_executor_config,
         )
 
         decrypt_idp_prod = PythonOperator(
@@ -403,10 +403,10 @@ def create_dag() -> DAG:
             python_callable=decrypt_pii_columns,
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
-                "decryption_specs": zetatango_configs.idp_decrpytion_spec,
+                "decryption_specs": zetatango.idp_decrpytion_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
-            executor_config=zetatango_configs.decryption_executor_config,
+            executor_config=zetatango.decryption_executor_config,
         )
 
         import_kyc_prod = PythonOperator(
@@ -418,7 +418,7 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.KYC_PRODUCTION",
             },
-            executor_config=zetatango_configs.generic_import_executor_config,
+            executor_config=zetatango.generic_import_executor_config,
         )
 
         decrypt_kyc_prod = PythonOperator(
@@ -426,10 +426,10 @@ def create_dag() -> DAG:
             python_callable=decrypt_pii_columns,
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
-                "decryption_specs": zetatango_configs.kyc_decryption_spec,
+                "decryption_specs": zetatango.kyc_decryption_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
-            executor_config=zetatango_configs.decryption_executor_config,
+            executor_config=zetatango.decryption_executor_config,
         )
 
         dbt_run = DbtOperator(
