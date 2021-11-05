@@ -25,7 +25,6 @@ cdk_test:
   #   - npm install -g aws-cdk ; cdk --version
 
   script:
-    - echo AWS_ACCESS_KEY_ID
     - echo $AWS_ACCESS_KEY_ID
     - echo $DEVELOPMENT_AWS_ACCESS_KEY_ID
     - env | grep -i AWS_
