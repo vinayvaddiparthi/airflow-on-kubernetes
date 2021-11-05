@@ -63,7 +63,7 @@ with DAG(
     default_args={"retries": 2, "retry_delay": timedelta(minutes=5)},
     catchup=True,
     start_date=pendulum.datetime(
-        2020, 8, 24, tzinfo=pendulum.timezone("America/Toronto")
+        2021, 11, 4, tzinfo=pendulum.timezone("America/Toronto")
     ),
     on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
