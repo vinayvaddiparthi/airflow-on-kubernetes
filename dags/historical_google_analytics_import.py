@@ -147,7 +147,7 @@ with DAG(
     )
 
     import_acquisition_funnel = PythonOperator(
-        task_id=f"import_acquisition_funnel",
+        task_id="import_acquisition_funnel",
         python_callable=process,
         op_kwargs={
             "conn": "snowflake_production",
