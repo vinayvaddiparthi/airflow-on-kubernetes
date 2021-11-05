@@ -29,11 +29,11 @@ def initialize_analytics_reporting() -> Any:
     return analytics
 
 
-def get_report(analytics: Any, table: str, ds: str, page_token: Any) -> Any:
+def get_report(analytics: Any, table: str, start_date: str, end_date: str, page_token: Any) -> Any:
     print(f"Current page_token: {page_token}")
     payload: Dict[str, Any] = reports[table]["payload"]
-    payload["reportRequests"][0]["dateRanges"][0]["startDate"] = ds
-    payload["reportRequests"][0]["dateRanges"][0]["endDate"] = ds
+    payload["reportRequests"][0]["dateRanges"][0]["startDate"] = start_date
+    payload["reportRequests"][0]["dateRanges"][0]["endDate"] = end_date
     if page_token:
         print(f"Overwrite page_token: {page_token}")
         payload["reportRequests"][0]["pageToken"] = page_token
@@ -115,7 +115,7 @@ with DAG(
             print("Initialize page_token")
             page_token: Any = "0"
             while page_token:
-                response = get_report(analytics, table, ds, page_token)
+                response = get_report(analytics, table, ds, ds, page_token)
                 if response:
                     res_json = transform_raw_json(response, ds)
                     token = next_page_token(response)
