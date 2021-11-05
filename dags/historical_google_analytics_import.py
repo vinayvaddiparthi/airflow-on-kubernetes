@@ -1,3 +1,4 @@
+import logging
 import json
 import tempfile
 from typing import Any, Dict
@@ -17,6 +18,7 @@ from google_analytics_import import (
     initialize_analytics_reporting,
     get_report,
     next_page_token,
+    build_deduplicate_query,
 )
 
 
@@ -27,7 +29,7 @@ def if_all_imported(report: str, end_date: str) -> bool:
 def set_to_previous_day(report: str, date: str) -> None:
     pre = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
     Variable.set(f"{report}_date", pre)
-    print(f"✔️ Set Variable {report}_date = {pre}")
+    logging.info(f"✔️ Set Variable {report}_date = {pre}")
 
 
 def transform_raw_json(raw: Dict, ds: str) -> Any:
@@ -49,7 +51,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
                 for metricHeader, value in zip(metric_headers, values.get("values")):
                     d[metricHeader.get("name").replace("ga:", "")] = value
             l.append(d)
-        print(f"get {len(l)} lines")
+        logging.info(f"get {len(l)} lines")
         return l
     return None
 
@@ -66,21 +68,13 @@ with DAG(
     on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
 
-    def build_deduplicate_query(dest_db: str, dest_schema: str, table: str) -> str:
-        query = f"merge into {dest_db}.{dest_schema}.{table} using {dest_db}.{dest_schema}.{table}_stage on "  # nosec
-        for key in reports[table]["primary_keys"]:  # type: ignore
-            query += f"{dest_db}.{dest_schema}.{table}.{key} = {dest_db}.{dest_schema}.{table}_stage.{key} and "
-        query = query[:-4]
-        query += "when matched then delete"
-        return query
-
     def process(table: str, conn: str, days: int, **context: Any) -> None:
         ds = context["ds"]
         end_date = Variable.get(f"{table}_date")
         start_date = (
             datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=(days - 1))
         ).strftime("%Y-%m-%d")
-        print(f"Date Range: {start_date} - {end_date}")
+        logging.info(f"Date Range: {start_date} - {end_date}")
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
         dest_db = google_analytics_hook.extra_dejson.get("dest_db")
@@ -92,11 +86,11 @@ with DAG(
             tx.execute(
                 f"create or replace stage {dest_schema}.{stage_guid} file_format=(type=json)"
             ).fetchall()
-            print(
+            logging.info(
                 f"create or replace stage {dest_schema}.{stage_guid} "
-                f"file_format=(type=csv)"
+                f"file_format=(type=json)"
             )
-            print("Initialize page_token")
+            logging.info("Initialize page_token")
             page_token: Any = "0"
             while page_token:
                 response = get_report(
@@ -115,7 +109,7 @@ with DAG(
                             tx.execute(
                                 f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
                             ).fetchall()
-                    print(f"{table} row count: {len(res_json)}")
+                    logging.info(f"{table} row count: {len(res_json)}")
                 if token:
                     page_token = str(token)
                 else:
@@ -133,7 +127,7 @@ with DAG(
             )
             tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
 
-            print(
+            logging.info(
                 f"✔️ Successfully loaded historical {table} for {start_date} - {end_date} on {ds}"
             )
 
