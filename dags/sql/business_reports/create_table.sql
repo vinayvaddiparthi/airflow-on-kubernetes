@@ -1,5 +1,6 @@
 create table if not exists {{ params.table_name }} (
-    lookup_key varchar(50) primary key,
+    lookup_key varchar primary key,
     raw_response variant,
-    batch_timestamp timestamp
+    last_modified_at timestamp,
+    batch_import_timestamp timestamp
 );
