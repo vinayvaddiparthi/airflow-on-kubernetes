@@ -40,6 +40,7 @@ dag = DAG(
     dag_id="business_reports_import",
     schedule_interval="0 */2 * * *",
     default_args=default_args,
+    template_searchpath="dags/sql",
 )
 dag.doc_md = __doc__
 
@@ -69,7 +70,12 @@ def _list_files(
 
 create_target_table = SnowflakeOperator(
     task_id="create_target_table",
-    sql=
+    sql=f"business_reports/create_table.sql",
+    params={"table_name": "s3_business_reports"},
+    schema=SCHEMA,
+    database="ZETATANGO",
+    snowflake_conn_id=SNOWFLAKE_CONN,
+    dag=dag,
 )
 
 list_files = PythonOperator(
