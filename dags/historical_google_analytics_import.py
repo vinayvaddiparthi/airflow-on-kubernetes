@@ -6,10 +6,9 @@ from pathlib import Path
 import pendulum
 from datetime import timedelta, datetime
 from airflow import DAG
-from airflow.models import Variable
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
-from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
+from airflow.operators.python_operator import PythonOperator
 
 from utils import random_identifier
 from utils.failure_callbacks import slack_dag
@@ -20,16 +19,6 @@ from google_analytics_import import (
     next_page_token,
     build_deduplicate_query,
 )
-
-
-def if_all_imported(report: str, end_date: str) -> bool:
-    return False if Variable.get(f"{report}_date") <= end_date else True
-
-
-def set_to_previous_day(report: str, date: str) -> None:
-    pre = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-    Variable.set(f"{report}_date", pre)
-    logging.info(f"✔️ Set Variable {report}_date = {pre}")
 
 
 def transform_raw_json(raw: Dict, ds: str) -> Any:
@@ -59,7 +48,8 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
 with DAG(
     dag_id="historical_google_analytics_import",
     max_active_runs=1,
-    schedule_interval="@daily",
+    concurrency=1,
+    schedule_interval=None,
     default_args={"retries": 2, "retry_delay": timedelta(minutes=5)},
     catchup=True,
     start_date=pendulum.datetime(
@@ -67,12 +57,13 @@ with DAG(
     ),
     on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
+    end_date = "2021-10-19"
+    DAYS = 5
 
-    def process(table: str, conn: str, days: int, **context: Any) -> None:
+    def process(table: str, conn: str, end_date: str, **context: Any) -> None:
         ds = context["ds"]
-        end_date = Variable.get(f"{table}_date")
         start_date = (
-            datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=(days - 1))
+            datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=(DAYS - 1))
         ).strftime("%Y-%m-%d")
         logging.info(f"Date Range: {start_date} - {end_date}")
         analytics = initialize_analytics_reporting()
@@ -131,24 +122,17 @@ with DAG(
                 f"✔️ Successfully loaded historical {table} for {start_date} - {end_date} on {ds}"
             )
 
-            set_to_previous_day(table, start_date)
-
-    check_if_all_acquisition_funnel_imported = ShortCircuitOperator(
-        task_id="check_if_all_acquisition_funnel_imported",
-        python_callable=if_all_imported,
-        op_kwargs={"report": "acquisition_funnel", "end_date": "2021-07-04"},
-        do_xcom_push=False,
-    )
-
-    import_acquisition_funnel = PythonOperator(
-        task_id="import_acquisition_funnel",
-        python_callable=process,
-        op_kwargs={
-            "conn": "snowflake_production",
-            "table": "acquisition_funnel",
-            "days": 3,
-        },
-        provide_context=True,
-    )
-
-    dag << check_if_all_acquisition_funnel_imported >> import_acquisition_funnel
+    while end_date >= "2021-07-05":
+        dag << PythonOperator(
+            task_id=f"import_acquisition_funnel_{end_date}",
+            python_callable=process,
+            op_kwargs={
+                "conn": "snowflake_production",
+                "table": "acquisition_funnel",
+                "end_date": end_date,
+            },
+            provide_context=True,
+        )
+        end_date = (
+            datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=DAYS)
+        ).strftime("%Y-%m-%d")
