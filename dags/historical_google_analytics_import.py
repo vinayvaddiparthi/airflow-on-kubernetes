@@ -58,7 +58,7 @@ with DAG(
     on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
     end_date = "2021-10-19"
-    DAYS = 22
+    DAYS = 5
 
     def process(table: str, conn: str, end_date: str, **context: Any) -> None:
         ds = context["ds"]
