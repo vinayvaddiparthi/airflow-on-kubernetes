@@ -58,7 +58,7 @@ with DAG(
     on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
     end_date = "2021-10-19"
-    DAYS = 22
+    DAYS = 5
 
     def process(table: str, conn: str, end_date: str, **context: Any) -> None:
         ds = context["ds"]
@@ -107,16 +107,16 @@ with DAG(
                     page_token = None
 
             tx.execute(
-                f"create or replace table {dest_db}.{dest_schema}.{table}_stage as "  # nosec
+                f"create or replace table {dest_db}.{dest_schema}.historical_{table}_stage as "  # nosec
                 f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
             )
             if "primary_keys" in reports[table]:  # type: ignore
                 tx.execute(build_deduplicate_query(dest_db, dest_schema, table))
             tx.execute(
                 f"insert into {dest_db}.{dest_schema}.{table} "  # nosec
-                f"select * from {dest_db}.{dest_schema}.{table}_stage"  # nosec
+                f"select * from {dest_db}.{dest_schema}.historical_{table}_stage"  # nosec
             )
-            tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
+            tx.execute(f"drop table {dest_db}.{dest_schema}.historical_{table}_stage")
 
             logging.info(
                 f"✔️ Successfully loaded historical {table} for {start_date} - {end_date} on {ds}"
