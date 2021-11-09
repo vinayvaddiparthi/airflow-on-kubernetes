@@ -35,6 +35,7 @@ default_args = {
     ),
     "concurrency": 1,
     "retries": 3,
+    "on_failure_callback": slack_dag("slack_data_alerts"),
 }
 
 dag = DAG(
@@ -42,7 +43,6 @@ dag = DAG(
     catchup=False,
     default_args=default_args,
     schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
-    on_failure_callback=slack_dag("slack_data_alerts"),
 )
 dag.doc_md = __doc__
 
