@@ -1,3 +1,4 @@
+import logging
 import json
 import tempfile
 from typing import Any, Dict
@@ -29,13 +30,15 @@ def initialize_analytics_reporting() -> Any:
     return analytics
 
 
-def get_report(analytics: Any, table: str, ds: str, page_token: Any) -> Any:
-    print(f"Current page_token: {page_token}")
+def get_report(
+    analytics: Any, table: str, start_date: str, end_date: str, page_token: Any
+) -> Any:
+    logging.info(f"Current page_token: {page_token}")
     payload: Dict[str, Any] = reports[table]["payload"]
-    payload["reportRequests"][0]["dateRanges"][0]["startDate"] = ds
-    payload["reportRequests"][0]["dateRanges"][0]["endDate"] = ds
+    payload["reportRequests"][0]["dateRanges"][0]["startDate"] = start_date
+    payload["reportRequests"][0]["dateRanges"][0]["endDate"] = end_date
     if page_token:
-        print(f"Overwrite page_token: {page_token}")
+        logging.info(f"Overwrite page_token: {page_token}")
         payload["reportRequests"][0]["pageToken"] = page_token
     return analytics.reports().batchGet(body=payload).execute()
 
@@ -46,7 +49,7 @@ def next_page_token(response: Any) -> Any:
     if report_results:
         if "nextPageToken" in report_results[0]:
             page_token = report_results[0]["nextPageToken"]
-            print(f"nextPageToken: {page_token}")
+            logging.info(f"nextPageToken: {page_token}")
     return page_token
 
 
@@ -69,7 +72,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
                 for metricHeader, value in zip(metric_headers, values.get("values")):
                     d[metricHeader.get("name").replace("ga:", "")] = value
             l.append(d)
-        print(f"get {len(l)} lines")
+        logging.info(f"get {len(l)} lines")
         return l
     return None
 
@@ -96,7 +99,7 @@ with DAG(
 
     def process(table: str, conn: str, **context: Any) -> None:
         ds = context["ds"]
-        print(f"Date Range: {ds}")
+        logging.info(f"Date Range: {ds}")
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
         dest_db = google_analytics_hook.extra_dejson.get("dest_db")
@@ -108,14 +111,14 @@ with DAG(
             tx.execute(
                 f"create or replace stage {dest_schema}.{stage_guid} file_format=(type=json)"
             ).fetchall()
-            print(
-                f"create or replace temporary stage {dest_schema}.{stage_guid} "
-                f"file_format=(type=csv)"
+            logging.info(
+                f"create or replace stage {dest_schema}.{stage_guid} "
+                f"file_format=(type=json)"
             )
-            print("Initialize page_token")
+            logging.info("Initialize page_token")
             page_token: Any = "0"
             while page_token:
-                response = get_report(analytics, table, ds, page_token)
+                response = get_report(analytics, table, ds, ds, page_token)
                 if response:
                     res_json = transform_raw_json(response, ds)
                     token = next_page_token(response)
@@ -133,7 +136,7 @@ with DAG(
                         # df.to_sql(
                         #     table, tx, if_exists="append", method="multi", index=False
                         # )
-                    print(f"{table} row count: {len(response)}")
+                    logging.info(f"{table} row count: {len(res_json)}")
                 if token:
                     page_token = str(token)
                 else:
@@ -168,8 +171,10 @@ with DAG(
             tx.execute(
                 f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_PRODUCTION"
             )
-            print(f"✔️ Successfully grant access to tables in {dest_db}.{dest_schema}")
-            print(f"✔️ Successfully loaded table {table} for {ds}")
+            logging.info(
+                f"✔️ Successfully grant access to tables in {dest_db}.{dest_schema}"
+            )
+            logging.info(f"✔️ Successfully loaded table {table} for {ds}")
 
     for report in reports:
         dag << PythonOperator(
