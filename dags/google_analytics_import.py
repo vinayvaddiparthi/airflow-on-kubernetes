@@ -81,12 +81,15 @@ with DAG(
     dag_id="google_analytics_import",
     max_active_runs=1,
     schedule_interval="@daily",
-    default_args={"retries": 2, "retry_delay": timedelta(minutes=5)},
+    default_args={
+        "retries": 2,
+        "retry_delay": timedelta(minutes=5),
+        "on_failure_callback": slack_dag("slack_data_alerts"),
+    },
     catchup=True,
     start_date=pendulum.datetime(
         2020, 8, 24, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
 
     def build_deduplicate_query(dest_db: str, dest_schema: str, table: str) -> str:

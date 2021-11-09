@@ -224,8 +224,11 @@ with DAG(
     start_date=pendulum.datetime(
         2020, 8, 29, tzinfo=pendulum.timezone("America/Toronto")
     ),
-    default_args={"retries": 5, "retry_delay": timedelta(minutes=30)},
-    on_failure_callback=slack_dag("slack_data_alerts"),
+    default_args={
+        "retries": 5,
+        "retry_delay": timedelta(minutes=30),
+        "on_failure_callback": slack_dag("slack_data_alerts"),
+    },
     description="Platform ERP Pipeline",
 ) as dag:
     dag << PythonOperator(

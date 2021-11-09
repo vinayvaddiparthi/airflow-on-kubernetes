@@ -406,7 +406,6 @@ def create_dag(instances: List[str]) -> DAG:
         schedule_interval="0 0 * * *",
         catchup=False,
         description="",
-        on_failure_callback=slack_dag("slack_data_alerts"),
         max_active_runs=1,
     ) as dag:
         for instance in instances:
@@ -422,6 +421,7 @@ def create_dag(instances: List[str]) -> DAG:
                 pool="sfdc_pool",
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
+                on_failure_callback=slack_dag("slack_data_alerts"),
                 executor_config={
                     "resources": {
                         "requests": {"memory": "8Gi"},
