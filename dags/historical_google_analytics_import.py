@@ -96,18 +96,18 @@ with DAG(
                 )
                 if response:
                     res_json = transform_raw_json(response, ds)
-                    token = next_page_token(response)
                     with tempfile.TemporaryDirectory() as tempdir:
+                        json_filepath = Path(tempdir, f"{table}{page_token}").with_suffix(
+                            ".json"
+                        )
                         for i in range(len(res_json)):
-                            json_filepath = Path(tempdir, f"{table}{i}").with_suffix(
-                                ".json"
-                            )
-                            with open(json_filepath, "w") as outfile:
+                            with open(json_filepath, "a") as outfile:
                                 outfile.writelines(json.dumps(res_json[i]))
-                            tx.execute(
-                                f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
-                            ).fetchall()
+                        tx.execute(
+                            f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
+                        ).fetchall()
                     logging.info(f"{table} row count: {len(res_json)}")
+                    token = next_page_token(response)
                 if token:
                     page_token = str(token)
                 else:
