@@ -125,9 +125,9 @@ with DAG(
                 if response:
                     res_json = transform_raw_json(response, ds)
                     with tempfile.TemporaryDirectory() as tempdir:
-                        json_filepath = Path(tempdir, f"{table}{page_token}").with_suffix(
-                            ".json"
-                        )
+                        json_filepath = Path(
+                            tempdir, f"{table}{page_token}"
+                        ).with_suffix(".json")
                         for i in range(len(res_json)):
                             with open(json_filepath, "a") as outfile:
                                 outfile.writelines(json.dumps(res_json[i]))
