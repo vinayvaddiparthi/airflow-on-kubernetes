@@ -17,7 +17,6 @@ from google_analytics_import import (
     initialize_analytics_reporting,
     get_report,
     next_page_token,
-    build_deduplicate_query,
 )
 
 
@@ -60,6 +59,14 @@ with DAG(
     end_date = "2021-10-19"
     DAYS = 5
 
+    def build_deduplicate_query(dest_db: str, dest_schema: str, table: str) -> str:
+        query = f"merge into {dest_db}.{dest_schema}.{table} using {dest_db}.{dest_schema}.historical_{table}_stage on "  # nosec
+        for key in reports[table]["primary_keys"]:  # type: ignore
+            query += f"{dest_db}.{dest_schema}.{table}.{key} = {dest_db}.{dest_schema}.historical_{table}_stage.{key} and "
+        query = query[:-4]
+        query += "when matched then delete"
+        return query
+
     def process(table: str, conn: str, end_date: str, **context: Any) -> None:
         ds = context["ds"]
         start_date = (
@@ -89,18 +96,18 @@ with DAG(
                 )
                 if response:
                     res_json = transform_raw_json(response, ds)
-                    token = next_page_token(response)
                     with tempfile.TemporaryDirectory() as tempdir:
+                        json_filepath = Path(
+                            tempdir, f"{table}{page_token}"
+                        ).with_suffix(".json")
                         for i in range(len(res_json)):
-                            json_filepath = Path(tempdir, f"{table}{i}").with_suffix(
-                                ".json"
-                            )
-                            with open(json_filepath, "w") as outfile:
+                            with open(json_filepath, "a") as outfile:
                                 outfile.writelines(json.dumps(res_json[i]))
-                            tx.execute(
-                                f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
-                            ).fetchall()
+                        tx.execute(
+                            f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
+                        ).fetchall()
                     logging.info(f"{table} row count: {len(res_json)}")
+                    token = next_page_token(response)
                 if token:
                     page_token = str(token)
                 else:
