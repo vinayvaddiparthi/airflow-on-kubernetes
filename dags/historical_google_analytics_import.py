@@ -17,7 +17,6 @@ from google_analytics_import import (
     initialize_analytics_reporting,
     get_report,
     next_page_token,
-    build_deduplicate_query,
 )
 
 
@@ -59,6 +58,14 @@ with DAG(
 ) as dag:
     end_date = "2021-10-19"
     DAYS = 5
+
+    def build_deduplicate_query(dest_db: str, dest_schema: str, table: str) -> str:
+        query = f"merge into {dest_db}.{dest_schema}.{table} using {dest_db}.{dest_schema}.historical_{table}_stage on "  # nosec
+        for key in reports[table]["primary_keys"]:  # type: ignore
+            query += f"{dest_db}.{dest_schema}.{table}.{key} = {dest_db}.{dest_schema}.historical_{table}_stage.{key} and "
+        query = query[:-4]
+        query += "when matched then delete"
+        return query
 
     def process(table: str, conn: str, end_date: str, **context: Any) -> None:
         ds = context["ds"]
