@@ -54,12 +54,10 @@ with DAG(
     ),
     on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
-    END_DATE = "2021-10-29" #-28
-    START_DATE = "2021-07-05"
 
-    def process(table: str, conn: str, **context: Any) -> None:
+    def process(table: str, conn: str, start_date: str, end_date: str,  **context: Any) -> None:
         ds = context["ds"]
-        logging.info(f"Date Range: {START_DATE} - {END_DATE}")
+        logging.info(f"Date Range: {start_date} - {end_date}")
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
         dest_db = google_analytics_hook.extra_dejson.get("dest_db")
@@ -79,7 +77,7 @@ with DAG(
             page_token: Any = "0"
             while page_token:
                 response = get_report(
-                    analytics, table, START_DATE, END_DATE, page_token
+                    analytics, table, start_date, end_date, page_token
                 )
                 if response:
                     res_json = transform_raw_json(response, ds)
@@ -111,7 +109,7 @@ with DAG(
                 f"GRANT SELECT ON TABLE {dest_db}.{dest_schema}.{table} TO ROLE DBT_PRODUCTION"
             )
             logging.info(
-                f"✔️ Successfully loaded historical {table} for {start_date} - {end_date} on {ds}"
+                f"✔️ Successfully loaded historical email event for {start_date} - {end_date} on {ds}"
             )
 
     dag << PythonOperator(
@@ -120,6 +118,8 @@ with DAG(
         op_kwargs={
             "conn": "snowflake_production",
             "table": "server_cx_email",
+            "start_date": "2021-10-29",
+            "end_date": "2021-07-05",
         },
         provide_context=True,
     )
