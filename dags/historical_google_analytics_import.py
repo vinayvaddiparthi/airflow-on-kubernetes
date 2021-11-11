@@ -120,8 +120,8 @@ with DAG(
         op_kwargs={
             "conn": "snowflake_production",
             "table": "server_cx_email",
-            "start_date": "2021-10-29",
-            "end_date": "2021-07-05",
+            "start_date": "2021-07-05",
+            "end_date": "2021-10-28",
         },
         provide_context=True,
     )
