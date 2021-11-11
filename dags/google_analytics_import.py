@@ -168,18 +168,18 @@ with DAG(
                     f"create or replace table {dest_db}.{dest_schema}.{table} as "  # nosec
                     f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
                 )
-            tx.execute(
-                f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_DEVELOPMENT"
-            )
-            tx.execute(
-                f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_PRODUCTION"
-            )
-            logging.info(
-                f"✔️ Successfully grant access to tables in {dest_db}.{dest_schema}"
-            )
+                tx.execute(
+                    f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_DEVELOPMENT"
+                )
+                tx.execute(
+                    f"GRANT SELECT ON ALL TABLES IN SCHEMA {dest_db}.{dest_schema} TO ROLE DBT_PRODUCTION"
+                )
+                logging.info(
+                    f"✔️ Successfully grant access to tables in {dest_db}.{dest_schema}"
+                )
             logging.info(f"✔️ Successfully loaded table {table} for {ds}")
 
-    for report in reports:
+    for report in {_report for _report in reports if _report != "server_cx_email"}:
         dag << PythonOperator(
             task_id=f"task_{report}",
             python_callable=process,
