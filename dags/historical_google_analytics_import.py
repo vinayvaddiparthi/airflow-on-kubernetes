@@ -115,7 +115,7 @@ with DAG(
             )
 
     dag << PythonOperator(
-        task_id=f"import_server_cx_email_event",
+        task_id="import_server_cx_email_event",
         python_callable=process,
         op_kwargs={
             "conn": "snowflake_production",
