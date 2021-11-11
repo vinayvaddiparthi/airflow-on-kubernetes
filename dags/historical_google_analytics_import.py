@@ -55,7 +55,9 @@ with DAG(
     on_failure_callback=slack_dag("slack_data_alerts"),
 ) as dag:
 
-    def process(table: str, conn: str, start_date: str, end_date: str,  **context: Any) -> None:
+    def process(
+        table: str, conn: str, start_date: str, end_date: str, **context: Any
+    ) -> None:
         ds = context["ds"]
         logging.info(f"Date Range: {start_date} - {end_date}")
         analytics = initialize_analytics_reporting()
