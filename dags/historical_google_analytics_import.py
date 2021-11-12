@@ -90,8 +90,14 @@ with DAG(
             )
             tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
 
+            # clean data imported in 2021-10-28
+            tx.execute(
+                f"delete from {dest_db}.{dest_schema}.{table} "
+                f"where fields:batch_import_date::string='2021-11-12' and fields:eventCategory::string='email'"
+            )
+
             logging.info(
-                f"✔️ Successfully loaded historical email event for {start_date} - {end_date} on {ds}"
+                f"✔️ Successfully loaded missing server_cx records for {start_date} - {end_date} on {ds}"
             )
 
     dag << PythonOperator(
