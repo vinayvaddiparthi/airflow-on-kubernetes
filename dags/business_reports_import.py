@@ -124,28 +124,19 @@ def _download_all_business_reports(
 ) -> None:
     engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
 
-    stmt = text(
-        """
-        select lookup_key
-        from ANALYTICS_PRODUCTION.DBT_ARIO.DIM_BUSINESS_REPORTS
-        where report_type in ('equifax_business_default', 'equifax_personal_default')
-            and lookup_key not in (
-                select lookup_key
-                from ZETATANGO.KYC_PRODUCTION.RAW_BUSINESS_REPORT_RESPONSES
-            )
-    """
-    )
+    stmt = text(open("dags/sql/business_reports/files_to_download.sql").read())
 
     df_reports_to_download = pd.read_sql_query(
         sql=stmt,
         con=engine,
     )
 
-    logging.info(f"📂 Processing {df_reports_to_download.size} business_reports...")
+    df = df_reports_to_download.iloc[:5]
+    logging.info(f"📂 Processing {df.size} business_reports...")
 
     start_time = time.time()
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        for _, row in df_reports_to_download.iterrows():
+        for _, row in df.iterrows():
             executor.submit(
                 _download_business_report,
                 snowflake_conn_id=snowflake_conn_id,
@@ -157,7 +148,7 @@ def _download_all_business_reports(
             )
     duration = time.time() - start_time
     logging.info(
-        f"⏱ Downloaded {df_reports_to_download.size} business reports in {duration} seconds"
+        f"⏱ Downloaded {df.size} business reports in {duration} seconds"
     )
 
 
