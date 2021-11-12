@@ -82,6 +82,13 @@ with DAG(
                 f"create or replace table {dest_db}.{dest_schema}.{table}_stage as "  # nosec
                 f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
             )
+
+            # back up server_cx
+            tx.execute(
+                f"create table {dest_db}.{dest_schema}.{table}_backup20211112 "  # nosec
+                f"clone {dest_db}.{dest_schema}.{table}"  # nosec
+            )
+
             if "primary_keys" in reports[table]:  # type: ignore
                 tx.execute(build_deduplicate_query(dest_db, dest_schema, table))
             tx.execute(
@@ -90,7 +97,7 @@ with DAG(
             )
             tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
 
-            # clean data imported in 2021-10-28
+            # clean email events imported in 2021-10-28
             tx.execute(
                 f"delete from {dest_db}.{dest_schema}.{table} "  # nosec
                 f"where fields:batch_import_date::string='2021-11-12' and fields:eventCategory::string='email'"  # nosec
