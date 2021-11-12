@@ -7,12 +7,17 @@ import logging
 import json
 import pendulum
 import pandas as pd
+import asyncio
+from aiobotocore.client import BaseClient
+from aiobotocore.session import get_session
 from datetime import timedelta
 from sqlalchemy import Table, MetaData
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import select, func, text, literal_column
 from base64 import b64decode
+from concurrent.futures import ThreadPoolExecutor
 from airflow import DAG
+from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
@@ -46,7 +51,8 @@ SNOWFLAKE_CONN = "snowflake_production"
 SCHEMA = "KYC_PRODUCTION"
 
 
-def _download_business_report(
+async def _download_business_report(
+    client: BaseClient,
     engine: Engine,
     metadata: MetaData,
     s3_file_key: str,
@@ -56,67 +62,75 @@ def _download_business_report(
     ts: str,
     **_: None,
 ) -> None:
-    s3 = S3Hook(aws_conn_id=s3_conn_id)
-    s3_object = s3.get_key(key=s3_file_key, bucket_name=s3_bucket)
-    body = json.loads(s3_object.get()["Body"].read())
-    body_decrypted = str(
-        SymmetricPorky(aws_region="ca-central-1").decrypt(
-            enciphered_dek=b64decode(body["key"], b"-_"),
-            enciphered_data=b64decode(body["data"], b"-_"),
-            nonce=b64decode(body["nonce"], b"-_"),
-        ),
-        "utf-8",
-    )
+    # s3 = S3Hook(aws_conn_id=s3_conn_id)
+    # s3_object = s3.get_key(key=s3_file_key, bucket_name=s3_bucket)
 
-    logging.info(
-        f"🔑 Decrypted business report located in key={s3_file_key}, bucket={s3_bucket}..."
-    )
-
-    raw_business_report_responses = Table(
-        "raw_business_report_responses",
-        metadata,
-        autoload_with=engine,
-        schema=schema,
-    )
-
-    with engine.begin() as tx:
-        batch_import_timestamp = ts
-        select_query = select(
-            columns=[
-                literal_column(f"'{s3_file_key}'").label("lookup_key"),
-                func.parse_json(body_decrypted).label("raw_response"),
-                literal_column(f"'{s3_object.get()['LastModified']}'").label(
-                    "last_modified_at"
-                ),
-                literal_column(f"'{batch_import_timestamp}'").label(
-                    "batch_import_timestamp"
-                ),
-            ]
+    # get object from s3
+    response = await client.get_object(Bucket=s3_bucket, Key=s3_file_key)
+    # ensure the connection is correctly re-used/closed
+    async with response["Body"] as stream:
+        body = await stream.read()
+        body_json = json.loads(body)
+        body_decrypted = str(
+            SymmetricPorky(aws_region="ca-central-1").decrypt(
+                enciphered_dek=b64decode(body_json["key"], b"-_"),
+                enciphered_data=b64decode(body_json["data"], b"-_"),
+                nonce=b64decode(body_json["nonce"], b"-_"),
+            ),
+            "utf-8",
         )
-
-        insert_query = raw_business_report_responses.insert().from_select(
-            [
-                "lookup_key",
-                "raw_response",
-                "last_modified_at",
-                "batch_import_timestamp",
-            ],
-            select_query,
-        )
-
-        tx.execute(insert_query)
 
         logging.info(
-            f"❄️️ Successfully inserted {s3_file_key} to {raw_business_report_responses} table..."
+            f"🔑 Decrypted business report located in key={s3_file_key}, bucket={s3_bucket}..."
         )
 
+        raw_business_report_responses = Table(
+            "raw_business_report_responses",
+            metadata,
+            autoload_with=engine,
+            schema=schema,
+        )
 
-def _download_all_business_reports(
+        with engine.begin() as tx:
+            batch_import_timestamp = ts
+            select_query = select(
+                columns=[
+                    literal_column(f"'{s3_file_key}'").label("lookup_key"),
+                    func.parse_json(body_decrypted).label("raw_response"),
+                    literal_column(f"'{response['LastModified']}'").label(
+                        "last_modified_at"
+                    ),
+                    literal_column(f"'{batch_import_timestamp}'").label(
+                        "batch_import_timestamp"
+                    ),
+                ]
+            )
+
+            insert_query = raw_business_report_responses.insert().from_select(
+                [
+                    "lookup_key",
+                    "raw_response",
+                    "last_modified_at",
+                    "batch_import_timestamp",
+                ],
+                select_query,
+            )
+
+            tx.execute(insert_query)
+
+            # TODO: investigate why this log only appears once in the threading approach
+            logging.info(
+                f"❄️️ Successfully inserted {s3_file_key} to {raw_business_report_responses} table..."
+            )
+
+
+async def _download_all_business_reports(
     snowflake_conn_id: str,
     schema: str,
     s3_conn_id: str,
     s3_bucket: str,
     ts: str,
+    num_threads: int=5,
     **_: None,
 ) -> None:
     engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
@@ -143,19 +157,85 @@ def _download_all_business_reports(
     logging.info(f"📂 Processing {df_subset.size} business_reports...")
 
     start_time = time.time()
-    for _, row in df_subset.iterrows():
-        _download_business_report(
-            engine,
-            metadata,
-            row[0],
-            schema=schema,
-            s3_conn_id=s3_conn_id,
-            s3_bucket=s3_bucket,
-            ts=ts,
-        )
+
+    """synchronous processing"""
+    # for _, row in df_subset.iterrows():
+    #     _download_business_report(
+    #         engine,
+    #         metadata,
+    #         row[0],
+    #         schema=schema,
+    #         s3_conn_id=s3_conn_id,
+    #         s3_bucket=s3_bucket,
+    #         ts=ts,
+    #     )
+
+    """thread processing"""
+    # with ThreadPoolExecutor(max_workers=num_threads) as executor:
+    #     for _, row in df_subset.iterrows():
+    #         executor.submit(
+    #             _download_business_report,
+    #             engine,
+    #             metadata,
+    #             row[0],
+    #             schema=schema,
+    #             s3_conn_id=s3_conn_id,
+    #             s3_bucket=s3_bucket,
+    #             ts=ts,
+    #         )
+
+    aws_hook = AwsBaseHook(aws_conn_id=s3_conn_id, client_type="s3")
+    aws_credentials = aws_hook.get_credentials()
+
+    """asyncio"""
+    session = get_session()
+    async with session.create_client(
+        "s3",
+        region_name="ca-central-1",
+        aws_access_key_id=aws_credentials.access_key,
+        aws_secret_access_key=aws_credentials.secret_key,
+    ) as client:
+        tasks = []
+        for _, row in df_subset.iterrows():
+            task = asyncio.ensure_future(
+                _download_business_report(
+                    client,
+                    engine,
+                    metadata,
+                    schema=schema,
+                    s3_conn_id=s3_conn_id,
+                    s3_bucket=s3_bucket,
+                    ts=ts,
+                    s3_file_key=row[0],
+                )
+            )
+            tasks.append(task)
+        await asyncio.gather(*tasks, return_exceptions=True)
+
     duration = time.time() - start_time
     logging.info(
         f"⏱ Downloaded {df_subset.size} business reports in {duration} seconds"
+    )
+
+
+def _task_callable(
+    snowflake_conn_id: str,
+    schema: str,
+    s3_conn_id: str,
+    s3_bucket: str,
+    ts: str,
+    num_threads: int = 5,
+    **_: None,
+):
+    asyncio.get_event_loop().run_until_complete(
+        _download_all_business_reports(
+            snowflake_conn_id,
+            schema,
+            s3_conn_id,
+            s3_bucket,
+            ts,
+            num_threads,
+        )
     )
 
 
@@ -171,13 +251,15 @@ create_target_table = SnowflakeOperator(
 
 download_business_reports = PythonOperator(
     task_id="download_business_reports",
-    python_callable=_download_all_business_reports,
+    # python_callable=_download_all_business_reports,
+    python_callable=_task_callable,
     provide_context=True,
     op_kwargs={
         "snowflake_conn_id": SNOWFLAKE_CONN,
         "schema": SCHEMA,
         "s3_conn_id": "s3_dataops",
         "s3_bucket": "ztportal-upload-production",
+        "num_threads": 10,
     },
     dag=dag,
 )
