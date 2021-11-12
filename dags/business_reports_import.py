@@ -9,8 +9,8 @@ import pendulum
 import pandas as pd
 from datetime import timedelta
 from sqlalchemy import Table, MetaData
-from sqlalchemy.engine import Engine
 from sqlalchemy.sql import select, func, text, literal_column
+from concurrent.futures.thread import ThreadPoolExecutor
 from base64 import b64decode
 from airflow import DAG
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
@@ -47,8 +47,7 @@ SCHEMA = "KYC_PRODUCTION"
 
 
 def _download_business_report(
-    engine: Engine,
-    metadata: MetaData,
+    snowflake_conn_id: str,
     s3_file_key: str,
     schema: str,
     s3_conn_id: str,
@@ -71,6 +70,9 @@ def _download_business_report(
     logging.info(
         f"🔑 Decrypted business report located in key={s3_file_key}, bucket={s3_bucket}..."
     )
+
+    engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
+    metadata = MetaData()
 
     raw_business_report_responses = Table(
         "raw_business_report_responses",
@@ -117,6 +119,7 @@ def _download_all_business_reports(
     s3_conn_id: str,
     s3_bucket: str,
     ts: str,
+    num_threads: int = 4,
     **_: None,
 ) -> None:
     engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
@@ -139,23 +142,23 @@ def _download_all_business_reports(
         con=engine,
     )
 
-    df_subset = df_reports_to_download.iloc[:5]
-    logging.info(f"📂 Processing {df_subset.size} business_reports...")
+    logging.info(f"📂 Processing {df_reports_to_download.size} business_reports...")
 
     start_time = time.time()
-    for _, row in df_subset.iterrows():
-        _download_business_report(
-            engine,
-            metadata,
-            row[0],
-            schema=schema,
-            s3_conn_id=s3_conn_id,
-            s3_bucket=s3_bucket,
-            ts=ts,
-        )
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        for _, row in df_reports_to_download.iterrows():
+            executor.submit(
+                _download_business_report,
+                snowflake_conn_id=snowflake_conn_id,
+                s3_file_key=row[0],
+                schema=schema,
+                s3_conn_id=s3_conn_id,
+                s3_bucket=s3_bucket,
+                ts=ts,
+            )
     duration = time.time() - start_time
     logging.info(
-        f"⏱ Downloaded {df_subset.size} business reports in {duration} seconds"
+        f"⏱ Downloaded {df_reports_to_download.size} business reports in {duration} seconds"
     )
 
 
@@ -178,20 +181,9 @@ download_business_reports = PythonOperator(
         "schema": SCHEMA,
         "s3_conn_id": "s3_dataops",
         "s3_bucket": "ztportal-upload-production",
+        "num_threads": 10,
     },
     dag=dag,
 )
 
 create_target_table >> download_business_reports
-
-# if __name__ == "__main__":
-#     start_time = time.time()
-#     _download_all_business_reports(
-#         snowflake_conn_id=SNOWFLAKE_CONN,
-#         schema=SCHEMA,
-#         s3_conn_id="s3_dataops",
-#         s3_bucket="ztportal-upload-production",
-#         ts="2021-11-11T00:00:00Z",
-#     )
-#     duration = time.time() - start_time
-#     logging.info(f"⏱ Downloaded in {duration} seconds")
