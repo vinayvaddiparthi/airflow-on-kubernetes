@@ -123,7 +123,6 @@ def _download_all_business_reports(
     **_: None,
 ) -> None:
     engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
-    metadata = MetaData()
 
     stmt = text(
         """
