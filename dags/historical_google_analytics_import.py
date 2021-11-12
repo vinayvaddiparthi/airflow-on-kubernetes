@@ -1,7 +1,7 @@
 import logging
 import json
 import tempfile
-from typing import Any, Dict
+from typing import Any
 from pathlib import Path
 import pendulum
 from datetime import timedelta
