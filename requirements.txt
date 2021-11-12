@@ -44,7 +44,6 @@ google-api-python-client
 fs.sshfs
 python-gnupg
 safety
-aiobotocore<1.2.0
 
 fastparquet==0.5.0
 transliterate
