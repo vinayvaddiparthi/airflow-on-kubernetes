@@ -16,32 +16,10 @@ from google_analytics_import import (
     initialize_analytics_reporting,
     get_report,
     next_page_token,
+    build_deduplicate_query,
+    transform_raw_json,
 )
-
-
-def transform_raw_json(raw: Dict, ds: str) -> Any:
-    for report in raw.get("reports", []):
-        column_header = report.get("columnHeader", {})
-        dimension_headers = column_header.get("dimensions", [])
-        metric_headers = column_header.get("metricHeader", {}).get(
-            "metricHeaderEntries", []
-        )
-        l = []
-        for row in report.get("data", {}).get("rows", []):
-            dimensions = row.get("dimensions", [])
-            date_range_values = row.get("metrics", [])
-            d = {}
-            for i, values in enumerate(date_range_values):
-                d["batch_import_date"] = ds
-                for header, dimension in zip(dimension_headers, dimensions):
-                    d[header.replace("ga:", "")] = dimension
-                for metricHeader, value in zip(metric_headers, values.get("values")):
-                    d[metricHeader.get("name").replace("ga:", "")] = value
-            l.append(d)
-        logging.info(f"get {len(l)} lines")
-        return l
-    return None
-
+from data.google_analytics import reports
 
 with DAG(
     dag_id="historical_google_analytics_import",
@@ -101,26 +79,28 @@ with DAG(
                     page_token = None
 
             tx.execute(
-                f"create or replace table {dest_db}.{dest_schema}.{table} as "  # nosec
+                f"create or replace table {dest_db}.{dest_schema}.{table}_stage as "  # nosec
                 f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
             )
+            if "primary_keys" in reports[table]:  # type: ignore
+                tx.execute(build_deduplicate_query(dest_db, dest_schema, table))
             tx.execute(
-                f"GRANT SELECT ON TABLE {dest_db}.{dest_schema}.{table} TO ROLE DBT_DEVELOPMENT"
+                f"insert into {dest_db}.{dest_schema}.{table} "  # nosec
+                f"select * from {dest_db}.{dest_schema}.{table}_stage"  # nosec
             )
-            tx.execute(
-                f"GRANT SELECT ON TABLE {dest_db}.{dest_schema}.{table} TO ROLE DBT_PRODUCTION"
-            )
+            tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
+
             logging.info(
                 f"✔️ Successfully loaded historical email event for {start_date} - {end_date} on {ds}"
             )
 
     dag << PythonOperator(
-        task_id="import_server_cx_email_event",
+        task_id="import_missing_server_cx",
         python_callable=process,
         op_kwargs={
             "conn": "snowflake_production",
-            "table": "server_cx_email",
-            "start_date": "2021-07-05",
+            "table": "server_cx",
+            "start_date": "2021-07-09",
             "end_date": "2021-10-28",
         },
         provide_context=True,
