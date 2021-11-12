@@ -8,8 +8,8 @@ import json
 import pendulum
 import pandas as pd
 from datetime import timedelta
-from sqlalchemy import Table, MetaData
-from sqlalchemy.sql import select, func, text, literal_column
+from sqlalchemy import Table, MetaData, VARCHAR
+from sqlalchemy.sql import select, func, cast, text, literal_column
 from concurrent.futures.thread import ThreadPoolExecutor
 from base64 import b64decode
 from airflow import DAG
@@ -123,8 +123,37 @@ def _download_all_business_reports(
     **_: None,
 ) -> None:
     engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
+    metadata_obj = MetaData()
 
-    stmt = text(open("dags/sql/business_reports/files_to_download.sql").read())
+    entities_business_reports = Table(
+        "entities_business_reports", metadata_obj,
+        autoload_with=engine,
+        schema=schema,
+    )
+
+    raw_business_report_responses = Table(
+        "raw_business_report_responses", metadata_obj,
+        autoload_with=engine,
+        schema=schema,
+    )
+
+    stmt = select(
+        columns=[
+            cast(func.get(entities_business_reports.c.fields, "lookup_key"), VARCHAR).label("lookup_key")
+        ]
+    ).where(
+        cast(func.get(entities_business_reports.c.fields, "report_type"), VARCHAR).in_(
+            ["equifax_business_default", "equifax_personal_default"]
+        )
+    ).where(
+        cast(func.get(entities_business_reports.c.fields, "lookup_key"), VARCHAR).notin_(
+            select(
+                columns=[
+                    raw_business_report_responses.c.lookup_key
+                ]
+            )
+        )
+    )
 
     df_reports_to_download = pd.read_sql_query(
         sql=stmt,
