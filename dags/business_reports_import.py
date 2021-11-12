@@ -2,25 +2,18 @@
 #### Description
 This workflow imports various business reports stored in the ztportal-upload-production s3 bucket.
 """
-import sys
 import time
 import logging
 import json
 import pendulum
 import pandas as pd
-import tempfile
-import boto3
-import sqlalchemy
+
 from datetime import timedelta
-from concurrent.futures.thread import ThreadPoolExecutor
 from sqlalchemy import Table, MetaData, VARCHAR, text
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import select, func, text, literal_column, literal, join
-from sqlalchemy.sql.expression import cast
 from base64 import b64decode
 
 from airflow import DAG
-from airflow.models import Variable
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
@@ -51,14 +44,8 @@ dag = DAG(
 )
 dag.doc_md = __doc__
 
-# is_prod = Variable.get("environment") != "production"
 SNOWFLAKE_CONN = "snowflake_production"
-# SCHEMA = f"CORE_{'PRODUCTION' if is_prod else 'STAGING'}"
 SCHEMA = "KYC_PRODUCTION"
-# S3_CONN = f"s3_dataops{'' if is_prod else '_staging'}"
-S3_CONN = "s3_dataops"
-# S3_BUCKET = f"ztportal-upload-{'production' if is_prod else 'staging'}"
-S3_BUCKET = "ztportal-upload-production"
 
 
 def _download_business_reports(
@@ -100,10 +87,6 @@ def _download_business_reports(
     logging.info(f"📂 Processing {df_reports_to_download.size} business_reports...")
 
     s3 = S3Hook(aws_conn_id=s3_conn_id)
-    # [
-    #     df_reports_to_download[
-    #         'lookup_key'] == 'p_Ch8kqu61g67pjJUD/app_1LDyHZtwPh3o3rwb/a4f34abb-1b39-4fbd-b167-fc21b49f4dcb'
-    # ]
     for i, row in df_reports_to_download.iterrows():
         logging.info(f"Lookup_key -> {row[0]}")
         s3_object = s3.get_key(key=row[0], bucket_name=s3_bucket)
@@ -112,10 +95,7 @@ def _download_business_reports(
         logging.info(f"Metadata -> {s3_object.get()['Metadata']}")
 
         body_decrypted = str(
-            SymmetricPorky(
-                aws_region="ca-central-1"
-            )
-            .decrypt(
+            SymmetricPorky(aws_region="ca-central-1").decrypt(
                 enciphered_dek=b64decode(body["key"], b"-_"),
                 enciphered_data=b64decode(body["data"], b"-_"),
                 nonce=b64decode(body["nonce"], b"-_"),
@@ -123,7 +103,9 @@ def _download_business_reports(
             "utf-8",
         )
 
-        logging.info(f"Decrypted business report in {row[0]}, bucket={s3_bucket} ({i + 1})")
+        logging.info(
+            f"Decrypted business report in {row[0]}, bucket={s3_bucket} ({i + 1})"
+        )
 
         with engine.begin() as tx:
             batch_import_timestamp = ts
@@ -131,8 +113,12 @@ def _download_business_reports(
                 columns=[
                     literal_column(f"'{row[0]}'").label("lookup_key"),
                     func.parse_json(body_decrypted).label("raw_response"),
-                    literal_column(f"'{s3_object.get()['LastModified']}'").label("last_modified_at"),
-                    literal_column(f"'{batch_import_timestamp}'").label("batch_import_timestamp"),
+                    literal_column(f"'{s3_object.get()['LastModified']}'").label(
+                        "last_modified_at"
+                    ),
+                    literal_column(f"'{batch_import_timestamp}'").label(
+                        "batch_import_timestamp"
+                    ),
                 ]
             )
 
@@ -148,11 +134,11 @@ def _download_business_reports(
 
             tx.execute(insert_query)
 
-            logging.info(
-                f"✔️ Successfully inserted {row[0]} to Snowflake."
-            )
+            logging.info(f"✔️ Successfully inserted {row[0]} to Snowflake.")
     duration = time.time() - start_time
-    logging.info(f"Downloaded {df_reports_to_download.size} business reports in {duration} seconds")
+    logging.info(
+        f"Downloaded {df_reports_to_download.size} business reports in {duration} seconds"
+    )
 
 
 create_target_table = SnowflakeOperator(
@@ -172,8 +158,8 @@ download_business_reports = PythonOperator(
     op_kwargs={
         "snowflake_conn_id": SNOWFLAKE_CONN,
         "schema": SCHEMA,
-        "s3_conn_id": S3_CONN,
-        "s3_bucket": S3_BUCKET,
+        "s3_conn_id": "s3_dataops",
+        "s3_bucket": "ztportal-upload-production",
     },
     dag=dag,
 )
