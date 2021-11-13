@@ -11,7 +11,7 @@ import concurrent.futures
 from typing import Dict
 from datetime import timedelta
 from sqlalchemy import Table, MetaData, VARCHAR
-from sqlalchemy.sql import select, func, cast, text, literal_column
+from sqlalchemy.sql import select, func, cast
 from concurrent.futures.thread import ThreadPoolExecutor
 from base64 import b64decode
 from airflow import DAG
