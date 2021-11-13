@@ -7,6 +7,8 @@ import logging
 import json
 import pendulum
 import pandas as pd
+import concurrent.futures
+from typing import Dict
 from datetime import timedelta
 from sqlalchemy import Table, MetaData, VARCHAR
 from sqlalchemy.sql import select, func, cast, text, literal_column
@@ -34,6 +36,7 @@ default_args = {
     "description": "A workflow to import business reports from s3 to snowflake",
 }
 
+
 dag = DAG(
     dag_id="business_reports_import",
     schedule_interval="0 */2 * * *",
@@ -47,14 +50,13 @@ SCHEMA = "KYC_PRODUCTION"
 
 
 def _download_business_report(
-    snowflake_conn_id: str,
     s3_file_key: str,
-    schema: str,
     s3_conn_id: str,
     s3_bucket: str,
+    file_number: int,
     ts: str,
     **_: None,
-) -> None:
+) -> Dict:
     s3 = S3Hook(aws_conn_id=s3_conn_id)
     s3_object = s3.get_key(key=s3_file_key, bucket_name=s3_bucket)
     body = json.loads(s3_object.get()["Body"].read())
@@ -66,51 +68,15 @@ def _download_business_report(
         ),
         "utf-8",
     )
-
     logging.info(
-        f"🔑 Decrypted business report located in key={s3_file_key}, bucket={s3_bucket}..."
+        f"🔑 Decrypted business report located in key={s3_file_key}, bucket={s3_bucket}...(#{file_number + 1})"
     )
-
-    engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
-    metadata = MetaData()
-
-    raw_business_report_responses = Table(
-        "raw_business_report_responses",
-        metadata,
-        autoload_with=engine,
-        schema=schema,
-    )
-
-    with engine.begin() as tx:
-        batch_import_timestamp = ts
-        select_query = select(
-            columns=[
-                literal_column(f"'{s3_file_key}'").label("lookup_key"),
-                func.parse_json(body_decrypted).label("raw_response"),
-                literal_column(f"'{s3_object.get()['LastModified']}'").label(
-                    "last_modified_at"
-                ),
-                literal_column(f"'{batch_import_timestamp}'").label(
-                    "batch_import_timestamp"
-                ),
-            ]
-        )
-
-        insert_query = raw_business_report_responses.insert().from_select(
-            [
-                "lookup_key",
-                "raw_response",
-                "last_modified_at",
-                "batch_import_timestamp",
-            ],
-            select_query,
-        )
-
-        tx.execute(insert_query)
-
-        logging.info(
-            f"❄️️ Successfully inserted {s3_file_key} to {raw_business_report_responses} table..."
-        )
+    return {
+        "lookup_key": s3_file_key,
+        "raw_response": body_decrypted,
+        "last_modified_at": s3_object.get()["LastModified"],
+        "batch_import_timestamp": ts,
+    }
 
 
 def _download_all_business_reports(
@@ -124,61 +90,68 @@ def _download_all_business_reports(
 ) -> None:
     engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
     metadata_obj = MetaData()
-
     entities_business_reports = Table(
-        "entities_business_reports", metadata_obj,
+        "entities_business_reports",
+        metadata_obj,
         autoload_with=engine,
         schema=schema,
     )
-
     raw_business_report_responses = Table(
-        "raw_business_report_responses", metadata_obj,
+        "raw_business_report_responses",
+        metadata_obj,
         autoload_with=engine,
         schema=schema,
     )
-
-    stmt = select(
-        columns=[
-            cast(func.get(entities_business_reports.c.fields, "lookup_key"), VARCHAR).label("lookup_key")
-        ]
-    ).where(
-        cast(func.get(entities_business_reports.c.fields, "report_type"), VARCHAR).in_(
-            ["equifax_business_default", "equifax_personal_default"]
+    stmt = (
+        select(
+            columns=[
+                cast(
+                    func.get(entities_business_reports.c.fields, "lookup_key"), VARCHAR
+                ).label("lookup_key")
+            ]
         )
-    ).where(
-        cast(func.get(entities_business_reports.c.fields, "lookup_key"), VARCHAR).notin_(
-            select(
-                columns=[
-                    raw_business_report_responses.c.lookup_key
-                ]
-            )
+        .where(
+            cast(
+                func.get(entities_business_reports.c.fields, "report_type"), VARCHAR
+            ).in_(["equifax_business_default", "equifax_personal_default"])
+        )
+        .where(
+            cast(
+                func.get(entities_business_reports.c.fields, "lookup_key"), VARCHAR
+            ).notin_(select(columns=[raw_business_report_responses.c.lookup_key]))
         )
     )
-
     df_reports_to_download = pd.read_sql_query(
         sql=stmt,
         con=engine,
     )
-
-    df = df_reports_to_download.iloc[:5]
+    df = df_reports_to_download.iloc[:3]
     logging.info(f"📂 Processing {df.size} business_reports...")
-
+    futures = []
+    data = []
     start_time = time.time()
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        for _, row in df.iterrows():
-            executor.submit(
+        for i, row in df.iterrows():
+            future = executor.submit(
                 _download_business_report,
-                snowflake_conn_id=snowflake_conn_id,
                 s3_file_key=row[0],
-                schema=schema,
                 s3_conn_id=s3_conn_id,
                 s3_bucket=s3_bucket,
+                file_number=i,
                 ts=ts,
             )
+            futures.append(future)
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            data.append(result)
+    with engine.begin() as conn:
+        # logging.info(f"DATA -> {data}")
+        conn.execute(raw_business_report_responses.insert(), data)
+        logging.info(
+            f"❄️️ Successfully inserted {len(data)} records to {raw_business_report_responses} table..."
+        )
     duration = time.time() - start_time
-    logging.info(
-        f"⏱ Downloaded {df.size} business reports in {duration} seconds"
-    )
+    logging.info(f"⏱ Processed {len(data)} business reports in {duration} seconds")
 
 
 create_target_table = SnowflakeOperator(
