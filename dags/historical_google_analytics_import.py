@@ -18,7 +18,6 @@ from google_analytics_import import (
     next_page_token,
     build_deduplicate_query,
 )
-from data.google_analytics import reports
 
 
 def transform_raw_json(raw: Dict, ds: str) -> Any:
@@ -34,7 +33,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
             date_range_values = row.get("metrics", [])
             d = {}
             for i, values in enumerate(date_range_values):
-                d["batch_import_date"] = ds
+                d["date"] = ds
                 for header, dimension in zip(dimension_headers, dimensions):
                     d[header.replace("ga:", "")] = dimension
                 for metricHeader, value in zip(metric_headers, values.get("values")):
@@ -128,17 +127,17 @@ with DAG(
             )
 
             logging.info(
-                f"✔️ Successfully loaded missing server_cx records for {start_date} - {end_date} on {ds}"
+                f"✔️ Successfully loaded historical email event for {start_date} - {end_date} on {ds}"
             )
 
     dag << PythonOperator(
-        task_id="import_missing_server_cx",
+        task_id="import_historical_acquisition_funnel",
         python_callable=process,
         op_kwargs={
             "conn": "snowflake_production",
-            "table": "server_cx",
-            "start_date": "2021-07-09",
-            "end_date": "2021-10-28",
+            "table": "acquisition_funnel",
+            "start_date": "2021-07-05",
+            "end_date": "2021-10-19",
         },
         provide_context=True,
     )
