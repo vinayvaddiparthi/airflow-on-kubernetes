@@ -125,13 +125,12 @@ def _download_all_business_reports(
         sql=stmt,
         con=engine,
     )
-    df = df_reports_to_download.iloc[:3]
-    logging.info(f"📂 Processing {df.size} business_reports...")
+    logging.info(f"📂 Processing {df_reports_to_download.size} business_reports...")
     futures = []
     data = []
     start_time = time.time()
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        for i, row in df.iterrows():
+        for i, row in df_reports_to_download.iterrows():
             future = executor.submit(
                 _download_business_report,
                 s3_file_key=row[0],
@@ -145,7 +144,6 @@ def _download_all_business_reports(
             result = future.result()
             data.append(result)
     with engine.begin() as conn:
-        # logging.info(f"DATA -> {data}")
         conn.execute(raw_business_report_responses.insert(), data)
         logging.info(
             f"❄️️ Successfully inserted {len(data)} records to {raw_business_report_responses} table..."
