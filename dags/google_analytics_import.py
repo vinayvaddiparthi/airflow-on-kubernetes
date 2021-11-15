@@ -66,7 +66,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
             date_range_values = row.get("metrics", [])
             d = {}
             for i, values in enumerate(date_range_values):
-                d["batch_import_date"] = ds
+                d["date"] = ds
                 for header, dimension in zip(dimension_headers, dimensions):
                     d[header.replace("ga:", "")] = dimension
                 for metricHeader, value in zip(metric_headers, values.get("values")):

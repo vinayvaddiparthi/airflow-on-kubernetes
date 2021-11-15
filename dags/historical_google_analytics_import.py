@@ -1,7 +1,7 @@
 import logging
 import json
 import tempfile
-from typing import Any
+from typing import Any, Dict
 from pathlib import Path
 import pendulum
 from datetime import timedelta
@@ -17,9 +17,33 @@ from google_analytics_import import (
     get_report,
     next_page_token,
     build_deduplicate_query,
-    transform_raw_json,
 )
 from data.google_analytics import reports
+
+
+def transform_raw_json(raw: Dict, ds: str) -> Any:
+    for report in raw.get("reports", []):
+        column_header = report.get("columnHeader", {})
+        dimension_headers = column_header.get("dimensions", [])
+        metric_headers = column_header.get("metricHeader", {}).get(
+            "metricHeaderEntries", []
+        )
+        l = []
+        for row in report.get("data", {}).get("rows", []):
+            dimensions = row.get("dimensions", [])
+            date_range_values = row.get("metrics", [])
+            d = {}
+            for i, values in enumerate(date_range_values):
+                d["batch_import_date"] = ds
+                for header, dimension in zip(dimension_headers, dimensions):
+                    d[header.replace("ga:", "")] = dimension
+                for metricHeader, value in zip(metric_headers, values.get("values")):
+                    d[metricHeader.get("name").replace("ga:", "")] = value
+            l.append(d)
+        logging.info(f"get {len(l)} lines")
+        return l
+    return None
+
 
 with DAG(
     dag_id="historical_google_analytics_import",
