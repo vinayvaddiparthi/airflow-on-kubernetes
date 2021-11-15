@@ -66,7 +66,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
             date_range_values = row.get("metrics", [])
             d = {}
             for i, values in enumerate(date_range_values):
-                d["batch_import_date"] = ds
+                d["date"] = ds
                 for header, dimension in zip(dimension_headers, dimensions):
                     d[header.replace("ga:", "")] = dimension
                 for metricHeader, value in zip(metric_headers, values.get("values")):
@@ -179,7 +179,7 @@ with DAG(
                 )
             logging.info(f"✔️ Successfully loaded table {table} for {ds}")
 
-    for report in reports:
+    for report in {_report for _report in reports if _report != "server_cx_email"}:
         dag << PythonOperator(
             task_id=f"task_{report}",
             python_callable=process,
