@@ -100,7 +100,7 @@ with DAG(
             # clean email events imported in 2021-10-28
             tx.execute(
                 f"delete from {dest_db}.{dest_schema}.{table} "  # nosec
-                f"where fields:batch_import_date::string='2021-11-12' and fields:eventCategory::string='email'"  # nosec
+                f"where fields:batch_import_date::string='{ds}' and fields:eventCategory::string='email'"  # nosec
             )
 
             logging.info(
