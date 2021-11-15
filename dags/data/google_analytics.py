@@ -155,28 +155,4 @@ reports: Dict[str, Any] = {
             ]
         },
     },
-    "server_cx_email": {
-        "payload": {
-            "reportRequests": [
-                {
-                    "viewId": VIEW_ID,
-                    "dateRanges": [{"startDate": None, "endDate": None}],
-                    "metrics": [
-                        {"expression": "ga:users"},
-                    ],
-                    "dimensions": [
-                        {"name": "ga:eventLabel"},
-                        {"name": "ga:hostname"},
-                        {"name": "ga:pagePath"},
-                        {"name": "ga:eventAction"},
-                        {"name": "ga:eventCategory"},
-                        {"name": "ga:dateHourMinute"},
-                    ],
-                    "filtersExpression": "ga:eventCategory==email",
-                    "pageToken": "0",
-                    "pageSize": ROW_LIMIT,
-                }
-            ]
-        },
-    },
 }
