@@ -171,6 +171,7 @@ reports: Dict[str, Any] = {
                         {"name": "ga:eventAction"},
                         {"name": "ga:eventCategory"},
                         {"name": "ga:dateHourMinute"},
+                        {"name": "ga:date"},
                     ],
                     "filtersExpression": "ga:eventCategory==email",
                     "pageToken": "0",
