@@ -16,7 +16,6 @@ from google_analytics_import import (
     initialize_analytics_reporting,
     get_report,
     next_page_token,
-    build_deduplicate_query,
 )
 
 
@@ -106,28 +105,20 @@ with DAG(
                 f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
             )
 
-            # back up server_cx
+            # drop all historical data imported before
             tx.execute(
-                f"create table {dest_db}.{dest_schema}.{table}_backup20211112 "  # nosec
-                f"clone {dest_db}.{dest_schema}.{table}"  # nosec
+                f"delete from {dest_db}.{dest_schema}.{table} "  # nosec
+                f"where fields:batch_import_date is not null"  # nosec
             )
 
-            if "primary_keys" in reports[table]:  # type: ignore
-                tx.execute(build_deduplicate_query(dest_db, dest_schema, table))
             tx.execute(
                 f"insert into {dest_db}.{dest_schema}.{table} "  # nosec
                 f"select * from {dest_db}.{dest_schema}.{table}_stage"  # nosec
             )
             tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
 
-            # clean email events imported in 2021-10-28
-            tx.execute(
-                f"delete from {dest_db}.{dest_schema}.{table} "  # nosec
-                f"where fields:batch_import_date::string='{ds}' and fields:eventCategory::string='email'"  # nosec
-            )
-
             logging.info(
-                f"✔️ Successfully loaded historical email event for {start_date} - {end_date} on {ds}"
+                f"✔️ Successfully loaded historical acquisition funnel reports for {start_date} - {end_date} on {ds}"
             )
 
     dag << PythonOperator(
