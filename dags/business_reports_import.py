@@ -2,16 +2,17 @@
 #### Description
 This workflow imports various business reports stored in the ztportal-upload-production s3 bucket.
 """
+import concurrent.futures
 import time
 import logging
 import json
 import pendulum
 import pandas as pd
-import concurrent.futures
 from typing import Dict
 from datetime import timedelta
 from sqlalchemy import Table, MetaData, VARCHAR
 from sqlalchemy.sql import select, func, cast
+from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
 from base64 import b64decode
 from airflow import DAG
@@ -55,9 +56,11 @@ def _download_business_report(
     s3_file_key: str,
     s3_bucket: str,
     file_number: int,
+    engine: SnowflakeHook,
+    target_table: Table,
     ts: str,
     **_: None,
-) -> Dict:
+) -> None:
     s3_object = s3_hook.get_key(key=s3_file_key, bucket_name=s3_bucket)
     body = json.loads(s3_object.get()["Body"].read())
     body_decrypted = str(
@@ -69,14 +72,20 @@ def _download_business_report(
         "utf-8",
     )
     logging.info(
-        f"🔑 Decrypted business report located in key={s3_file_key}, bucket={s3_bucket}...(#{file_number + 1})"
+        f"🔑 (#{file_number + 1}) Decrypted business report located in key={s3_file_key}, bucket={s3_bucket}..."
     )
-    return {
-        "lookup_key": s3_file_key,
-        "raw_response": body_decrypted,
-        "last_modified_at": s3_object.get()["LastModified"],
-        "batch_import_timestamp": ts,
-    }
+    with engine.begin() as tx:
+        tx.execute(
+            target_table.insert(), {
+                "lookup_key": s3_file_key,
+                "raw_response": body_decrypted,
+                "last_modified_at": s3_object.get()["LastModified"],
+                "batch_import_timestamp": ts,
+            }
+        )
+        logging.info(
+            f"❄️️ (#{file_number + 1}) Successfully stored s3_file_key={s3_file_key}, s3_bucket={s3_bucket} in {target_table} table..."
+        )
 
 
 def _download_all_business_reports(
@@ -126,31 +135,22 @@ def _download_all_business_reports(
         con=engine,
     )
     logging.info(f"📂 Processing {df_reports_to_download.size} business_reports...")
-    futures = []
-    data = []
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
     start_time = time.time()
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         for i, row in df_reports_to_download.iterrows():
-            future = executor.submit(
+            executor.submit(
                 _download_business_report,
                 s3_hook=s3_hook,
                 s3_file_key=row[0],
                 s3_bucket=s3_bucket,
                 file_number=i,
+                engine=engine,
+                target_table=raw_business_report_responses,
                 ts=ts,
             )
-            futures.append(future)
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            data.append(result)
-    with engine.begin() as conn:
-        conn.execute(raw_business_report_responses.insert(), data)
-        logging.info(
-            f"❄️️ Successfully inserted {len(data)} records to {raw_business_report_responses} table..."
-        )
     duration = time.time() - start_time
-    logging.info(f"⏱ Processed {len(data)} business reports in {duration} seconds")
+    logging.info(f"⏱ Processed {df_reports_to_download.size} business reports in {duration} seconds")
 
 
 create_target_table = SnowflakeOperator(
