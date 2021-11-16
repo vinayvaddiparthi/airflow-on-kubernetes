@@ -104,6 +104,18 @@ core_decryption_spec = [
             "merchant_name",
         ],
     ),
+    DecryptionSpec(
+        schema="CORE_PRODUCTION",
+        table="LEAD_ATTRIBUTES",
+        columns=["value"],
+        whereclause=literal_column("$1:key").in_(
+            [
+                "bank_connection_required",
+                "marketing_qualified_lead",
+                "selected_insights_bank_accounts",
+            ]
+        ),
+    ),
 ]
 
 
