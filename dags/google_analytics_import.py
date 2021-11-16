@@ -179,7 +179,7 @@ with DAG(
                 )
             logging.info(f"✔️ Successfully loaded table {table} for {ds}")
 
-    for report in {_report for _report in reports if _report != "server_cx_email"}:
+    for report in reports:
         dag << PythonOperator(
             task_id=f"task_{report}",
             python_callable=process,
