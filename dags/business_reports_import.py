@@ -51,15 +51,14 @@ SCHEMA = "KYC_PRODUCTION"
 
 
 def _download_business_report(
+    s3_hook: S3Hook,
     s3_file_key: str,
-    s3_conn_id: str,
     s3_bucket: str,
     file_number: int,
     ts: str,
     **_: None,
 ) -> Dict:
-    s3 = S3Hook(aws_conn_id=s3_conn_id)
-    s3_object = s3.get_key(key=s3_file_key, bucket_name=s3_bucket)
+    s3_object = s3_hook.get_key(key=s3_file_key, bucket_name=s3_bucket)
     body = json.loads(s3_object.get()["Body"].read())
     body_decrypted = str(
         SymmetricPorky(aws_region="ca-central-1").decrypt(
@@ -129,13 +128,14 @@ def _download_all_business_reports(
     logging.info(f"📂 Processing {df_reports_to_download.size} business_reports...")
     futures = []
     data = []
+    s3_hook = S3Hook(aws_conn_id=s3_conn_id)
     start_time = time.time()
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         for i, row in df_reports_to_download.iterrows():
             future = executor.submit(
                 _download_business_report,
+                s3_hook=s3_hook,
                 s3_file_key=row[0],
-                s3_conn_id=s3_conn_id,
                 s3_bucket=s3_bucket,
                 file_number=i,
                 ts=ts,
