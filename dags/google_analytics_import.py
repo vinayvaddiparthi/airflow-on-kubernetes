@@ -1,3 +1,6 @@
+"""
+quick start documentation: https://developers.google.com/analytics/devguides/reporting/core/v4/quickstart/service-py
+"""
 import logging
 import json
 import tempfile
@@ -9,6 +12,7 @@ from airflow import DAG
 from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
+from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from googleapiclient.discovery import build as AnalyticsBuild
 from oauth2client.service_account import ServiceAccountCredentials
@@ -19,6 +23,11 @@ from data.google_analytics import reports
 
 
 def initialize_analytics_reporting() -> Any:
+    """Initializes an Analytics Reporting API V4 service object.
+
+    Returns:
+        An authorized Analytics Reporting API V4 service object.
+    """
     hook = GoogleCloudBaseHook(gcp_conn_id="google_analytics_default")
     key = json.loads(hook._get_field("keyfile_dict"))
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(
@@ -33,6 +42,17 @@ def initialize_analytics_reporting() -> Any:
 def get_report(
     analytics: Any, table: str, start_date: str, end_date: str, page_token: Any
 ) -> Any:
+    """Queries the Analytics Reporting API V4.
+
+    Args:
+        analytics: An authorized Analytics Reporting API V4 service object.
+        table: A configuration for Google Analytics report.
+        start_date: Start of the data interval as YYYY-MM-DD.
+        end_date: End of the data interval as YYYY-MM-DD.
+        page_token: Page token.
+    Returns:
+        The Analytics Reporting API V4 response.
+    """
     logging.info(f"Current page_token: {page_token}")
     payload: Dict[str, Any] = reports[table]["payload"]
     payload["reportRequests"][0]["dateRanges"][0]["startDate"] = start_date
@@ -44,6 +64,13 @@ def get_report(
 
 
 def next_page_token(response: Any) -> Any:
+    """Return the next page token.
+
+    Args:
+        response: The Analytics Reporting API V4 response.
+    Returns:
+        A string represents the page token or None if not exists.
+    """
     page_token = None
     report_results = response.get("reports", [])
     if report_results:
@@ -54,6 +81,15 @@ def next_page_token(response: Any) -> Any:
 
 
 def transform_raw_json(raw: Dict, ds: str) -> Any:
+    """Transforms raw response.
+
+    Args:
+        raw: The Analytics Reporting API V4 response.
+        ds: Start of the data interval as YYYY-MM-DD.
+    Returns:
+        List of dictionaries containing transformed data.
+    Reference: https://developers.google.com/analytics/devguides/reporting/core/v4/rest/v4/reports/batchGet#report
+    """
     for report in raw.get("reports", []):
         column_header = report.get("columnHeader", {})
         dimension_headers = column_header.get("dimensions", [])
@@ -93,6 +129,15 @@ with DAG(
 ) as dag:
 
     def build_deduplicate_query(dest_db: str, dest_schema: str, table: str) -> str:
+        """Delete records from destination table based on the values of primary keys in destination and staging table.
+
+        Args:
+            dest_db: Database name of the destination table that needs deduplicate.
+            dest_schema: Schema name of the destination table that needs deduplicate.
+            table: Destination table that needs deduplicate.
+        Returns:
+            A string represents the Snowflake statement.
+        """
         query = f"merge into {dest_db}.{dest_schema}.{table} using {dest_db}.{dest_schema}.{table}_stage on "  # nosec
         for key in reports[table]["primary_keys"]:  # type: ignore
             query += f"{dest_db}.{dest_schema}.{table}.{key} = {dest_db}.{dest_schema}.{table}_stage.{key} and "
@@ -106,16 +151,20 @@ with DAG(
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
         dest_db = google_analytics_hook.extra_dejson.get("dest_db")
-        dest_schema = google_analytics_hook.extra_dejson.get("dest_schema")
+        dest_schema = (
+            google_analytics_hook.extra_dejson.get("dest_schema")
+            if Variable.get(key="environment") == "production"
+            else "development"
+        )
 
         with SnowflakeHook(conn).get_sqlalchemy_engine().begin() as tx:
             stage_guid = random_identifier()
             tx.execute(f"use database {dest_db}")
             tx.execute(
-                f"create or replace stage {dest_schema}.{stage_guid} file_format=(type=json)"
+                f"create or replace temporary stage {dest_schema}.{stage_guid} file_format=(type=json)"
             ).fetchall()
             logging.info(
-                f"create or replace stage {dest_schema}.{stage_guid} "
+                f"create or replace temporary stage {dest_schema}.{stage_guid} "
                 f"file_format=(type=json)"
             )
             logging.info("Initialize page_token")
@@ -135,9 +184,6 @@ with DAG(
                             f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
                         ).fetchall()
 
-                        # df.to_sql(
-                        #     table, tx, if_exists="append", method="multi", index=False
-                        # )
                     logging.info(f"{table} row count: {len(res_json)}")
                     token = next_page_token(response)
                 if token:
