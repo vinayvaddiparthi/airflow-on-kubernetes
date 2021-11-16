@@ -2,17 +2,14 @@
 #### Description
 This workflow imports various business reports stored in the ztportal-upload-production s3 bucket.
 """
-import concurrent.futures
 import time
 import logging
 import json
 import pendulum
 import pandas as pd
-from typing import Dict
 from datetime import timedelta
 from sqlalchemy import Table, MetaData, VARCHAR
 from sqlalchemy.sql import select, func, cast
-from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
 from base64 import b64decode
 from airflow import DAG
