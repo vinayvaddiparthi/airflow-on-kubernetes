@@ -64,6 +64,13 @@ def get_report(
 
 
 def next_page_token(response: Any) -> Any:
+    """Return the next page token.
+
+    Args:
+        response: The Analytics Reporting API V4 response.
+    Returns:
+        A string represents the page token or None if not exists.
+    """
     page_token = None
     report_results = response.get("reports", [])
     if report_results:
@@ -122,6 +129,15 @@ with DAG(
 ) as dag:
 
     def build_deduplicate_query(dest_db: str, dest_schema: str, table: str) -> str:
+        """Delete records from destination table based on the values of primary keys in destination and staging table.
+
+        Args:
+            dest_db: Database name of the destination table that needs deduplicate.
+            dest_schema: Schema name of the destination table that needs deduplicate.
+            table: Destination table that needs deduplicate.
+        Returns:
+            A string represents the Snowflake statement.
+        """
         query = f"merge into {dest_db}.{dest_schema}.{table} using {dest_db}.{dest_schema}.{table}_stage on "  # nosec
         for key in reports[table]["primary_keys"]:  # type: ignore
             query += f"{dest_db}.{dest_schema}.{table}.{key} = {dest_db}.{dest_schema}.{table}_stage.{key} and "
