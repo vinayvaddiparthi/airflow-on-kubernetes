@@ -42,7 +42,7 @@ decryption_executor_config = {
 }
 
 
-core_decrption_spec = [
+core_decryption_spec = [
     DecryptionSpec(
         schema="CORE_PRODUCTION",
         table="MERCHANT_ATTRIBUTES",
@@ -107,7 +107,7 @@ core_decrption_spec = [
 ]
 
 
-idp_decrpytion_spec = [
+idp_decryption_spec = [
     DecryptionSpec(
         schema="IDP_PRODUCTION",
         table="POLY_PROPERTIES",

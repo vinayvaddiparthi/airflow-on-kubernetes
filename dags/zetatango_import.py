@@ -51,8 +51,8 @@ from data.zetatango import (
     generic_import_executor_config,
     core_import_executor_config,
     decryption_executor_config,
-    core_decrption_spec,
-    idp_decrpytion_spec,
+    core_decryption_spec,
+    idp_decryption_spec,
     kyc_decryption_spec,
 )
 
@@ -380,7 +380,7 @@ def create_dag() -> DAG:
             python_callable=decrypt_pii_columns,
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
-                "decryption_specs": core_decrption_spec,
+                "decryption_specs": core_decryption_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
             executor_config=decryption_executor_config,
@@ -403,7 +403,7 @@ def create_dag() -> DAG:
             python_callable=decrypt_pii_columns,
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
-                "decryption_specs": idp_decrpytion_spec,
+                "decryption_specs": idp_decryption_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
             executor_config=decryption_executor_config,
