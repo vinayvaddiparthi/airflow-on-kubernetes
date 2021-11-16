@@ -174,6 +174,7 @@ download_business_reports = PythonOperator(
         "s3_bucket": "ztportal-upload-production",
         "num_threads": 10,
     },
+    pool="business_reports_pool",
     dag=dag,
 )
 
