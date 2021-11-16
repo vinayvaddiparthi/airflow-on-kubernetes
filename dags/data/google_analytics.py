@@ -96,6 +96,7 @@ reports: Dict[str, Any] = {
                         {"name": "ga:eventCategory"},
                         {"name": "ga:dimension1"},  # millisecond timestamp
                         {"name": "ga:dateHourMinute"},
+                        {"name": "ga:date"},
                     ],
                     "pageToken": "0",
                     "pageSize": ROW_LIMIT,
@@ -149,31 +150,6 @@ reports: Dict[str, Any] = {
                         {"name": "ga:keyword"},
                         {"name": "ga:dimension1"},  # millisecond timestamp
                     ],
-                    "pageToken": "0",
-                    "pageSize": ROW_LIMIT,
-                }
-            ]
-        },
-    },
-    "server_cx_email": {
-        "payload": {
-            "reportRequests": [
-                {
-                    "viewId": VIEW_ID,
-                    "dateRanges": [{"startDate": None, "endDate": None}],
-                    "metrics": [
-                        {"expression": "ga:users"},
-                    ],
-                    "dimensions": [
-                        {"name": "ga:eventLabel"},
-                        {"name": "ga:hostname"},
-                        {"name": "ga:pagePath"},
-                        {"name": "ga:eventAction"},
-                        {"name": "ga:eventCategory"},
-                        {"name": "ga:dateHourMinute"},
-                        {"name": "ga:date"},
-                    ],
-                    "filtersExpression": "ga:eventCategory==email",
                     "pageToken": "0",
                     "pageSize": ROW_LIMIT,
                 }

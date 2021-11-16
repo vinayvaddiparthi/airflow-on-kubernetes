@@ -16,7 +16,9 @@ from google_analytics_import import (
     initialize_analytics_reporting,
     get_report,
     next_page_token,
+    build_deduplicate_query,
 )
+from data.google_analytics import reports
 
 
 def transform_raw_json(raw: Dict, ds: str) -> Any:
@@ -101,26 +103,41 @@ with DAG(
                     page_token = None
 
             tx.execute(
-                f"create or replace table {dest_db}.{dest_schema}.{table} as "  # nosec
+                f"create or replace table {dest_db}.{dest_schema}.{table}_stage as "  # nosec
                 f"select $1 as fields from @{dest_schema}.{stage_guid}"  # nosec
             )
+
+            # back up server_cx
             tx.execute(
-                f"GRANT SELECT ON TABLE {dest_db}.{dest_schema}.{table} TO ROLE DBT_DEVELOPMENT"
+                f"create table {dest_db}.{dest_schema}.{table}_backup20211112 "  # nosec
+                f"clone {dest_db}.{dest_schema}.{table}"  # nosec
             )
+
+            if "primary_keys" in reports[table]:  # type: ignore
+                tx.execute(build_deduplicate_query(dest_db, dest_schema, table))
             tx.execute(
-                f"GRANT SELECT ON TABLE {dest_db}.{dest_schema}.{table} TO ROLE DBT_PRODUCTION"
+                f"insert into {dest_db}.{dest_schema}.{table} "  # nosec
+                f"select * from {dest_db}.{dest_schema}.{table}_stage"  # nosec
             )
+            tx.execute(f"drop table {dest_db}.{dest_schema}.{table}_stage")
+
+            # clean email events imported in 2021-10-28
+            tx.execute(
+                f"delete from {dest_db}.{dest_schema}.{table} "  # nosec
+                f"where fields:batch_import_date::string='{ds}' and fields:eventCategory::string='email'"  # nosec
+            )
+
             logging.info(
-                f"✔️ Successfully loaded historical email event for {start_date} - {end_date} on {ds}"
+                f"✔️ Successfully loaded missing server_cx records for {start_date} - {end_date} on {ds}"
             )
 
     dag << PythonOperator(
-        task_id="import_server_cx_email_event",
+        task_id="import_missing_server_cx",
         python_callable=process,
         op_kwargs={
             "conn": "snowflake_production",
-            "table": "server_cx_email",
-            "start_date": "2021-07-05",
+            "table": "server_cx",
+            "start_date": "2021-07-09",
             "end_date": "2021-10-28",
         },
         provide_context=True,
