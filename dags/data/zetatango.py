@@ -122,6 +122,7 @@ idp_decryption_spec = [
                 "phone_number",
                 "mfa_mode",
                 "role",
+                "sso",
             ]
         ),
     ),
