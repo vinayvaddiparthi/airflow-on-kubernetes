@@ -32,6 +32,7 @@ default_args = {
         2021, 11, 12, tzinfo=pendulum.timezone("America/Toronto")
     ),
     "catchup": False,
+    "max_active_runs": 1,
     "tags": ["business reports"],
     "description": "A workflow to import business reports from s3 to snowflake",
 }
