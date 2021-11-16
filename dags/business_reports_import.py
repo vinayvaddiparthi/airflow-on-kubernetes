@@ -76,12 +76,13 @@ def _download_business_report(
     )
     with engine.begin() as tx:
         tx.execute(
-            target_table.insert(), {
+            target_table.insert(),
+            {
                 "lookup_key": s3_file_key,
                 "raw_response": body_decrypted,
                 "last_modified_at": s3_object.get()["LastModified"],
                 "batch_import_timestamp": ts,
-            }
+            },
         )
         logging.info(
             f"❄️️ (#{file_number + 1}) Successfully stored s3_file_key={s3_file_key}, s3_bucket={s3_bucket} in {target_table} table..."
@@ -150,7 +151,9 @@ def _download_all_business_reports(
                 ts=ts,
             )
     duration = time.time() - start_time
-    logging.info(f"⏱ Processed {df_reports_to_download.size} business reports in {duration} seconds")
+    logging.info(
+        f"⏱ Processed {df_reports_to_download.size} business reports in {duration} seconds"
+    )
 
 
 create_target_table = SnowflakeOperator(
