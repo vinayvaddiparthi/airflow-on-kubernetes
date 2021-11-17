@@ -33,6 +33,11 @@ default_args = {
     "max_active_runs": 1,
     "tags": ["business reports"],
     "description": "A workflow to import business reports from s3 to snowflake",
+    "snowflake_conn_id": "snowflake_production",
+    "schema": "KYC_PRODUCTION",
+    "database": "ZETATANGO",
+    "s3_conn_id": "s3_dataops",
+    "s3_bucket": "ztportal-upload-production",
 }
 
 
@@ -43,9 +48,6 @@ dag = DAG(
     template_searchpath="dags/sql",
 )
 dag.doc_md = __doc__
-
-SNOWFLAKE_CONN = "snowflake_production"
-SCHEMA = "KYC_PRODUCTION"
 
 
 def _download_business_report(
@@ -82,7 +84,8 @@ def _download_business_report(
             },
         )
         logging.info(
-            f"❄️️ (#{file_number + 1}) Successfully stored s3_file_key={s3_file_key}, s3_bucket={s3_bucket} in {target_table} table..."
+            f"❄️️ (#{file_number + 1}) Successfully stored s3_file_key={s3_file_key}, s3_bucket={s3_bucket}"
+            f"in {target_table} table..."
         )
 
 
@@ -103,7 +106,7 @@ def _download_all_business_reports(
         schema=schema,
     )
     raw_business_report_responses = Table(
-        "raw_business_report_responses",
+        "raw_business_report_responses_test",
         metadata_obj,
         autoload_with=engine,
         schema=schema,
@@ -131,11 +134,12 @@ def _download_all_business_reports(
         sql=stmt,
         con=engine,
     )
-    logging.info(f"📂 Processing {df_reports_to_download.size} business_reports...")
+    df = df_reports_to_download.iloc[:10]
+    logging.info(f"📂 Processing {df.size} business_reports...")
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
     start_time = time.time()
     with ThreadPoolExecutor(max_workers=4) as executor:
-        for i, row in df_reports_to_download.iterrows():
+        for i, row in df.iterrows():
             executor.submit(
                 _download_business_report,
                 s3_hook=s3_hook,
@@ -147,37 +151,27 @@ def _download_all_business_reports(
                 ts=ts,
             )
     duration = time.time() - start_time
-    logging.info(
-        f"⏱ Processed {df_reports_to_download.size} business reports in {duration} seconds"
-    )
+    logging.info(f"⏱ Processed {df.size} business reports in {duration} seconds")
 
 
 create_target_table = SnowflakeOperator(
     task_id="create_target_table",
     sql="business_reports/create_table.sql",
-    params={"table_name": "raw_business_report_responses"},
-    schema=SCHEMA,
-    database="ZETATANGO",
-    snowflake_conn_id=SNOWFLAKE_CONN,
+    params={"table_name": "raw_business_report_responses_test"},
     dag=dag,
 )
 
 download_business_reports = PythonOperator(
     task_id="download_business_reports",
     python_callable=_download_all_business_reports,
-    provide_context=True,
-    op_kwargs={
-        "snowflake_conn_id": SNOWFLAKE_CONN,
-        "schema": SCHEMA,
-        "s3_conn_id": "s3_dataops",
-        "s3_bucket": "ztportal-upload-production",
-    },
+    op_kwargs=default_args,
     pool="business_reports_pool",
     executor_config={
         "resources": {
             "requests": {"memory": "8Gi"},
         },
     },
+    provide_context=True,
     dag=dag,
 )
 
