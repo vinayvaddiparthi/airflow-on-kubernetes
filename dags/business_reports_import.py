@@ -6,6 +6,7 @@ import time
 import logging
 import json
 import pendulum
+import boto3
 from datetime import timedelta
 from sqlalchemy import Table, MetaData, VARCHAR
 from sqlalchemy.sql import select, func, cast
@@ -15,7 +16,7 @@ from airflow import DAG
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from helpers.aws_hack import hack_clear_aws_keys
 from pyporky.symmetric import SymmetricPorky
 from utils.failure_callbacks import slack_dag
 
@@ -50,7 +51,6 @@ dag.doc_md = __doc__
 
 
 def _download_business_report(
-    s3_hook: S3Hook,
     s3_file_key: str,
     s3_bucket: str,
     file_number: int,
@@ -59,8 +59,10 @@ def _download_business_report(
     ts: str,
     **_: None,
 ) -> None:
-    s3_object = s3_hook.get_key(key=s3_file_key, bucket_name=s3_bucket)
-    body = json.loads(s3_object.get()["Body"].read())
+    hack_clear_aws_keys()
+    s3_client = boto3.client("s3")
+    response = s3_client.get_object(Bucket=s3_bucket, Key=s3_file_key)
+    body = json.loads(response["Body"].read())
     body_decrypted = str(
         SymmetricPorky(aws_region="ca-central-1").decrypt(
             enciphered_dek=b64decode(body["key"], b"-_"),
@@ -78,7 +80,7 @@ def _download_business_report(
             {
                 "lookup_key": s3_file_key,
                 "raw_response": body_decrypted,
-                "last_modified_at": s3_object.get()["LastModified"],
+                "last_modified_at": response["LastModified"],
                 "batch_import_timestamp": ts,
             },
         )
@@ -91,7 +93,6 @@ def _download_business_report(
 def _download_all_business_reports(
     snowflake_conn_id: str,
     schema: str,
-    s3_conn_id: str,
     s3_bucket: str,
     ts: str,
     **_: None,
@@ -132,13 +133,11 @@ def _download_all_business_reports(
     with engine.connect() as conn:
         result = [r[0] for r in conn.execute(stmt)]
         logging.info(f"📂 Processing {len(result)} business_reports...")
-        s3_hook = S3Hook(aws_conn_id=s3_conn_id)
         start_time = time.time()
         with ThreadPoolExecutor(max_workers=5) as executor:
             for i, file_key in enumerate(result):
                 executor.submit(
                     _download_business_report,
-                    s3_hook=s3_hook,
                     s3_file_key=file_key,
                     s3_bucket=s3_bucket,
                     file_number=i + 1,
@@ -165,6 +164,11 @@ download_business_reports = PythonOperator(
     provide_context=True,
     op_kwargs=default_args,
     executor_config={
+        "KubernetesExecutor": {
+            "annotations": {
+                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/Access-ZtPortalUploadProduction-S3-Bucket-In-Zetatango-Prod-AWS"
+            }
+        },
         "resources": {
             "requests": {"memory": "8Gi"},
         },
