@@ -92,7 +92,6 @@ def _download_all_business_reports(
     s3_conn_id: str,
     s3_bucket: str,
     ts: str,
-    num_threads: int = 4,
     **_: None,
 ) -> None:
     engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
@@ -135,7 +134,7 @@ def _download_all_business_reports(
     logging.info(f"📂 Processing {df_reports_to_download.size} business_reports...")
     s3_hook = S3Hook(aws_conn_id=s3_conn_id)
     start_time = time.time()
-    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         for i, row in df_reports_to_download.iterrows():
             executor.submit(
                 _download_business_report,
@@ -172,9 +171,13 @@ download_business_reports = PythonOperator(
         "schema": SCHEMA,
         "s3_conn_id": "s3_dataops",
         "s3_bucket": "ztportal-upload-production",
-        "num_threads": 10,
     },
     pool="business_reports_pool",
+    executor_config={
+        "resources": {
+            "requests": {"memory": "8Gi"},
+        },
+    },
     dag=dag,
 )
 
