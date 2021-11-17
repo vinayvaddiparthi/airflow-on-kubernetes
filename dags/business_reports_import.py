@@ -29,9 +29,7 @@ default_args = {
         2021, 11, 12, tzinfo=pendulum.timezone("America/Toronto")
     ),
     "catchup": False,
-    "max_active_runs": 1,
     "tags": ["business reports"],
-    "description": "A workflow to import business reports from s3 to snowflake",
     "snowflake_conn_id": "snowflake_production",
     "schema": "KYC_PRODUCTION",
     "database": "ZETATANGO",
@@ -42,9 +40,11 @@ default_args = {
 
 dag = DAG(
     dag_id="business_reports_import",
+    description="A workflow to import business reports from s3 to snowflake",
     schedule_interval="0 */2 * * *",
-    default_args=default_args,
+    max_active_runs=1,
     template_searchpath="dags/sql",
+    default_args=default_args,
 )
 dag.doc_md = __doc__
 
