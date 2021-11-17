@@ -139,25 +139,18 @@ def download_business_report_worker(file_number: int, file_key: str) -> PythonOp
     )
 
 
-def create_dag() -> DAG:
-    with DAG(
-        dag_id="business_reports_import_test",
-        schedule_interval="0 */2 * * *",
-        default_args=default_args,
-        template_searchpath="dags/sql",
-    ) as dag:
-        create_target_table = SnowflakeOperator(
-            task_id="create_target_table",
-            sql="business_reports/create_table.sql",
-            params={"table_name": "raw_business_report_responses_test"},
-        )
-        for i, s3_file_key in enumerate(
-            get_file_keys(
-                snowflake_conn_id="snowflake_production", schema="KYC_PRODUCTION"
-            )
-        ):
-            create_target_table >> download_business_report_worker(i + 1, s3_file_key)
-        return dag
-
-
-globals()["business_reports_import"] = create_dag()
+with DAG(
+    dag_id="business_reports_import_test",
+    schedule_interval="0 */2 * * *",
+    default_args=default_args,
+    template_searchpath="dags/sql",
+) as dag:
+    create_target_table = SnowflakeOperator(
+        task_id="create_target_table",
+        sql="business_reports/create_table.sql",
+        params={"table_name": "raw_business_report_responses_test"},
+    )
+    for i, s3_file_key in enumerate(
+        get_file_keys(snowflake_conn_id="snowflake_production", schema="KYC_PRODUCTION")
+    ):
+        create_target_table >> download_business_report_worker(i + 1, s3_file_key)
