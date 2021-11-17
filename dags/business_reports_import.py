@@ -6,7 +6,6 @@ import time
 import logging
 import json
 import pendulum
-import pandas as pd
 from datetime import timedelta
 from sqlalchemy import Table, MetaData, VARCHAR
 from sqlalchemy.sql import select, func, cast
@@ -71,7 +70,7 @@ def _download_business_report(
         "utf-8",
     )
     logging.info(
-        f"🔑 (#{file_number + 1}) Decrypted business report located in key={s3_file_key}, bucket={s3_bucket}..."
+        f"🔑 (#{file_number}) Decrypted business report located in key={s3_file_key}, bucket={s3_bucket}..."
     )
     with engine.begin() as tx:
         tx.execute(
@@ -84,7 +83,8 @@ def _download_business_report(
             },
         )
         logging.info(
-            f"❄️️ (#{file_number + 1}) Successfully stored s3_file_key={s3_file_key}, s3_bucket={s3_bucket} in {target_table} table..."
+            f"✨️️ (#{file_number}) Successfully stored s3_file_key={s3_file_key}, s3_bucket={s3_bucket}"
+            f"in {target_table} table..."
         )
 
 
@@ -129,30 +129,27 @@ def _download_all_business_reports(
             ).notin_(select(columns=[raw_business_report_responses.c.lookup_key]))
         )
     )
-    df_reports_to_download = pd.read_sql_query(
-        sql=stmt,
-        con=engine,
-    )
-    df = df_reports_to_download.iloc[:5]
-    logging.info(f"📂 Processing {df.size} business_reports...")
-    s3_hook = S3Hook(aws_conn_id=s3_conn_id)
-    start_time = time.time()
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        for i, row in df.iterrows():
-            executor.submit(
-                _download_business_report,
-                s3_hook=s3_hook,
-                s3_file_key=row[0],
-                s3_bucket=s3_bucket,
-                file_number=i,
-                engine=engine,
-                target_table=raw_business_report_responses,
-                ts=ts,
-            )
-    duration = time.time() - start_time
-    logging.info(
-        f"⏱ Processed {df.size} business reports in {duration} seconds"
-    )
+    with engine.connect() as conn:
+        result = [r[0] for r in conn.execute(stmt)]
+        logging.info(f"📂 Processing {len(result)} business_reports...")
+        s3_hook = S3Hook(aws_conn_id=s3_conn_id)
+        start_time = time.time()
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            for i, file_key in enumerate(result):
+                executor.submit(
+                    _download_business_report,
+                    s3_hook=s3_hook,
+                    s3_file_key=file_key,
+                    s3_bucket=s3_bucket,
+                    file_number=i + 1,
+                    engine=engine,
+                    target_table=raw_business_report_responses,
+                    ts=ts,
+                )
+        duration = time.time() - start_time
+        logging.info(
+            f"⏱ Processed {len(result)} business reports in {duration} seconds"
+        )
 
 
 create_target_table = SnowflakeOperator(
@@ -167,7 +164,6 @@ download_business_reports = PythonOperator(
     python_callable=_download_all_business_reports,
     provide_context=True,
     op_kwargs=default_args,
-    pool="business_reports_pool",
     executor_config={
         "resources": {
             "requests": {"memory": "8Gi"},
