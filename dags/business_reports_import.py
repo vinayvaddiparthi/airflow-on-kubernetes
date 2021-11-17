@@ -40,6 +40,7 @@ default_args = {
 
 dag = DAG(
     dag_id="business_reports_import",
+    description="A workflow to import business reports from s3 to snowflake",
     schedule_interval="0 */2 * * *",
     max_active_runs=1,
     template_searchpath="dags/sql",
