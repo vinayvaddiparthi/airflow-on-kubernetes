@@ -105,7 +105,7 @@ def _download_all_business_reports(
         schema=schema,
     )
     raw_business_report_responses = Table(
-        "raw_business_report_responses_test2",
+        "raw_business_report_responses",
         metadata_obj,
         autoload_with=engine,
         schema=schema,
@@ -155,7 +155,7 @@ def _download_all_business_reports(
 create_target_table = SnowflakeOperator(
     task_id="create_target_table",
     sql="business_reports/create_table.sql",
-    params={"table_name": "raw_business_report_responses_test2"},
+    params={"table_name": "raw_business_report_responses"},
     dag=dag,
 )
 
