@@ -165,12 +165,19 @@ kyc_decryption_spec = [
         columns=["value"],
         whereclause=literal_column("$1:key").in_(
             [
-                "transit_number",
-                "institution_number",
                 "account_number",
-                "flinks_account_type",
+                "confirmed",
+                "flinks_account_holder",
                 "flinks_account_id",
+                "flinks_account_type",
+                "flinks_login_guid",
+                "institution_number",
+                "last_transaction_date",
+                "source",
                 "stale",
+                "transit_number",
+                "valid_holder",
+                "verified",
             ]
         ),
     ),
