@@ -116,6 +116,11 @@ core_decryption_spec = [
             ]
         ),
     ),
+    DecryptionSpec(
+        schema="CORE_PRODUCTION",
+        table="EMAILS",
+        columns=["from", "html_body", "subject", "text_body", "to"],
+    ),
 ]
 
 
