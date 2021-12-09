@@ -134,7 +134,7 @@ idp_decryption_spec = [
                 "merchant",
                 "applicant",
                 "applicants",
-                "insights_preference",
+                "insights_preference_email",
                 "product_preference",
                 "phone_number",
                 "mfa_mode",
