@@ -363,6 +363,7 @@ def create_dag() -> DAG:
         },
         catchup=False,
         max_active_runs=1,
+        on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
         import_core_prod = PythonOperator(
             task_id="zt-production-elt-core__import",
