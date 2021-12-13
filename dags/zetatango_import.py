@@ -355,6 +355,7 @@ def create_dag() -> DAG:
             2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="0 */2 * * *",
+        dagrun_timeout=timedelta(hours=2),
         default_args={
             "retries": 3,
             "retry_delay": timedelta(minutes=5),
@@ -362,6 +363,7 @@ def create_dag() -> DAG:
         },
         catchup=False,
         max_active_runs=1,
+        on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
         import_core_prod = PythonOperator(
             task_id="zt-production-elt-core__import",
