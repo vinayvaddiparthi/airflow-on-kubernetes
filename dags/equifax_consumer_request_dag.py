@@ -25,7 +25,7 @@ from jinja2 import Template
 from equifax_extras.data import models
 from equifax_extras.consumer import validation
 from equifax_extras.consumer.request_file import RequestFile
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_task
 
 
 default_args = {
@@ -35,7 +35,7 @@ default_args = {
     ),
     "concurrency": 1,
     "retries": 3,
-    "on_failure_callback": slack_dag("slack_data_alerts"),
+    "on_failure_callback": slack_task("slack_data_alerts"),
 }
 
 dag = DAG(
