@@ -44,7 +44,7 @@ from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils import random_identifier
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_dag, slack_task
 
 from data.zetatango import (
     DecryptionSpec,
@@ -359,7 +359,7 @@ def create_dag() -> DAG:
         default_args={
             "retries": 3,
             "retry_delay": timedelta(minutes=5),
-            "on_failure_callback": slack_dag("slack_data_alerts"),
+            "on_failure_callback": slack_task("slack_data_alerts"),
         },
         catchup=False,
         max_active_runs=1,

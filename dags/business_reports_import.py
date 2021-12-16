@@ -18,14 +18,14 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from helpers.aws_hack import hack_clear_aws_keys
 from pyporky.symmetric import SymmetricPorky
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_task
 
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
     "retries": 3,
     "retry_delay": timedelta(minutes=5),
-    "on_failure_callback": slack_dag("slack_data_alerts"),
+    "on_failure_callback": slack_task("slack_data_alerts"),
     "start_date": pendulum.datetime(
         2021, 11, 12, tzinfo=pendulum.timezone("America/Toronto")
     ),

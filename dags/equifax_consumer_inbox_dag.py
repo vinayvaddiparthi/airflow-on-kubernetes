@@ -23,7 +23,7 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 from helpers.aws_hack import hack_clear_aws_keys
-from utils.failure_callbacks import slack_dag, sensor_timeout
+from utils.failure_callbacks import slack_task, sensor_timeout
 from utils.gpg import init_gnupg
 from utils.reference_data import result_dict, date_columns, personal_info
 from utils.equifax_helpers import get_import_month
@@ -36,7 +36,7 @@ default_args = {
     ),
     "retries": 0,
     "catchup": False,
-    "on_failure_callback": slack_dag("slack_data_alerts"),
+    "on_failure_callback": slack_task("slack_data_alerts"),
     "tags": ["equifax"],
     "description": "A workflow to download and process the consumer batch response file from Equifax",
 }

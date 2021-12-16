@@ -18,7 +18,7 @@ from googleapiclient.discovery import build as AnalyticsBuild
 from oauth2client.service_account import ServiceAccountCredentials
 
 from utils import random_identifier
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_task
 from data.google_analytics import reports
 
 
@@ -120,7 +120,7 @@ with DAG(
     default_args={
         "retries": 2,
         "retry_delay": timedelta(minutes=5),
-        "on_failure_callback": slack_dag("slack_data_alerts"),
+        "on_failure_callback": slack_task("slack_data_alerts"),
     },
     catchup=True,
     start_date=pendulum.datetime(
