@@ -11,7 +11,7 @@ from helpers.aws_hack import hack_clear_aws_keys
 from sqlalchemy import Table, MetaData, VARCHAR
 from sqlalchemy.sql import select, func, text, literal_column, literal, join
 from concurrent.futures.thread import ThreadPoolExecutor
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_task
 from datetime import timedelta
 from airflow.operators.python_operator import PythonOperator
 from dbt_extras.dbt_operator import DbtOperator
@@ -235,7 +235,7 @@ def create_dag() -> DAG:
         default_args={
             "retries": 5,
             "retry_delay": timedelta(minutes=2),
-            "on_failure_callback": slack_dag("slack_data_alerts"),
+            "on_failure_callback": slack_task("slack_data_alerts"),
         },
     ) as dag:
         (
