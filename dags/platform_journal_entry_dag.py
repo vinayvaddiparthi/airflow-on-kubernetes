@@ -12,7 +12,7 @@ from sqlalchemy import text, cast, column, Date
 from sqlalchemy.sql import Select
 from zeep import Client
 
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_task
 
 
 def build_journal_entry(
@@ -227,7 +227,7 @@ with DAG(
     default_args={
         "retries": 5,
         "retry_delay": timedelta(minutes=30),
-        "on_failure_callback": slack_dag("slack_data_alerts"),
+        "on_failure_callback": slack_task("slack_data_alerts"),
     },
     description="Platform ERP Pipeline",
 ) as dag:

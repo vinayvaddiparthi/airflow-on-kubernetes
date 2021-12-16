@@ -15,7 +15,7 @@ import pendulum
 from datetime import timedelta
 from typing import Dict
 
-from utils.failure_callbacks import slack_dag, sensor_timeout
+from utils.failure_callbacks import slack_task, sensor_timeout
 from utils.gpg import init_gnupg
 
 default_args = {
@@ -23,7 +23,7 @@ default_args = {
     "depends_on_past": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
-    "on_failure_callback": slack_dag("slack_data_alerts"),
+    "on_failure_callback": slack_task("slack_data_alerts"),
     "start_date": pendulum.datetime(
         2021, 9, 1, tzinfo=pendulum.timezone("America/Toronto")
     ),

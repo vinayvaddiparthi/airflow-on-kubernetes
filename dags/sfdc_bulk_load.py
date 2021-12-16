@@ -28,7 +28,7 @@ from slugify import slugify
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_task
 
 PK_CHUNKING_THRESHOLD = 2_000_000
 WIDE_THRESHOLD = 200
@@ -421,7 +421,7 @@ def create_dag(instances: List[str]) -> DAG:
                 pool="sfdc_pool",
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
-                on_failure_callback=slack_dag("slack_data_alerts"),
+                on_failure_callback=slack_task("slack_data_alerts"),
                 executor_config={
                     "resources": {
                         "requests": {"memory": "8Gi"},

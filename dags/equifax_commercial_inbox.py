@@ -20,7 +20,7 @@ import pyarrow.parquet as pq
 from pyarrow._csv import ReadOptions
 from pyarrow.lib import ArrowInvalid, array
 
-from utils.failure_callbacks import slack_dag
+from utils.failure_callbacks import slack_task
 from utils.gpg import init_gnupg
 from utils.equifax_helpers import get_import_month
 
@@ -32,7 +32,7 @@ default_args = {
     ),
     "retries": 0,
     "catchup": False,
-    "on_failure_callback": slack_dag("slack_data_alerts"),
+    "on_failure_callback": slack_task("slack_data_alerts"),
     "tags": ["equifax"],
     "description": "A workflow to download and process the commercial batch response file from Equifax",
     "default_view": "graph",
