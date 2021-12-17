@@ -5,7 +5,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.providers.sftp.hooks.sftp import SFTPHook
 
 
-def check_sftp_connection(ftp_conn_id: str):
+def check_sftp_connection(ftp_conn_id: str) -> None:
     hook = SFTPHook(ftp_conn_id=ftp_conn_id)
     inbox_files = hook.list_directory(path="inbox/")
     outbox_files = hook.list_directory(path="outbox/")
