@@ -21,7 +21,7 @@ with DAG(
     ),
     schedule_interval=None,
     description="test connection to equifax sftp server for batch bureau pull",
-    tag="equifax",
+    tags=["equifax"],
 ) as dag:
 
     check_sftp_connection = PythonOperator(
