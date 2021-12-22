@@ -113,6 +113,7 @@ core_decryption_spec = [
                 "bank_connection_required",
                 "marketing_qualified_lead",
                 "selected_insights_bank_accounts",
+                "desired_bank_account_balance",
             ]
         ),
     ),
