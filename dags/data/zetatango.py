@@ -65,6 +65,7 @@ core_decryption_spec = [
                 "merchant_on_hold_flag",
                 "merchant_on_hold_flag_reason",
                 "merchant_on_hold_flag_date",
+                "desired_bank_account_balance",
             ]
         ),
     ),
