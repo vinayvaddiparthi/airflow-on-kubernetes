@@ -112,6 +112,9 @@ core_decryption_spec = [
         whereclause=literal_column("$1:key").in_(
             [
                 "bank_connection_required",
+                "banking_institution",
+                "bank_account_institution_number",
+                "bank_account_transit_number",
                 "marketing_qualified_lead",
                 "selected_insights_bank_accounts",
                 "desired_bank_account_balance",
