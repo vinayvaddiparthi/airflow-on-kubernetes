@@ -142,6 +142,12 @@ idp_decryption_spec = [
                 "mfa_mode",
                 "role",
                 "sso",
+                "lead",
+                "leads_source",
+                "preferred_language",
+                "referrer",
+                "sso_linked_account",
+                "loc_notification_preference",
             ]
         ),
     ),
