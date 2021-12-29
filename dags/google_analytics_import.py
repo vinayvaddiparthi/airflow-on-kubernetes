@@ -173,7 +173,7 @@ with DAG(
                 response = get_report(analytics, table, ds, ds, page_token)
                 if response:
                     res_json = transform_raw_json(response, ds)
-                    
+
                     if len(res_json):
                         with tempfile.TemporaryDirectory() as tempdir:
                             json_filepath = Path(
@@ -185,11 +185,11 @@ with DAG(
                             tx.execute(
                                 f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
                             ).fetchall()
-                        
+
                         logging.info(f"{table} row count: {len(res_json)}")
                     else:
                         logging.info(f"{table} row count: {len(res_json)}")
-                    
+
                     token = next_page_token(response)
                 if token:
                     page_token = str(token)
