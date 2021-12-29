@@ -108,7 +108,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
                 for metricHeader, value in zip(metric_headers, values.get("values")):
                     d[metricHeader.get("name").replace("ga:", "")] = value
             l.append(d)
-        logging.info(f"get {len(l)} lines")
+        logging.info(f"got {len(l)} lines")
         return l
     return None
 
@@ -173,18 +173,23 @@ with DAG(
                 response = get_report(analytics, table, ds, ds, page_token)
                 if response:
                     res_json = transform_raw_json(response, ds)
-                    with tempfile.TemporaryDirectory() as tempdir:
-                        json_filepath = Path(
-                            tempdir, f"{table}{page_token}"
-                        ).with_suffix(".json")
-                        for i in range(len(res_json)):
-                            with open(json_filepath, "a") as outfile:
-                                outfile.writelines(json.dumps(res_json[i]))
-                        tx.execute(
-                            f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
-                        ).fetchall()
 
-                    logging.info(f"{table} row count: {len(res_json)}")
+                    if len(res_json):
+                        with tempfile.TemporaryDirectory() as tempdir:
+                            json_filepath = Path(
+                                tempdir, f"{table}{page_token}"
+                            ).with_suffix(".json")
+                            for i in range(len(res_json)):
+                                with open(json_filepath, "a") as outfile:
+                                    outfile.writelines(json.dumps(res_json[i]))
+                            tx.execute(
+                                f"put file://{json_filepath} @{dest_schema}.{stage_guid}"
+                            ).fetchall()
+
+                        logging.info(f"{table} row count: {len(res_json)}")
+                    else:
+                        logging.info(f"{table} row count: {len(res_json)}")
+
                     token = next_page_token(response)
                 if token:
                     page_token = str(token)
