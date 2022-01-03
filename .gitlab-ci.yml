@@ -96,7 +96,7 @@ check_dependencies:
   image: python:${PYTHON_VERSION}
   script:
     - pip install -r requirements.txt --use-deprecated=legacy-resolver
-    - safety check -i 40459 -i 40630 -i 41002 -i 41181 -i 41288 -i 41747 -i 41284 -i 42050 -i 42194 -i 42155 -i 42852
+    - safety check -i 40459 -i 40630 -i 41002 -i 41181 -i 41288 -i 41747 -i 41284 -i 42050 -i 42194 -i 42155 -i 42852 -i 43309
 
 build_image:
   stage: build

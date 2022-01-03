@@ -8,9 +8,9 @@ copy into {{ params.table_name }}
     $1:"POSTAL CODE"::varchar(50),
     $1:"TELEPHONE"::varchar(50),
     null, --telephone1
-    $1:"SEQUENCE NUMBER"::number(38,0),
-    $1:"COMPANY NUMBER"::number(38,0),
-    $1:"EFX Reserve AVRO HitFlag"::number(38,0),
+    nullif($1:"SEQUENCE NUMBER", '')::number(38,0),
+    nullif($1:"COMPANY NUMBER", '')::number(38,0),
+    nullif($1:"EFX Reserve AVRO HitFlag", '')::number(38,0),
     $1:"Score Code2"::varchar(5),
     $1:"Score Description2"::varchar(150),
     $1:"Score value2"::varchar(5),
@@ -26,7 +26,7 @@ copy into {{ params.table_name }}
     $1:"Reason Code2 5 Desc"::varchar(150),
     $1:"Reject Code2"::varchar(5),
     $1:"Reject Code Desc2"::varchar(150),
-    $1:"Model Number2"::number(38,0),
+    nullif($1:"Model Number2", '')::number(38,0),
     $1:"Score Code3"::varchar(5),
     $1:"Score Description3"::varchar(150),
     $1:"Score value3"::varchar(5),
@@ -42,7 +42,7 @@ copy into {{ params.table_name }}
     $1:"Reason Code3 5 Desc"::varchar(150),
     $1:"Reject Code3"::varchar(5),
     $1:"Reject Code Desc3"::varchar(150),
-    $1:"Model Number3"::number(38,0),
+    nullif($1:"Model Number3", '')::number(38,0),
     $1:imported_file_name::varchar(250),
     $1:import_month::varchar(6)
     from @{{ params.stage_name }});
