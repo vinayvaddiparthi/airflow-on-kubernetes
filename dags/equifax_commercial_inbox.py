@@ -19,6 +19,7 @@ import pyarrow.csv as csv
 import pyarrow.parquet as pq
 from pyarrow._csv import ReadOptions
 from pyarrow.lib import ArrowInvalid, array
+from typing import List
 
 from utils.failure_callbacks import slack_task
 from utils.gpg import init_gnupg
@@ -73,7 +74,7 @@ def _check_if_file_downloaded() -> bool:
     )
 
 
-def _fetch_files_from_sftp(sftp_conn_id: str) -> bool:
+def _fetch_files_from_sftp(sftp_conn_id: str) -> List[str]:
 
     sftp_hook = SFTPHook(ftp_conn_id=sftp_conn_id)
     files = sftp_hook.list_directory(path="outbox/")
