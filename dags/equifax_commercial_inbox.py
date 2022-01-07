@@ -87,7 +87,6 @@ def _fetch_files_from_sftp(sftp_conn_id: str) -> List[str]:
 
 def _check_if_response_available(
     sftp_conn_id: str,
-    **_: None,
 ) -> bool:
 
     commercial_file_list = _fetch_files_from_sftp(sftp_conn_id)
