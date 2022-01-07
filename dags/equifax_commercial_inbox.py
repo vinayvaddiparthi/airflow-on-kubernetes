@@ -73,6 +73,32 @@ def _check_if_file_downloaded() -> bool:
     )
 
 
+def _fetch_files_from_sftp(sftp_conn_id: str) -> bool:
+
+    sftp_hook = SFTPHook(ftp_conn_id=sftp_conn_id)
+    files = sftp_hook.list_directory(path="outbox/")
+    commercial_files = [
+        file for file in files if file.startswith("exthinkingpd.eqxcan.eqxcom")
+    ]
+
+    return commercial_files
+
+
+def _check_if_response_available(
+    sftp_conn_id: str,
+    **_: None,
+) -> bool:
+
+    commercial_file_list = _fetch_files_from_sftp(sftp_conn_id)
+
+    if len(commercial_file_list) != 2:  # wait until both commercial files are ready
+        logging.error(
+            "❌ Both commercial files are not yet available to download from the sftp server."
+        )
+        return False
+    return True
+
+
 def _download_response_files(
     sftp_conn_id: str,
     s3_conn_id: str,
@@ -86,15 +112,8 @@ def _download_response_files(
     available every odd month as Equifax clears the directory after 7 days.
     """
     sftp_hook = SFTPHook(ftp_conn_id=sftp_conn_id)
-    files = sftp_hook.list_directory(path="outbox/")
-    commercial_files = [
-        file for file in files if file.startswith("exthinkingpd.eqxcan.eqxcom")
-    ]
-    if len(commercial_files) != 2:  # wait until both commercial files are ready
-        logging.error(
-            "❌ Both commercial files are not yet available to download from the sftp server."
-        )
-        return
+    commercial_files = _fetch_files_from_sftp(sftp_conn_id)
+
     for file in commercial_files:
         if "risk" in file:
             ti.xcom_push(key="risk_filename", value=file[:-8])
@@ -211,6 +230,18 @@ check_if_files_downloaded = ShortCircuitOperator(
     dag=dag,
 )
 
+
+check_if_response_available = ShortCircuitOperator(
+    task_id="check_if_response_available",
+    python_callable=_check_if_response_available,
+    op_kwargs={
+        "sftp_conn_id": SFTP_CONN,
+    },
+    provide_context=True,
+    dag=dag,
+)
+
+
 download_response_files = PythonOperator(
     task_id="download_response_files",
     python_callable=_download_response_files,
@@ -257,6 +288,7 @@ convert_to_parquet = PythonOperator(
 
 (
     check_if_files_downloaded
+    >> check_if_response_available
     >> download_response_files
     >> decrypt_response_files
     >> convert_to_parquet
