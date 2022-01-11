@@ -355,7 +355,7 @@ def create_dag() -> DAG:
             2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="0 */2 * * *",
-        dagrun_timeout=timedelta(hours=2),
+        dagrun_timeout=timedelta(hours=3),
         default_args={
             "retries": 3,
             "retry_delay": timedelta(minutes=5),
