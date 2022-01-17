@@ -118,6 +118,7 @@ core_decryption_spec = [
                 "marketing_qualified_lead",
                 "selected_insights_bank_accounts",
                 "desired_bank_account_balance",
+                "merchant_self_attested_average_monthly_sales",
             ]
         ),
     ),
