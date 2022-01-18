@@ -119,6 +119,7 @@ core_decryption_spec = [
                 "selected_insights_bank_accounts",
                 "desired_bank_account_balance",
                 "merchant_self_attested_average_monthly_sales",
+                "merchant_self_attested_date_established",
             ]
         ),
     ),
