@@ -7,7 +7,7 @@ import tempfile
 from typing import Any, Dict
 from pathlib import Path
 import pendulum
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 from airflow import DAG
 from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -150,7 +150,11 @@ with DAG(
     def process(table: str, conn: str, **context: Any) -> None:
         ds = context["ds"]
         logging.info(f"Date Range: {ds}")
-        utc_time_now = datetime.utcnow().isoformat(sep=" ", timespec="milliseconds")
+        utc_time_now = (
+            datetime.now(timezone.utc)
+            .replace(tzinfo=None)
+            .isoformat(sep=" ", timespec="milliseconds")
+        )  # get utc time, strip timezone offset and format it
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
         dest_db = google_analytics_hook.extra_dejson.get("dest_db")
