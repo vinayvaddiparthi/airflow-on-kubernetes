@@ -150,7 +150,7 @@ with DAG(
     def process(table: str, conn: str, **context: Any) -> None:
         ds = context["ds"]
         logging.info(f"Date Range: {ds}")
-        utc_time_now = datetime.utcnow().isoformat(sep=' ', timespec='milliseconds')
+        utc_time_now = datetime.utcnow().isoformat(sep=" ", timespec="milliseconds")
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
         dest_db = google_analytics_hook.extra_dejson.get("dest_db")

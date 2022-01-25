@@ -28,7 +28,7 @@ reports: Dict[str, Any] = {
                     "pageSize": ROW_LIMIT,
                 }
             ]
-        }
+        },
     },
     "ad_cost": {
         "primary_keys": [
@@ -58,7 +58,7 @@ reports: Dict[str, Any] = {
                     "pageSize": ROW_LIMIT,
                 }
             ]
-        }
+        },
     },
     "cx": {
         "primary_keys": [
