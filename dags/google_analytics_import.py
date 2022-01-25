@@ -7,7 +7,7 @@ import tempfile
 from typing import Any, Dict
 from pathlib import Path
 import pendulum
-from datetime import timedelta
+from datetime import timedelta, datetime
 from airflow import DAG
 from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -80,12 +80,13 @@ def next_page_token(response: Any) -> Any:
     return page_token
 
 
-def transform_raw_json(raw: Dict, ds: str) -> Any:
+def transform_raw_json(raw: Dict, ds: str, import_ts: str) -> Any:
     """Transforms raw response.
 
     Args:
         raw: The Analytics Reporting API V4 response.
         ds: Start of the data interval as YYYY-MM-DD.
+        import_ts: The timestamp of the import.
     Returns:
         List of dictionaries containing transformed data.
     Reference: https://developers.google.com/analytics/devguides/reporting/core/v4/rest/v4/reports/batchGet#report
@@ -103,6 +104,7 @@ def transform_raw_json(raw: Dict, ds: str) -> Any:
             d = {}
             for i, values in enumerate(date_range_values):
                 d["date"] = ds
+                d["import_ts"] = import_ts
                 for header, dimension in zip(dimension_headers, dimensions):
                     d[header.replace("ga:", "")] = dimension
                 for metricHeader, value in zip(metric_headers, values.get("values")):
@@ -148,6 +150,7 @@ with DAG(
     def process(table: str, conn: str, **context: Any) -> None:
         ds = context["ds"]
         logging.info(f"Date Range: {ds}")
+        utc_time_now = datetime.utcnow().isoformat(sep=' ', timespec='milliseconds')
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
         dest_db = google_analytics_hook.extra_dejson.get("dest_db")
@@ -172,7 +175,7 @@ with DAG(
             while page_token:
                 response = get_report(analytics, table, ds, ds, page_token)
                 if response:
-                    res_json = transform_raw_json(response, ds)
+                    res_json = transform_raw_json(response, ds, utc_time_now)
 
                     if len(res_json):
                         with tempfile.TemporaryDirectory() as tempdir:
