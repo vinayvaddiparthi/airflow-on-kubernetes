@@ -6,6 +6,12 @@ ROW_LIMIT = 10000
 
 reports: Dict[str, Any] = {
     "usr": {
+        "primary_keys": [
+            "fields:dimension6::string",
+            "fields:dimension5::string",
+            "fields:sessions::string",
+            "fields:date::string",
+        ],
         "payload": {
             "reportRequests": [
                 {
@@ -22,9 +28,17 @@ reports: Dict[str, Any] = {
                     "pageSize": ROW_LIMIT,
                 }
             ]
-        }
+        },
     },
     "ad_cost": {
+        "primary_keys": [
+            "fields:adClicks::string",
+            "fields:adCost::string",
+            "fields:adwordsCampaignID::string",
+            "fields:campaign::string",
+            "fields:keyword::string",
+            "fields:date::string",
+        ],
         "payload": {
             "reportRequests": [
                 {
@@ -44,7 +58,7 @@ reports: Dict[str, Any] = {
                     "pageSize": ROW_LIMIT,
                 }
             ]
-        }
+        },
     },
     "cx": {
         "primary_keys": [
