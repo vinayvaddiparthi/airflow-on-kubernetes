@@ -47,7 +47,6 @@ core_decryption_spec = [
         schema="CORE_PRODUCTION",
         table="BANK_ACCOUNT_ATTRIBUTES",
         columns=["value"],
-        whereclause=literal_column("$1:key").in_(["likely_acct_type"]),
     ),
     DecryptionSpec(
         schema="CORE_PRODUCTION",
