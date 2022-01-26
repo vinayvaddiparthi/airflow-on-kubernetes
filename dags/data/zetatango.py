@@ -48,7 +48,6 @@ core_decryption_spec = [
         table="BANK_ACCOUNT_ATTRIBUTES",
         columns=["value"],
     ),
-
     DecryptionSpec(
         schema="CORE_PRODUCTION",
         table="MERCHANT_ATTRIBUTES",
