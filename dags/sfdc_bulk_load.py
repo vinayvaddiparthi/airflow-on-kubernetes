@@ -191,9 +191,11 @@ def put_resps_on_snowflake(
                     f"{json_filepath}",
                     parse_options=ParseOptions(newlines_in_values=True),
                 )
-                
-                table = table.append_column('import_ts', pa.array([f'{utc_time_now}'] * len(table), pa.string()))
-                
+
+                table = table.append_column(
+                    "import_ts", pa.array([f"{utc_time_now}"] * len(table), pa.string())
+                )
+
                 pq.write_table(table, f"{pq_filepath}")
                 load_data_stmts = [
                     f"create or replace temporary stage {destination_schema}.{destination_table} "  # nosec
