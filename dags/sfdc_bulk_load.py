@@ -9,6 +9,7 @@ from typing import Union, Callable, Iterator, List, Optional
 
 import attr
 import pendulum
+import pyarrow as pa
 import pyarrow.csv as pv, pyarrow.parquet as pq
 import requests
 import urllib.parse as urlparse
@@ -29,6 +30,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 
 from utils.failure_callbacks import slack_task
+from utils.common_utils import get_utc_timestamp
 
 PK_CHUNKING_THRESHOLD = 2_000_000
 WIDE_THRESHOLD = 200
@@ -167,6 +169,7 @@ def put_resps_on_snowflake(
     destination_table: str,
     engine_: Engine,
     resps: Iterator[requests.Response],
+    utc_time_now: str,
 ) -> None:
     dt_suffix = slugify(pendulum.datetime.now().isoformat(), separator="_")
     with engine_.begin() as tx:
@@ -188,6 +191,11 @@ def put_resps_on_snowflake(
                     f"{json_filepath}",
                     parse_options=ParseOptions(newlines_in_values=True),
                 )
+
+                table = table.append_column(
+                    "import_ts", pa.array([f"{utc_time_now}"] * len(table), pa.string())
+                )
+
                 pq.write_table(table, f"{pq_filepath}")
                 load_data_stmts = [
                     f"create or replace temporary stage {destination_schema}.{destination_table} "  # nosec
@@ -288,6 +296,8 @@ def process_sobject(
         else:
             max_date_col = "CreatedDate"
 
+    utc_time_now = get_utc_timestamp()
+
     chunks: List[List[str]] = [sobject.fields]
     if len(sobject.fields) >= WIDE_THRESHOLD:
         chunks = [["Id", max_date_col] for _ in range(NUM_BUCKETS)]
@@ -349,7 +359,9 @@ def process_sobject(
                 max_date_col=max_date_col,
                 max_date=max_date,
             )
-            put_resps_on_snowflake(database, schema, destination_table, engine_, resps)
+            put_resps_on_snowflake(
+                database, schema, destination_table, engine_, resps, utc_time_now
+            )
         except Exception as exc:
             print(f"❌️put_resps_on_snowflake on {destination_table} raised \n{exc}")
 
