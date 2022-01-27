@@ -7,7 +7,7 @@ import tempfile
 from typing import Any, Dict
 from pathlib import Path
 import pendulum
-from datetime import timedelta, datetime, timezone
+from datetime import timedelta
 from airflow import DAG
 from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -20,6 +20,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from utils import random_identifier
 from utils.failure_callbacks import slack_task
 from data.google_analytics import reports
+from utils.common_utils import get_utc_timestamp
 
 
 def initialize_analytics_reporting() -> Any:
@@ -150,11 +151,7 @@ with DAG(
     def process(table: str, conn: str, **context: Any) -> None:
         ds = context["ds"]
         logging.info(f"Date Range: {ds}")
-        utc_time_now = (
-            datetime.now(timezone.utc)
-            .replace(tzinfo=None)
-            .isoformat(sep=" ", timespec="milliseconds")
-        )  # get utc time, strip timezone offset and format it
+        utc_time_now = get_utc_timestamp()
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
         dest_db = google_analytics_hook.extra_dejson.get("dest_db")
