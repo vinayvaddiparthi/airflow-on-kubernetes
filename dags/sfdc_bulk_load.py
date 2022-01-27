@@ -9,6 +9,7 @@ from typing import Union, Callable, Iterator, List, Optional
 
 import attr
 import pendulum
+import pyarrow as pa
 import pyarrow.csv as pv, pyarrow.parquet as pq
 import requests
 import urllib.parse as urlparse
@@ -29,6 +30,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 
 from utils.failure_callbacks import slack_task
+from utils.common_utils import get_utc_timestamp
 
 PK_CHUNKING_THRESHOLD = 2_000_000
 WIDE_THRESHOLD = 200
@@ -189,13 +191,16 @@ def put_resps_on_snowflake(
                     f"{json_filepath}",
                     parse_options=ParseOptions(newlines_in_values=True),
                 )
+                
+                table = table.append_column('import_ts', pa.array([f'{utc_time_now}'] * len(table), pa.string()))
+                
                 pq.write_table(table, f"{pq_filepath}")
                 load_data_stmts = [
                     f"create or replace temporary stage {destination_schema}.{destination_table} "  # nosec
                     f"  file_format=(type=parquet)",
                     f"put file://{pq_filepath} @{destination_database}.{destination_schema}.{destination_table}",
                     f"copy into {destination_database}.{destination_schema}.{destination_table}"
-                    f"  from (select object_insert($1, 'import_ts', '{utc_time_now}') from @{destination_database}.{destination_schema}.{destination_table})",
+                    f"  from @{destination_database}.{destination_schema}.{destination_table}",
                 ]
 
                 print([tx.execute(stmt).fetchall() for stmt in load_data_stmts])
@@ -289,11 +294,7 @@ def process_sobject(
         else:
             max_date_col = "CreatedDate"
 
-    utc_time_now = (
-        datetime.datetime.now(datetime.timezone.utc)
-        .replace(tzinfo=None)
-        .isoformat(sep=" ", timespec="milliseconds")
-    )  # get utc time, strip timezone offset and format it
+    utc_time_now = get_utc_timestamp()
 
     chunks: List[List[str]] = [sobject.fields]
     if len(sobject.fields) >= WIDE_THRESHOLD:
