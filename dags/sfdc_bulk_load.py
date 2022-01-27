@@ -167,6 +167,7 @@ def put_resps_on_snowflake(
     destination_table: str,
     engine_: Engine,
     resps: Iterator[requests.Response],
+    utc_time_now: str,
 ) -> None:
     dt_suffix = slugify(pendulum.datetime.now().isoformat(), separator="_")
     with engine_.begin() as tx:
@@ -194,7 +195,7 @@ def put_resps_on_snowflake(
                     f"  file_format=(type=parquet)",
                     f"put file://{pq_filepath} @{destination_database}.{destination_schema}.{destination_table}",
                     f"copy into {destination_database}.{destination_schema}.{destination_table}"
-                    f"  from @{destination_database}.{destination_schema}.{destination_table}",
+                    f"  from (select object_insert($1, 'import_ts', '{utc_time_now}') from @{destination_database}.{destination_schema}.{destination_table})",
                 ]
 
                 print([tx.execute(stmt).fetchall() for stmt in load_data_stmts])
@@ -288,6 +289,12 @@ def process_sobject(
         else:
             max_date_col = "CreatedDate"
 
+    utc_time_now = (
+        datetime.datetime.now(datetime.timezone.utc)
+        .replace(tzinfo=None)
+        .isoformat(sep=" ", timespec="milliseconds")
+    )  # get utc time, strip timezone offset and format it
+
     chunks: List[List[str]] = [sobject.fields]
     if len(sobject.fields) >= WIDE_THRESHOLD:
         chunks = [["Id", max_date_col] for _ in range(NUM_BUCKETS)]
@@ -349,7 +356,9 @@ def process_sobject(
                 max_date_col=max_date_col,
                 max_date=max_date,
             )
-            put_resps_on_snowflake(database, schema, destination_table, engine_, resps)
+            put_resps_on_snowflake(
+                database, schema, destination_table, engine_, resps, utc_time_now
+            )
         except Exception as exc:
             print(f"❌️put_resps_on_snowflake on {destination_table} raised \n{exc}")
 
