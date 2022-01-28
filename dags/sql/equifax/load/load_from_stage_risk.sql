@@ -335,5 +335,6 @@ copy into {{ params.table_name }}
     $1:"I050 SIC"::varchar(4),
     $1:"I050 MBR NAME"::varchar(30),
     $1:imported_file_name::varchar(250),
-    $1:import_month::varchar(6)
+    $1:import_month::varchar(6),
+    try_to_timestamp($1:import_ts::varchar(30))
     from @{{ params.stage_name }});

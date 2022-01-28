@@ -20,6 +20,7 @@ import pyarrow.parquet as pq
 from pyarrow._csv import ReadOptions
 from pyarrow.lib import ArrowInvalid, array
 from typing import List
+from dags.utils.common_utils import get_utc_timestamp
 
 from utils.failure_callbacks import slack_task
 from utils.gpg import init_gnupg
@@ -197,6 +198,10 @@ def _convert_to_parquet(
                 table_ = table_.append_column(
                     field_="import_month",
                     column=array([get_import_month(next_ds_nodash)] * len(table_)),
+                )
+                table_ = table_.append_column(
+                    field_="import_ts",
+                    column=array([f"'{get_utc_timestamp()}'"] * len(table_)),
                 )
                 if table_.num_rows == 0:
                     logging.warning(f"📝️ Skipping empty file {reader.name}")
