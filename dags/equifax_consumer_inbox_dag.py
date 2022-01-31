@@ -27,6 +27,7 @@ from utils.failure_callbacks import slack_task, sensor_timeout
 from utils.gpg import init_gnupg
 from utils.reference_data import result_dict, date_columns, personal_info
 from utils.equifax_helpers import get_import_month
+from utils.common_utils import get_utc_timestamp
 
 default_args = {
     "owner": "airflow",
@@ -306,6 +307,7 @@ def _insert_snowflake_public(
         "accountid",
         "contractid",
         "business_name",
+        "import_ts",
         *result_dict.keys(),
     ]
     columns_string = ",".join(columns)
@@ -318,6 +320,7 @@ def _insert_snowflake_public(
         null as accountid,
         null as contractid,
         null as business_name,
+        '{get_utc_timestamp()}' as import_ts,
         staging.*
         from {source_table} as staging
     """
