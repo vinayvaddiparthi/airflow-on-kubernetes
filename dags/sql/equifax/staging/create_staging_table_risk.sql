@@ -334,5 +334,6 @@ create or replace transient table {{ params.table_name }} (
     i050_sic varchar(4) default null,
     i050_mbr_name varchar(30) default null,
     imported_file_name varchar(250) default null,
-    import_month varchar(6) default null
+    import_month varchar(6) default null,
+    import_ts timestamp default null
 );

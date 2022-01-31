@@ -43,5 +43,6 @@ create or replace transient table {{ params.table_name }} (
     reject_code_desc3 varchar(150) default null,
     model_number3 number(38,0) default null,
     imported_file_name varchar(250) default null,
-    import_month varchar(6) default null
+    import_month varchar(6) default null,
+    import_ts timestamp default null
 );
