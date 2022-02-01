@@ -20,7 +20,7 @@ import pyarrow.parquet as pq
 from pyarrow._csv import ReadOptions
 from pyarrow.lib import ArrowInvalid, array
 from typing import List
-from dags.utils.common_utils import get_utc_timestamp
+from utils.common_utils import get_utc_timestamp
 
 from utils.failure_callbacks import slack_task
 from utils.gpg import init_gnupg
