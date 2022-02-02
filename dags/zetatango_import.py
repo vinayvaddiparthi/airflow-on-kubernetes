@@ -14,6 +14,7 @@ from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.operators.python_operator import PythonOperator
 from airflow import DAG
+from airflow.models import Variable
 from psycopg2._psycopg import connection
 from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
 import pyarrow.csv as pv, pyarrow.parquet as pq
@@ -58,12 +59,12 @@ from data.zetatango import (
 
 
 def export_to_snowflake(
-    snowflake_connection: str,
-    snowflake_schema: str,
-    source_schema: str = "public",
-    heroku_app: Optional[str] = None,
-    heroku_endpoint_url_env_var: str = "DATABASE_URL",
-    heroku_postgres_connection: Optional[str] = None,
+        snowflake_connection: str,
+        snowflake_schema: str,
+        source_schema: str = "public",
+        heroku_app: Optional[str] = None,
+        heroku_endpoint_url_env_var: str = "DATABASE_URL",
+        heroku_postgres_connection: Optional[str] = None,
 ) -> None:
     if not (heroku_postgres_connection or heroku_app):
         raise Exception(
@@ -79,8 +80,8 @@ def export_to_snowflake(
             heroku3.from_key(
                 HttpHook.get_connection("heroku_production_api_key").password
             )
-            .app(heroku_app)
-            .config()[heroku_endpoint_url_env_var],
+                .app(heroku_app)
+                .config()[heroku_endpoint_url_env_var],
             isolation_level="REPEATABLE_READ",
         )
     )
@@ -89,15 +90,15 @@ def export_to_snowflake(
         tables = (
             x[0]
             for x in tx.execute(
-                Select(
-                    columns=[column("table_name")],
-                    from_obj=text('"information_schema"."tables"'),
-                    whereclause=and_(
-                        literal_column("table_schema") == literal(source_schema),
-                        literal_column("table_type") == literal("BASE TABLE"),
-                    ),
-                )
-            ).fetchall()
+            Select(
+                columns=[column("table_name")],
+                from_obj=text('"information_schema"."tables"'),
+                whereclause=and_(
+                    literal_column("table_schema") == literal(source_schema),
+                    literal_column("table_type") == literal("BASE TABLE"),
+                ),
+            )
+        ).fetchall()
         )
 
     source_raw_conn: connection = source_engine.raw_connection()
@@ -119,18 +120,18 @@ def export_to_snowflake(
 
 
 def stage_table_in_snowflake(
-    source_raw_conn: connection,
-    snowflake_engine: Engine,
-    source_schema: str,
-    destination_schema: str,
-    table: str,
+        source_raw_conn: connection,
+        snowflake_engine: Engine,
+        source_schema: str,
+        destination_schema: str,
+        table: str,
 ) -> str:
     if table in ("versions", "job_reports", "job_statuses"):
         return f"⏭️️ Skipping table {table}"
     logging.info(f"start syncing table: {table}")
     stage_guid = random_identifier()
     with snowflake_engine.begin() as tx, cast(
-        psycopg2.extensions.cursor, source_raw_conn.cursor()
+            psycopg2.extensions.cursor, source_raw_conn.cursor()
     ) as cursor, tempfile.TemporaryDirectory() as tempdir:
 
         tx.execute(
@@ -186,9 +187,9 @@ def _json_converter(o: Any) -> Union[str, int, float, bool, List, Dict, None]:
 
 
 def decrypt_pii_columns(
-    snowflake_connection: str,
-    decryption_specs: List[DecryptionSpec],
-    target_schema: str,
+        snowflake_connection: str,
+        decryption_specs: List[DecryptionSpec],
+        target_schema: str,
 ) -> None:
     yaml.add_constructor(
         "!ruby/object:BigDecimal",
@@ -231,7 +232,7 @@ def decrypt_pii_columns(
         return [postprocessors[format_](field) for field, format_ in zip(list_, format)]
 
     def _decrypt(
-        row: pd.Series, format: Optional[Union[str, List[str]]] = None
+            row: pd.Series, format: Optional[Union[str, List[str]]] = None
     ) -> List[Any]:
         list_: List[Optional[bytes]] = []
         for field in row[3:]:
@@ -265,18 +266,18 @@ def decrypt_pii_columns(
 
             stmt = Select(
                 columns=[
-                    literal_column(f"{spec.table}.$1:id::integer").label("id"),
-                    literal_column(f"{spec.table}.$1:updated_at::datetime").label(
-                        "updated_at"
-                    ),
-                    func.sha2(literal_column("$1")).label("_hash"),
-                ]
-                + [
-                    func.base64_decode_string(
-                        literal_column(f"{spec.table}.$1:encrypted_{col}")
-                    ).label(col)
-                    for col in spec.columns
-                ],
+                            literal_column(f"{spec.table}.$1:id::integer").label("id"),
+                            literal_column(f"{spec.table}.$1:updated_at::datetime").label(
+                                "updated_at"
+                            ),
+                            func.sha2(literal_column("$1")).label("_hash"),
+                        ]
+                        + [
+                            func.base64_decode_string(
+                                literal_column(f"{spec.table}.$1:encrypted_{col}")
+                            ).label(col)
+                            for col in spec.columns
+                        ],
                 from_obj=text(f"{spec.schema}.{spec.table}"),
             )
 
@@ -350,20 +351,20 @@ def decrypt_pii_columns(
 
 def create_dag() -> DAG:
     with DAG(
-        dag_id="zetatango_import",
-        start_date=pendulum.datetime(
-            2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
-        ),
-        schedule_interval="0 */2 * * *",
-        dagrun_timeout=timedelta(hours=3),
-        default_args={
-            "retries": 3,
-            "retry_delay": timedelta(minutes=5),
-            "on_failure_callback": slack_task("slack_data_alerts"),
-        },
-        catchup=False,
-        max_active_runs=1,
-        on_failure_callback=slack_dag("slack_data_alerts"),
+            dag_id="zetatango_import",
+            start_date=pendulum.datetime(
+                2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
+            ),
+            schedule_interval="0 */2 * * *",
+            dagrun_timeout=timedelta(hours=3),
+            default_args={
+                "retries": 3,
+                "retry_delay": timedelta(minutes=5),
+                "on_failure_callback": slack_task("slack_data_alerts"),
+            },
+            catchup=False,
+            max_active_runs=1,
+            on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
         import_core_prod = PythonOperator(
             task_id="zt-production-elt-core__import",
@@ -372,7 +373,9 @@ def create_dag() -> DAG:
                 "heroku_app": "zt-production-elt-core",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
                 "snowflake_connection": "snowflake_production",
-                "snowflake_schema": "ZETATANGO.CORE_PRODUCTION",
+                "snowflake_schema":
+                    ("ZETATANGO.CORE_PRODUCTION"
+                     if (Variable.get(key="environment") == "production") else "ZETATANGO.CORE_STAGING"),
             },
             executor_config=core_import_executor_config,
         )
@@ -383,7 +386,9 @@ def create_dag() -> DAG:
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
                 "decryption_specs": core_decryption_spec,
-                "target_schema": "ZETATANGO.PII_PRODUCTION",
+                "target_schema":
+                    ("ZETATANGO.PII_PRODUCTION"
+                     if (Variable.get(key="environment") == "production") else "ZETATANGO.PII_STAGING"),
             },
             executor_config=decryption_executor_config,
         )
@@ -395,7 +400,9 @@ def create_dag() -> DAG:
                 "heroku_app": "zt-production-elt-idp",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0DB594617CE5BEC42_URL",
                 "snowflake_connection": "snowflake_production",
-                "snowflake_schema": "ZETATANGO.IDP_PRODUCTION",
+                "snowflake_schema":
+                    ("ZETATANGO.IDP_PRODUCTION"
+                     if (Variable.get(key="environment") == "production") else "ZETATANGO.IDP_STAGING"),
             },
             executor_config=generic_import_executor_config,
         )
@@ -406,7 +413,9 @@ def create_dag() -> DAG:
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
                 "decryption_specs": idp_decryption_spec,
-                "target_schema": "ZETATANGO.PII_PRODUCTION",
+                "target_schema":
+                    ("ZETATANGO.PII_PRODUCTION"
+                     if (Variable.get(key="environment") == "production") else "ZETATANGO.PII_STAGING"),
             },
             executor_config=decryption_executor_config,
         )
@@ -418,7 +427,9 @@ def create_dag() -> DAG:
                 "heroku_app": "zt-production-elt-kyc",
                 "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0467EC30D24A2723A_URL",
                 "snowflake_connection": "snowflake_production",
-                "snowflake_schema": "ZETATANGO.KYC_PRODUCTION",
+                "snowflake_schema":
+                    ("ZETATANGO.KYC_PRODUCTION"
+                     if (Variable.get(key="environment") == "production") else "ZETATANGO.KYC_STAGING"),
             },
             executor_config=generic_import_executor_config,
         )
@@ -429,7 +440,9 @@ def create_dag() -> DAG:
             op_kwargs={
                 "snowflake_connection": "snowflake_production",
                 "decryption_specs": kyc_decryption_spec,
-                "target_schema": "ZETATANGO.PII_PRODUCTION",
+                "target_schema":
+                    ("ZETATANGO.PII_PRODUCTION"
+                     if (Variable.get(key="environment") == "production") else "ZETATANGO.PII_STAGING"),
             },
             executor_config=decryption_executor_config,
         )
@@ -456,14 +469,14 @@ def create_dag() -> DAG:
         dag << import_idp_prod >> decrypt_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
         (
-            [
-                decrypt_core_prod,
-                decrypt_kyc_prod,
-                decrypt_idp_prod,
-            ]
-            >> dbt_run
-            >> dbt_snapshot
-            >> dbt_test
+                [
+                    decrypt_core_prod,
+                    decrypt_kyc_prod,
+                    decrypt_idp_prod,
+                ]
+                >> dbt_run
+                >> dbt_snapshot
+                >> dbt_test
         )
 
     return dag
@@ -475,16 +488,16 @@ if __name__ == "__main__":
     from snowflake.sqlalchemy import URL
 
     with patch(
-        "dags.zetatango_import.SnowflakeHook.get_sqlalchemy_engine",
-        return_value=create_engine(
-            URL(
-                account="thinkingcapital.ca-central-1.aws",
-                user=os.environ["SNOWFLAKE_USERNAME"],
-                password=os.environ["SNOWFLAKE_PASSWORD"],
-                database="ZETATANGO",
-                warehouse="ETL",
-            )
-        ),
+            "dags.zetatango_import.SnowflakeHook.get_sqlalchemy_engine",
+            return_value=create_engine(
+                URL(
+                    account="thinkingcapital.ca-central-1.aws",
+                    user=os.environ["SNOWFLAKE_USERNAME"],
+                    password=os.environ["SNOWFLAKE_PASSWORD"],
+                    database="ZETATANGO",
+                    warehouse="ETL",
+                )
+            ),
     ):
         decrypt_pii_columns(
             "abc",

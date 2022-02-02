@@ -1,6 +1,8 @@
 import attr
 from typing import List, Optional, Union
 
+from airflow.models import Variable
+
 from sqlalchemy.sql import ClauseElement
 from sqlalchemy import literal_column
 
@@ -44,12 +46,12 @@ decryption_executor_config = {
 
 core_decryption_spec = [
     DecryptionSpec(
-        schema="CORE_PRODUCTION",
+        schema="CORE_PRODUCTION" if (Variable.get(key="environment") == "production") else "CORE_STAGING",
         table="BANK_ACCOUNT_ATTRIBUTES",
         columns=["value"],
     ),
     DecryptionSpec(
-        schema="CORE_PRODUCTION",
+        schema="CORE_PRODUCTION" if (Variable.get(key="environment") == "production") else "CORE_STAGING",
         table="MERCHANT_ATTRIBUTES",
         columns=["value"],
         whereclause=literal_column("$1:key").in_(
@@ -75,7 +77,7 @@ core_decryption_spec = [
         ),
     ),
     DecryptionSpec(
-        schema="CORE_PRODUCTION",
+        schema="CORE_PRODUCTION" if (Variable.get(key="environment") == "production") else "CORE_STAGING",
         table="LENDING_ADJUDICATIONS",
         columns=[
             "offer_results",
@@ -85,23 +87,23 @@ core_decryption_spec = [
         format=["yaml", "yaml", None],
     ),
     DecryptionSpec(
-        schema="CORE_PRODUCTION",
+        schema="CORE_PRODUCTION" if (Variable.get(key="environment") == "production") else "CORE_STAGING",
         table="LENDING_ADJUDICATION_DECISIONS",
         columns=["notes"],
     ),
     DecryptionSpec(
-        schema="CORE_PRODUCTION",
+        schema="CORE_PRODUCTION" if (Variable.get(key="environment") == "production") else "CORE_STAGING",
         table="LENDING_LOAN_ATTRIBUTES",
         columns=["value"],
         whereclause=literal_column("$1:key").in_(["external_id"]),
     ),
     DecryptionSpec(
-        schema="CORE_PRODUCTION",
+        schema="CORE_PRODUCTION" if (Variable.get(key="environment") == "production") else "CORE_STAGING",
         table="QUICKBOOKS_ACCOUNTING_TRANSACTIONS",
         columns=["account", "split"],
     ),
     DecryptionSpec(
-        schema="CORE_PRODUCTION",
+        schema="CORE_PRODUCTION" if (Variable.get(key="environment") == "production") else "CORE_STAGING",
         table="LEADS",
         columns=[
             "applicant_email",
@@ -111,7 +113,7 @@ core_decryption_spec = [
         ],
     ),
     DecryptionSpec(
-        schema="CORE_PRODUCTION",
+        schema="CORE_PRODUCTION" if (Variable.get(key="environment") == "production") else "CORE_STAGING",
         table="LEAD_ATTRIBUTES",
         columns=["value"],
         whereclause=literal_column("$1:key").in_(
@@ -129,7 +131,7 @@ core_decryption_spec = [
         ),
     ),
     DecryptionSpec(
-        schema="CORE_PRODUCTION",
+        schema="CORE_PRODUCTION" if (Variable.get(key="environment") == "production") else "CORE_STAGING",
         table="EMAILS",
         columns=["from", "html_body", "subject", "text_body", "to"],
     ),
@@ -138,7 +140,7 @@ core_decryption_spec = [
 
 idp_decryption_spec = [
     DecryptionSpec(
-        schema="IDP_PRODUCTION",
+        schema="IDP_PRODUCTION" if (Variable.get(key="environment") == "production") else "IDP_STAGING",
         table="POLY_PROPERTIES",
         columns=["value"],
         whereclause=literal_column("$1:key").in_(
@@ -166,7 +168,7 @@ idp_decryption_spec = [
 
 kyc_decryption_spec = [
     DecryptionSpec(
-        schema="KYC_PRODUCTION",
+        schema="KYC_PRODUCTION" if (Variable.get(key="environment") == "production") else "KYC_STAGING",
         table="INDIVIDUALS_APPLICANTS",
         columns=[
             "date_of_birth",
@@ -176,14 +178,14 @@ kyc_decryption_spec = [
         ],
     ),
     DecryptionSpec(
-        schema="KYC_PRODUCTION",
+        schema="KYC_PRODUCTION" if (Variable.get(key="environment") == "production") else "KYC_STAGING",
         table="INDIVIDUAL_ATTRIBUTES",
         columns=["value"],
         format="marshal",
         whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
     ),
     DecryptionSpec(
-        schema="KYC_PRODUCTION",
+        schema="KYC_PRODUCTION" if (Variable.get(key="environment") == "production") else "KYC_STAGING",
         table="ENTITIES_BANK_ACCOUNT_ATTRIBUTES",
         columns=["value"],
         whereclause=literal_column("$1:key").in_(
