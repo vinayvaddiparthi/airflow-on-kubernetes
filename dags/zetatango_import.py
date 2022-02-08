@@ -437,18 +437,21 @@ def create_dag() -> DAG:
             task_id="dbt_run",
             execution_timeout=timedelta(hours=1),
             action=DbtAction.run,
+            retries=1,
         )
 
         dbt_snapshot = DbtOperator(
             task_id="dbt_snapshot",
             execution_timeout=timedelta(hours=1),
             action=DbtAction.snapshot,
+            retries=1,
         )
 
         dbt_test = DbtOperator(
             task_id="dbt_test",
             execution_timeout=timedelta(hours=1),
             action=DbtAction.test,
+            retries=1,
         )
 
         dag << import_core_prod >> decrypt_core_prod
