@@ -183,6 +183,13 @@ kyc_decryption_spec = [
     ),
     DecryptionSpec(
         schema="KYC_PRODUCTION",
+        table="FLINKS_LOGINS",
+        columns=[
+            "login_id",
+        ],
+    ),
+    DecryptionSpec(
+        schema="KYC_PRODUCTION",
         table="INDIVIDUAL_ATTRIBUTES",
         columns=["value"],
         format="marshal",
