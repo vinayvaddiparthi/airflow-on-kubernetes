@@ -97,17 +97,6 @@ core_decryption_spec = [
     ),
     DecryptionSpec(
         schema="CORE_PRODUCTION",
-        table="QUICKBOOKS_ACCOUNTING_TRANSACTIONS",
-        columns=[
-            "account",
-            "split",
-            "additional_info",
-            "description",
-            "name",
-        ],
-    ),
-    DecryptionSpec(
-        schema="CORE_PRODUCTION",
         table="LEADS",
         columns=[
             "applicant_email",
@@ -138,6 +127,17 @@ core_decryption_spec = [
         schema="CORE_PRODUCTION",
         table="EMAILS",
         columns=["from", "html_body", "subject", "text_body", "to"],
+    ),
+    DecryptionSpec(
+        schema="CORE_PRODUCTION",
+        table="QUICKBOOKS_ACCOUNTING_TRANSACTIONS",
+        columns=[
+            "account",
+            "split",
+            "additional_info",
+            "description",
+            "name",
+        ],
     ),
 ]
 
