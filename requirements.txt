@@ -69,3 +69,5 @@ cryptography==3.4.8 # temp pinned to ignore version 35.0.
 WTForms==2.3.3  # pinned because of Flask-AppBuilder 2.3.4
 
 markupsafe==2.0.1 # https://github.com/pallets/markupsafe/issues/284
+
+itsdangerous==1.1.0 # pinned because of Flask==1.1.4
