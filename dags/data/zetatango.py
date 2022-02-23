@@ -29,15 +29,28 @@ core_import_executor_config = {
 }
 
 
-decryption_executor_config = {
+kubernetes_config = {
     "KubernetesExecutor": {
         "annotations": {
             "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
             "KubernetesAirflowProductionZetatangoPiiRole"
         }
     },
+}
+
+
+decryption_executor_config = {
+    **kubernetes_config,
     "resources": {
         "requests": {"memory": "2Gi"},
+    },
+}
+
+
+quickbooks_decryption_executor_config = {
+    **kubernetes_config,
+    "resources": {
+        "requests": {"memory": "4Gi"},
     },
 }
 

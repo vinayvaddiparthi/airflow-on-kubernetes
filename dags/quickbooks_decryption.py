@@ -8,7 +8,7 @@ from airflow.models import Variable
 from utils.failure_callbacks import slack_task
 from zetatango_import import decrypt_pii_columns
 from data.zetatango import (
-    decryption_executor_config,
+    quickbooks_decryption_executor_config,
     qbo_decryption_spec,
 )
 
@@ -30,15 +30,13 @@ with DAG(
 
     is_prod = Variable.get(key="environment") == "production"
 
-    decrypt_qbo_prod = PythonOperator(
-        task_id="qbo__pii_decryption",
+    decrypt_qbo = PythonOperator(
+        task_id="qbo_pii_decryption",
         python_callable=decrypt_pii_columns,
         op_kwargs={
             "snowflake_connection": "snowflake_production",
             "decryption_specs": qbo_decryption_spec,
             "target_schema": f"ZETATANGO.PII_{'PRODUCTION' if is_prod else 'STAGING'}",
         },
-        executor_config=decryption_executor_config,
+        executor_config=quickbooks_decryption_executor_config,
     )
-
-    dag << decrypt_qbo_prod
