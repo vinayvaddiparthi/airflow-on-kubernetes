@@ -208,3 +208,18 @@ kyc_decryption_spec = [
         ),
     ),
 ]
+
+
+qbo_decryption_spec = [
+    DecryptionSpec(
+        schema="CORE_PRODUCTION",
+        table="QUICKBOOKS_ACCOUNTING_TRANSACTIONS",
+        columns=[
+            "account",
+            "split",
+            "additional_info",
+            "description",
+            "name",
+        ],
+    ),
+]
