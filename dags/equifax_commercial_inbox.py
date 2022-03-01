@@ -242,7 +242,6 @@ check_if_response_available = ShortCircuitOperator(
     op_kwargs={
         "sftp_conn_id": SFTP_CONN,
     },
-    provide_context=True,
     dag=dag,
 )
 
