@@ -1,3 +1,5 @@
+include:
+  - local: .infrastructure.gitlab-ci.yml
 stages:
   - pre-test
   - test
@@ -15,7 +17,7 @@ variables:
   APP_NAME: "airflow"
   AIRFLOW_GPL_UNIDECODE: "yes"
 
-black:
+.black:
   stage: pre-test
   tags:
     - k8s
@@ -24,7 +26,7 @@ black:
     - pip install black
     - black --check .
 
-mypy:
+.mypy:
   stage: test
   tags:
     - k8s
@@ -41,7 +43,7 @@ mypy:
     variables:
       - $TEST_DISABLED
 
-flakes:
+.flakes:
   stage: test
   tags:
     - k8s
@@ -58,7 +60,7 @@ flakes:
     variables:
       - $TEST_DISABLED
 
-test:
+.test:
   stage: test
   tags:
     - docker
@@ -74,7 +76,7 @@ test:
       cobertura: cov.xml
   coverage: /^TOTAL.+?(\d+\%)$/
 
-sast:
+.sast:
   stage: test
   tags:
     - k8s
@@ -89,7 +91,7 @@ sast:
     reports:
       junit: sast.xml
 
-check_dependencies:
+.check_dependencies:
   stage: test
   tags:
     - k8s
@@ -98,7 +100,7 @@ check_dependencies:
     - pip install -r requirements.txt --use-deprecated=legacy-resolver
     - cat allowed_vulnerabilities.txt | xargs safety check --full-report
 
-build_image:
+.build_image:
   stage: build
   tags:
     - docker
@@ -111,7 +113,7 @@ build_image:
     - docker build --build-arg GIT_USERNAME=gitlab-ci-token --build-arg GIT_PASSWORD=${CI_JOB_TOKEN} -t ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG} .
     - docker push ${DOCKER_REPOSITORY}:${DOCKER_IMAGE_TAG}
 
-deploy_production:
+.deploy_production:
   stage: deploy
   tags:
     - k8s

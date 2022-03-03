@@ -7,3 +7,6 @@ __pycache__/
 .vscode/
 .vscode
 .DS_Store
+./aws-cdk-stacks/cdk.out
+./aws-cdk-stacks/cdk.context.json
+./aws-cdk-stacks/__pycache__
