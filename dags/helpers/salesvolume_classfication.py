@@ -1,6 +1,6 @@
 import pandas as pd
 import re
-from typing import List, Union, Optional
+from typing import Union, List
 
 
 def tc_description_clean(desc: str) -> str:
@@ -18,7 +18,7 @@ def tc_description_clean(desc: str) -> str:
     return desc.upper()
 
 
-def refine_e_transfer_lookup(desc: str, nsd) -> Optional[bool]:
+def refine_e_transfer_lookup(desc: str, nsd: bool) -> bool:
 
     if "ELECTRONICFUNDSTRANSFER" not in desc:
         return nsd
@@ -33,16 +33,15 @@ def refine_e_transfer_lookup(desc: str, nsd) -> Optional[bool]:
 
 
 def categorize_transactions(
-    test_data: pd.Series,
-    lookup_entries: pd.DataFrame,
+    transaction: pd.Series,
     precise_entries: pd.DataFrame,
     imprecise_entries: pd.DataFrame,
-) -> Union[str, bool]:
+) -> List[Union[str, bool]]:
 
-    category = None
+    category = "no_match"
     is_nsd = False
 
-    desc = test_data["description"]
+    desc = transaction["description"]
 
     # 1. check for blank or all numbers
 
@@ -65,13 +64,13 @@ def categorize_transactions(
     # 2. check for precise matches (CRA, NSF)
 
     matching_entry = [
-        (t, n)
-        for k, t, n in zip(
+        (type, nsd)
+        for key, type, nsd in zip(
             precise_entries["key"],
             precise_entries["transaction_type"],
             precise_entries["is_non_sales_deposit"],
         )
-        if k == desc
+        if key == desc
     ]
 
     if matching_entry:
@@ -81,30 +80,18 @@ def categorize_transactions(
 
         return [category, is_nsd]
 
-    matching_entry = precise_entries[precise_entries["key"] == desc]
-
-    if not matching_entry.empty:
-
-        # take the first match
-        first_match = matching_entry[:1].reset_index(drop=True)
-
-        category = first_match.loc[0, "transaction_type"]
-        is_nsd = first_match.loc[0, "is_non_sales_deposit"]
-
-        return [category, is_nsd]
-
     # 3. Check for cleaned description match (the rest)
 
     cleaned_desc = tc_description_clean(desc)
 
     matching_entry = [
-        (t, n)
-        for k, t, n in zip(
+        (type, nsd)
+        for key, type, nsd in zip(
             imprecise_entries["key"],
             imprecise_entries["transaction_type"],
             imprecise_entries["is_non_sales_deposit"],
         )
-        if k in cleaned_desc
+        if key in cleaned_desc
     ]
 
     if matching_entry:
@@ -117,7 +104,5 @@ def categorize_transactions(
             is_nsd = refine_e_transfer_lookup(cleaned_desc, is_nsd)
 
         return [category, is_nsd]
-
-    category = "no_match"
 
     return [category, is_nsd]

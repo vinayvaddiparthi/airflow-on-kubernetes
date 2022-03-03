@@ -1,5 +1,23 @@
 copy into {table} 
-(id,file_id,merchant_guid,batch_timestamp,batch_balance,account_guid,account_category,account_currency,transaction_guid,rel_transaction_id,credit,debit,balance,date,description,predicted_category,is_nsd) 
+(
+    id,
+    file_id,
+    merchant_guid,
+    batch_timestamp,
+    batch_balance,
+    account_guid,
+    account_category,
+    account_currency,
+    transaction_guid,
+    rel_transaction_id,
+    credit,
+    debit,
+    balance,
+    date,
+    description,
+    predicted_category,
+    is_nsd
+) 
 from 
 (
     select 
