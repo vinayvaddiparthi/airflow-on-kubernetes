@@ -201,7 +201,7 @@ def _convert_to_parquet(
                 )
                 table_ = table_.append_column(
                     field_="import_ts",
-                    column=array([f"'{get_utc_timestamp()}'"] * len(table_)),
+                    column=array([f"{get_utc_timestamp()}"] * len(table_)),
                 )
                 if table_.num_rows == 0:
                     logging.warning(f"📝️ Skipping empty file {reader.name}")
