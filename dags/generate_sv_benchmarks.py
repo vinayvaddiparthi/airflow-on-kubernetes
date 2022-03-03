@@ -30,6 +30,8 @@ def _classify_transactions(
     engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     metadata = MetaData()
 
+    chunk_size = 500000
+
     stage = f"{database}.{schema}.categorized_transactions_stage"
     qualified_table = f"{database}.{schema}.{table}"
 
@@ -64,13 +66,13 @@ def _classify_transactions(
                 .label("ranked"),
             ]
         )
-        # .where(transactions.c.merchant_guid == 'm_yCWW9JAVdvxC13xW')
+        .where(transactions.c.merchant_guid == "m_yCWW9JAVdvxC13xW")
         .order_by(transactions.c.account_guid, transactions.c.merchant_guid)
     )
 
-    latest_trx_select = select([ranked_trx]).where(
-        ranked_trx.c.ranked == 1
-    )  # .limit(1000000)
+    latest_trx_select = (
+        select([ranked_trx]).where(ranked_trx.c.ranked == 1).limit(1000000)
+    )
 
     cashflow_lookup_select = select([cash_flow_lookup]).where(
         cash_flow_lookup.c.cash_flow_lookup_version_id == 120
@@ -79,6 +81,10 @@ def _classify_transactions(
     with engine.begin() as conn:
 
         df_lookup = pd.read_sql(cashflow_lookup_select, con=conn)
+
+        df_precise_entries = df_lookup[df_lookup["has_match"]]
+
+        df_inprecise_entries = df_lookup[~df_lookup["has_match"]]
 
         with open("dags/sql/benchmarking/create_table.sql", "r") as f:
             create_stmt = f.read()
@@ -92,56 +98,47 @@ def _classify_transactions(
 
         time1 = time.time()
 
-        # dfs = pd.read_sql(latest_trx_select, con=conn, chunksize=500000)
-
-        # for df_transactions in dfs:
-
-        #     df_transactions[['predicted_category', 'is_nsd']] = df_transactions.apply(lookup_entry_by_description, args=(df_lookup,), axis=1, result_type='expand')
-
-        #     df_transactions.drop(columns=['ranked'], inplace=True)
-
-        #     # cast date column to date object
-        #     df_transactions.date = pd.to_datetime(df_transactions.date)
-
-        #     with tempfile.NamedTemporaryFile() as temp_file:
-
-        #         df_transactions.to_parquet(
-        #             temp_file.name, engine="fastparquet", compression="gzip",
-        #         )
-
-        #         conn.execute(
-        #             text(f"put file://{temp_file.name} @analytics_development.dbt_reporting.bfueb parallel=4")
-        #         )
-
-        df_transactions = pd.read_sql(latest_trx_select, con=conn)
+        dfs = pd.read_sql(latest_trx_select, con=conn, chunksize=chunk_size)
 
         time2 = time.time()
 
-        # df_transactions[['predicted_category', 'is_nsd']] = df_transactions.apply(lookup_entry_by_description, args=(df_lookup,), axis=1, result_type='expand')
-        df_transactions[["predicted_category", "is_nsd"]] = df_transactions.apply(
-            categorize_transactions, args=(df_lookup,), axis=1, result_type="expand"
-        )
+        for df_transactions in dfs:
 
-        time3 = time.time()
+            time3 = time.time()
 
-        df_transactions.drop(columns=["ranked"], inplace=True)
-
-        # cast date column to date object
-        df_transactions.date = pd.to_datetime(df_transactions.date)
-
-        with tempfile.NamedTemporaryFile() as temp_file:
-
-            df_transactions.to_parquet(
-                temp_file.name,
-                engine="fastparquet",
-                compression="gzip",
+            df_transactions[["predicted_category", "is_nsd"]] = df_transactions.apply(
+                categorize_transactions,
+                args=(df_lookup, df_precise_entries, df_inprecise_entries),
+                axis=1,
+                result_type="expand",
             )
 
             time4 = time.time()
 
-            conn.execute(text(f"put file://{temp_file.name} @{stage} parallel=4"))
+            df_transactions.drop(columns=["ranked"], inplace=True)
 
-        time5 = time.time()
+            # cast date column to date object
+            df_transactions.date = pd.to_datetime(df_transactions.date)
+
+            with tempfile.NamedTemporaryFile() as temp_file:
+
+                df_transactions.to_parquet(
+                    temp_file.name,
+                    engine="fastparquet",
+                    compression="gzip",
+                )
+
+                time5 = time.time()
+
+                conn.execute(text(f"put file://{temp_file.name} @{stage} parallel=4"))
+
+                time6 = time.time()
+
+            print(
+                f"Time to categorize: {time4 - time3} | Time to parquet: {time5 - time4} | Time to put: {time6 - time5} "
+            )
+
+        time7 = time.time()
 
         with open("dags/sql/benchmarking/load_table.sql", "r") as f:
             copy_stmt = f.read()
@@ -151,16 +148,10 @@ def _classify_transactions(
 
         conn.execute(copy_stmt)
 
-        time6 = time.time()
-
-        # time4 = time.time()
-
-        # df_transactions.to_sql(name='fct_categorized_bank_transactions', con=conn, if_exists='replace', index=False, method=pd_writer)
-
-        # print(f"Time to stage transactions: {time2 - time1} | Time to write to db: {time3 - time2}")
+        time8 = time.time()
 
         print(
-            f"Time to load transactions: {time2 - time1} | Time to categorize: {time3 - time2} | Time to parquet: {time4 - time3} | Time to put: {time5 - time4} | Time to load to db: {time6 - time5}"
+            f"Time to read transactions: {time2 - time1} | Time to load to db: {time8 - time7}"
         )
 
 
@@ -224,8 +215,8 @@ if __name__ == "__main__":
         return_value=create_engine(
             URL(
                 account="thinkingcapital.ca-central-1.aws",
-                user=os.environ["SNOWFLAKE_USERNAME"],
-                password=os.environ["SNOWFLAKE_PASSWORD"],
+                user=os.environ.get("SNOWFLAKE_USERNAME"),
+                password=os.environ.get("SNOWFLAKE_PASSWORD"),
                 database="analytics_development",
                 schema="dbt_reporting",
                 role="dbt_development",
@@ -238,7 +229,10 @@ if __name__ == "__main__":
         time1 = time.time()
 
         _classify_transactions(
-            "abc", schema="dbt_ario", database="analytics_development"
+            "abc",
+            schema="dbt_ario",
+            database="analytics_development",
+            table="fct_categorized_bank_transactions",
         )
 
         time2 = time.time()
@@ -246,7 +240,7 @@ if __name__ == "__main__":
         query = f.read()
 
         params = {
-            "trx_table": "fct_categorized_bank_transactions_v2",
+            "trx_table": "fct_categorized_bank_transactions",
             "merchant_table": "dbt_ario.dim_merchant",
             "sv_table": "fct_sales_volume_industry_benchmarks",
         }
