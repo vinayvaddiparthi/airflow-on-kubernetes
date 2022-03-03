@@ -33,7 +33,10 @@ def refine_e_transfer_lookup(desc: str, nsd) -> Optional[bool]:
 
 
 def categorize_transactions(
-    test_data: pd.Series, lookup_entries: pd.DataFrame
+    test_data: pd.Series,
+    lookup_entries: pd.DataFrame,
+    precise_entries: pd.DataFrame,
+    imprecise_entries: pd.DataFrame,
 ) -> Union[str, bool]:
 
     category = None
@@ -61,7 +64,22 @@ def categorize_transactions(
 
     # 2. check for precise matches (CRA, NSF)
 
-    precise_entries = lookup_entries[lookup_entries["has_match"]]
+    matching_entry = [
+        (t, n)
+        for k, t, n in zip(
+            precise_entries["key"],
+            precise_entries["transaction_type"],
+            precise_entries["is_non_sales_deposit"],
+        )
+        if k == desc
+    ]
+
+    if matching_entry:
+
+        category = matching_entry[0][0]
+        is_nsd = matching_entry[0][1]
+
+        return [category, is_nsd]
 
     matching_entry = precise_entries[precise_entries["key"] == desc]
 
@@ -77,16 +95,14 @@ def categorize_transactions(
 
     # 3. Check for cleaned description match (the rest)
 
-    inprecise_entries = lookup_entries[~lookup_entries["has_match"]]
-
     cleaned_desc = tc_description_clean(desc)
 
     matching_entry = [
         (t, n)
         for k, t, n in zip(
-            inprecise_entries["key"],
-            inprecise_entries["transaction_type"],
-            inprecise_entries["is_non_sales_deposit"],
+            imprecise_entries["key"],
+            imprecise_entries["transaction_type"],
+            imprecise_entries["is_non_sales_deposit"],
         )
         if k in cleaned_desc
     ]
