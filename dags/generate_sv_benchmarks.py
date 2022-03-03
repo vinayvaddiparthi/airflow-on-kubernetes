@@ -3,21 +3,17 @@ from datetime import timedelta
 import tempfile
 import time
 
-from sqlalchemy import create_engine
-from utils.failure_callbacks import slack_task
-
 import pandas as pd
-from snowflake.connector.pandas_tools import pd_writer
-
+from sqlalchemy import create_engine
+from sqlalchemy import Table, MetaData
+from sqlalchemy.sql import select, func, text
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.models import Variable
 
-from sqlalchemy import Table, MetaData, VARCHAR
-from sqlalchemy.sql import select, func, text, literal_column, literal, join, column
-
+from utils.failure_callbacks import slack_task
 from helpers.salesvolume_classfication import (
     categorize_transactions,
 )
@@ -30,7 +26,7 @@ def _classify_transactions(
     engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     metadata = MetaData()
 
-    chunk_size = 500000
+    chunk_size = 100000
 
     stage = f"{database}.{schema}.categorized_transactions_stage"
     qualified_table = f"{database}.{schema}.{table}"
@@ -66,13 +62,11 @@ def _classify_transactions(
                 .label("ranked"),
             ]
         )
-        .where(transactions.c.merchant_guid == "m_yCWW9JAVdvxC13xW")
+        # .where(transactions.c.merchant_guid == "m_yCWW9JAVdvxC13xW")
         .order_by(transactions.c.account_guid, transactions.c.merchant_guid)
     )
 
-    latest_trx_select = (
-        select([ranked_trx]).where(ranked_trx.c.ranked == 1).limit(1000000)
-    )
+    latest_trx_select = select([ranked_trx]).where(ranked_trx.c.ranked == 1)
 
     cashflow_lookup_select = select([cash_flow_lookup]).where(
         cash_flow_lookup.c.cash_flow_lookup_version_id == 120
@@ -86,7 +80,7 @@ def _classify_transactions(
 
         df_inprecise_entries = df_lookup[~df_lookup["has_match"]]
 
-        with open("dags/sql/benchmarking/create_table.sql", "r") as f:
+        with open("dags/sql/benchmarking/create_categorized_table.sql", "r") as f:
             create_stmt = f.read()
             create_stmt = create_stmt.replace("{table}", qualified_table)
 
@@ -108,7 +102,7 @@ def _classify_transactions(
 
             df_transactions[["predicted_category", "is_nsd"]] = df_transactions.apply(
                 categorize_transactions,
-                args=(df_lookup, df_precise_entries, df_inprecise_entries),
+                args=(df_precise_entries, df_inprecise_entries),
                 axis=1,
                 result_type="expand",
             )
@@ -140,7 +134,7 @@ def _classify_transactions(
 
         time7 = time.time()
 
-        with open("dags/sql/benchmarking/load_table.sql", "r") as f:
+        with open("dags/sql/benchmarking/load_categorized_table.sql", "r") as f:
             copy_stmt = f.read()
             copy_stmt = copy_stmt.replace("{table}", qualified_table).replace(
                 "{stage}", stage
@@ -159,7 +153,7 @@ def create_dag() -> DAG:
     with DAG(
         dag_id="generate_sv_benchmarks",
         max_active_runs=1,
-        schedule_interval="0 4 * * *",
+        schedule_interval="0 9 * * 0",
         default_args={
             "retries": 2,
             "retry_delay": timedelta(minutes=5),
@@ -169,9 +163,13 @@ def create_dag() -> DAG:
         start_date=pendulum.datetime(
             2022, 2, 28, tzinfo=pendulum.timezone("America/Toronto")
         ),
-    ) as dag:
+    ) as dag, open(
+        "dags/sql/benchmarking/weekly_sales_volume_benchmarking.sql", "r"
+    ) as f:
 
         is_prod = Variable.get(key="environment") == "production"
+
+        queries = [query.strip("\n") for query in f.read().split(";")]
 
         classify_transactions = PythonOperator(
             task_id="classify_transactions",
@@ -187,14 +185,15 @@ def create_dag() -> DAG:
 
         perform_aggregations = SnowflakeOperator(
             task_id="perform_aggregations",
-            sql="sql/benchmarking/weekly_sales_volume_benchmarking.sql",
+            # sql="sql/benchmarking/weekly_sales_volume_benchmarking.sql",
+            sql=queries,
             params={
                 "trx_table": "dbt_ario.fct_categorized_bank_transactions",
                 "merchant_table": "dbt_ario.dim_merchant",
-                "sv_table": "fct_sales_volume_industry_benchmarks",
+                "sv_table": "dbt_reporting.fct_sales_volume_industry_benchmarks",
             },
             database=f"{'analytics_production' if is_prod else 'analytics_development'}",
-            schema=f"dbt_reporting",
+            schema="dbt_reporting",
             snowflake_conn_id="snowflake_production",
             dag=dag,
         )
@@ -237,18 +236,22 @@ if __name__ == "__main__":
 
         time2 = time.time()
 
-        query = f.read()
-
         params = {
-            "trx_table": "fct_categorized_bank_transactions",
+            "trx_table": "dbt_ario.fct_categorized_bank_transactions",
             "merchant_table": "dbt_ario.dim_merchant",
-            "sv_table": "fct_sales_volume_industry_benchmarks",
+            "sv_table": "dbt_reporting.fct_sales_volume_industry_benchmarks",
         }
+
+        query = f.read()
 
         for param in params:
             query = query.replace(f"{{{{ params.{param} }}}}", f"{params[param]}")
 
-        df = pd.read_sql_query(query, con=mock_engine.return_value)
+        queries = [query.strip("\n") for query in f.read().split(";")]
+
+        with mock_engine.begin() as conn:
+            for query in queries:
+                conn.execute(query)
 
         time3 = time.time()
 

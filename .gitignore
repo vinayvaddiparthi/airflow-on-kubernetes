@@ -7,3 +7,6 @@ __pycache__/
 .vscode/
 .vscode
 .DS_Store
+flakes.xml
+mypy.xml
+.env
