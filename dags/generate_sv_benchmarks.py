@@ -1,7 +1,6 @@
 import pendulum
 from datetime import timedelta
 import tempfile
-import time
 
 import pandas as pd
 from sqlalchemy import create_engine
@@ -90,15 +89,9 @@ def _classify_transactions(
             text(f"create or replace stage {stage} file_format=(type=parquet)")
         )
 
-        time1 = time.time()
-
         dfs = pd.read_sql(latest_trx_select, con=conn, chunksize=chunk_size)
 
-        time2 = time.time()
-
         for df_transactions in dfs:
-
-            time3 = time.time()
 
             df_transactions[["predicted_category", "is_nsd"]] = df_transactions.apply(
                 categorize_transactions,
@@ -106,8 +99,6 @@ def _classify_transactions(
                 axis=1,
                 result_type="expand",
             )
-
-            time4 = time.time()
 
             df_transactions.drop(columns=["ranked"], inplace=True)
 
@@ -122,17 +113,7 @@ def _classify_transactions(
                     compression="gzip",
                 )
 
-                time5 = time.time()
-
                 conn.execute(text(f"put file://{temp_file.name} @{stage} parallel=4"))
-
-                time6 = time.time()
-
-            print(
-                f"Time to categorize: {time4 - time3} | Time to parquet: {time5 - time4} | Time to put: {time6 - time5} "
-            )
-
-        time7 = time.time()
 
         with open("dags/sql/benchmarking/load_categorized_table.sql", "r") as f:
             copy_stmt = f.read()
@@ -141,12 +122,6 @@ def _classify_transactions(
             )
 
         conn.execute(copy_stmt)
-
-        time8 = time.time()
-
-        print(
-            f"Time to read transactions: {time2 - time1} | Time to load to db: {time8 - time7}"
-        )
 
 
 def create_dag() -> DAG:
@@ -198,7 +173,7 @@ def create_dag() -> DAG:
             dag=dag,
         )
 
-        dag << classify_transactions >> perform_aggregations
+        classify_transactions >> perform_aggregations
 
         return dag
 
@@ -225,16 +200,12 @@ if __name__ == "__main__":
         "dags/sql/benchmarking/weekly_sales_volume_benchmarking.sql", "r"
     ) as f:
 
-        time1 = time.time()
-
         _classify_transactions(
             "abc",
             schema="dbt_ario",
             database="analytics_development",
             table="fct_categorized_bank_transactions",
         )
-
-        time2 = time.time()
 
         params = {
             "trx_table": "dbt_ario.fct_categorized_bank_transactions",
@@ -252,10 +223,6 @@ if __name__ == "__main__":
         with mock_engine.begin() as conn:
             for query in queries:
                 conn.execute(query)
-
-        time3 = time.time()
-
-        print(f"Classify: {time2 - time1} | Aggregate: {time3 - time2}")
 
 else:
     globals()["sv_aggregates"] = create_dag()
