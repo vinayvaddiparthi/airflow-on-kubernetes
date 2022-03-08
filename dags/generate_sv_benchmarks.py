@@ -3,7 +3,6 @@ from datetime import timedelta
 import tempfile
 
 import pandas as pd
-from sqlalchemy import create_engine
 from sqlalchemy import Table, MetaData
 from sqlalchemy.sql import select, func, text
 from airflow import DAG
