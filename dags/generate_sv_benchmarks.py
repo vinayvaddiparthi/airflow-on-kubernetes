@@ -22,7 +22,7 @@ def _classify_transactions(
     snowflake_conn: str, database: str, schema: str, table: str
 ) -> None:
 
-    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
+    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine({"echo": True})
     metadata = MetaData()
 
     chunk_size = 100000
@@ -46,24 +46,20 @@ def _classify_transactions(
         snowflake_database=database,
     )
 
-    ranked_trx = (
-        select(
-            [
-                transactions,
-                func.rank()
-                .over(
-                    partition_by=[
-                        transactions.c.merchant_guid,
-                        transactions.c.account_guid,
-                    ],
-                    order_by=transactions.c.batch_timestamp.desc(),
-                )
-                .label("ranked"),
-            ]
-        )
-        # .where(transactions.c.merchant_guid == "m_yCWW9JAVdvxC13xW")
-        .order_by(transactions.c.account_guid, transactions.c.merchant_guid)
-    )
+    ranked_trx = select(
+        [
+            transactions,
+            func.rank()
+            .over(
+                partition_by=[
+                    transactions.c.merchant_guid,
+                    transactions.c.account_guid,
+                ],
+                order_by=transactions.c.batch_timestamp.desc(),
+            )
+            .label("ranked"),
+        ]
+    ).order_by(transactions.c.account_guid, transactions.c.merchant_guid)
 
     latest_trx_select = select([ranked_trx]).where(ranked_trx.c.ranked == 1)
 
@@ -128,7 +124,7 @@ def create_dag() -> DAG:
     with DAG(
         dag_id="generate_sv_benchmarks",
         max_active_runs=1,
-        schedule_interval="0 9 * * 0",
+        schedule_interval="0 8 * * 0",
         default_args={
             "retries": 2,
             "retry_delay": timedelta(minutes=5),
@@ -136,7 +132,7 @@ def create_dag() -> DAG:
         },
         catchup=False,
         start_date=pendulum.datetime(
-            2022, 2, 28, tzinfo=pendulum.timezone("America/Toronto")
+            2022, 3, 8, tzinfo=pendulum.timezone("America/Toronto")
         ),
     ) as dag, open(
         "dags/sql/benchmarking/weekly_sales_volume_benchmarking.sql", "r"
@@ -160,7 +156,6 @@ def create_dag() -> DAG:
 
         perform_aggregations = SnowflakeOperator(
             task_id="perform_aggregations",
-            # sql="sql/benchmarking/weekly_sales_volume_benchmarking.sql",
             sql=queries,
             params={
                 "trx_table": "dbt_ario.fct_categorized_bank_transactions",
@@ -218,9 +213,9 @@ if __name__ == "__main__":
         for param in params:
             query = query.replace(f"{{{{ params.{param} }}}}", f"{params[param]}")
 
-        queries = [query.strip("\n") for query in f.read().split(";")]
+        queries = [q.strip("\n") for q in query.split(";")]
 
-        with mock_engine.begin() as conn:
+        with mock_engine.return_value.begin() as conn:
             for query in queries:
                 conn.execute(query)
 

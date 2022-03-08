@@ -1,8 +1,8 @@
 create table if not exists {{ params.sv_table }} (
 	macro_industry varchar(255),
 	province varchar(100),
-	starting_day_of_week date,
-	median_weekly_sales_volume number(38,2),
+	week date,
+	avg_sales number(38,2),
 	sample_size number(38,0),
 	report_ts timestamp_ntz(9)
 );
@@ -14,8 +14,8 @@ where date(report_ts) = current_date();
 insert into {{ params.sv_table }} (
     macro_industry,
     province,
-    starting_day_of_week,
-    median_weekly_sales_volume,
+    week,
+    avg_sales,
     sample_size,
     report_ts
 )
@@ -23,12 +23,12 @@ with weekly_balances as (
     select
     merchant_guid,
     account_guid,
-    last_day(date, 'week') - 6 as starting_day_of_week,
+    last_day(date, 'week') - 6 as week,
     coalesce(sum(credit),0) as weekly_sales_volume
     from {{ params.trx_table }}
     where is_nsd = False
-    group by merchant_guid, account_guid, starting_day_of_week
-    order by starting_day_of_week desc
+    group by merchant_guid, account_guid, week
+    order by week desc
 ),
 merchant as (
     select * from {{ params.merchant_table }}
@@ -51,7 +51,7 @@ merchant_industry as (
     select
     wb.merchant_guid,
     wb.account_guid,
-    wb.starting_day_of_week,
+    wb.week,
     wb.weekly_sales_volume,
     mr.macro_industry,
     mr.province
@@ -63,19 +63,19 @@ merchant_industry_aggregated as (
     select
     macro_industry,
     province,
-    starting_day_of_week,
-    round(median(weekly_sales_volume),2) as median_weekly_sales_volume,
+    week,
+    round(avg(weekly_sales_volume),2) as avg_sales,
     count(*) as sample_size,
     current_timestamp() as report_ts
     from merchant_industry
-    group by macro_industry, province, starting_day_of_week
-    order by starting_day_of_week desc, macro_industry, province
+    group by macro_industry, province, week
+    order by week desc, macro_industry, province
 )
 select
 macro_industry,
 province,
-starting_day_of_week,
-median_weekly_sales_volume,
+week,
+avg_sales,
 sample_size,
 report_ts
 from merchant_industry_aggregated
