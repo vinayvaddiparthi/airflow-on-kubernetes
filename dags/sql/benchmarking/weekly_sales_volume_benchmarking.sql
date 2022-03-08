@@ -36,7 +36,7 @@ merchant as (
 merchant_refined as (
     select 
     guid,
-    initcap(replace(macro_industry, '_', ' '))  as macro_industry,
+    upper(macro_industry)                       as macro_industry,
     case when not is_null_value(addresses:legal_business_address) then addresses:legal_business_address[0]:province::varchar
         when not is_null_value(addresses:operating_at_address) then addresses:operating_at_address[0]:province::varchar
         when not is_null_value(addresses:mailing_address) then addresses:mailing_address[0]:province::varchar
@@ -56,7 +56,7 @@ merchant_industry as (
     mr.macro_industry,
     mr.province
     from weekly_balances  as wb
-    join merchant_refined as mr
+    inner join merchant_refined as mr
         on wb.merchant_guid = mr.guid
 ),
 merchant_industry_aggregated as (

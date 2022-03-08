@@ -3,19 +3,16 @@ import re
 from typing import Union, List
 
 
-def tc_description_clean(desc: str) -> str:
+def clean_description(desc: str) -> str:
 
     desc.replace("Â", "to").replace("Â", "to").replace("Ã´", "o").replace(
         "Ã¨", "e"
     ).replace("Ãª", "e")
 
-    # remove spaces
-    desc = re.sub(r"\s", "", desc)
-
     # remove non alphanumeric characters
-    desc = re.sub(r"[^\w]", "", desc)
+    desc = re.sub(r"[^\w]", "", desc).upper()
 
-    return desc.upper()
+    return desc
 
 
 def refine_e_transfer_lookup(desc: str, nsd: bool) -> bool:
@@ -82,7 +79,7 @@ def categorize_transactions(
 
     # 3. Check for cleaned description match (the rest)
 
-    cleaned_desc = tc_description_clean(desc)
+    cleaned_desc = clean_description(desc)
 
     matching_entry = [
         (type, nsd)
