@@ -7,6 +7,9 @@ create table if not exists {{ params.sv_table }} (
 	report_ts timestamp_ntz(9)
 );
 
+delete from {{ params.sv_table }}
+where date(report_ts) = current_date();
+
 insert into {{ params.sv_table }} (
     macro_industry,
     province,
