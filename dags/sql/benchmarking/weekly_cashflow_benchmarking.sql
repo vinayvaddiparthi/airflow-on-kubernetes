@@ -19,15 +19,7 @@ insert into {{ params.sv_table }} (
     report_ts
 )
 with weekly_balances as (
-    select
-    merchant_guid,
-    account_guid,
-    last_day(date, 'week') - 6 as week,
-    coalesce(sum(credit),0) as weekly_sales_volume
-    from {{ params.trx_table }}
-    where is_nsd = False
-    group by merchant_guid, account_guid, week
-    order by week desc
+    select * from {{ params.trx_table }}
 ),
 merchant as (
     select * from {{ params.merchant_table }}
@@ -50,20 +42,20 @@ merchant_industry as (
     select
     wb.merchant_guid,
     wb.account_guid,
-    wb.week,
-    wb.weekly_sales_volume,
+    wb.date,
+    wb.credits,
     mr.macro_industry,
     mr.province
-    from weekly_balances  as wb
-    inner join merchant_refined as mr
-        on wb.merchant_guid = mr.guid
+    from weekly_balances as wb
+    inner join merchant_refined as mr 
+    on wb.merchant_guid = mr.guid
 ),
 merchant_industry_aggregated as (
     select
     macro_industry,
     province,
-    week,
-    round(avg(weekly_sales_volume),2) as avg_sales,
+    last_day(date, 'week') - 6 as week,
+    round(avg(credits),2) as avg_sales,
     count(*) as sample_size,
     current_timestamp() as report_ts
     from merchant_industry
@@ -78,3 +70,4 @@ avg_sales,
 sample_size,
 report_ts
 from merchant_industry_aggregated
+
