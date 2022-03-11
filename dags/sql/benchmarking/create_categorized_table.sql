@@ -1,4 +1,4 @@
-create or replace table {table} (
+create table if not exists {table} (
 	id varchar(255),
 	file_id varchar(255),
 	merchant_guid varchar(255),
@@ -17,3 +17,5 @@ create or replace table {table} (
 	predicted_category varchar(255),
 	is_nsd boolean
 );
+
+delete from {table};

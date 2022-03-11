@@ -78,7 +78,8 @@ def _classify_transactions(
             create_stmt = f.read()
             create_stmt = create_stmt.replace("{table}", qualified_table)
 
-        conn.execute(create_stmt)
+        for stmt in create_stmt.split(";"):
+            conn.execute(stmt)
 
         conn.execute(
             text(f"create or replace stage {stage} file_format=(type=parquet)")
@@ -121,7 +122,7 @@ def _classify_transactions(
 
 def create_dag() -> DAG:
     with DAG(
-        dag_id="generate_sv_benchmarks",
+        dag_id="insights_benchmarks",
         max_active_runs=1,
         schedule_interval="0 8 * * 0",
         default_args={
@@ -134,12 +135,16 @@ def create_dag() -> DAG:
             2022, 3, 8, tzinfo=pendulum.timezone("America/Toronto")
         ),
     ) as dag, open(
-        "dags/sql/benchmarking/weekly_sales_volume_benchmarking.sql", "r"
-    ) as f:
+        "dags/sql/benchmarking/weekly_sales_volume_benchmarking.sql"
+    ) as sv, open(
+        "dags/sql/benchmarking/weekly_cashflow_benchmarking.sql"
+    ) as cf:
 
         is_prod = Variable.get(key="environment") == "production"
 
-        queries = [query.strip("\n") for query in f.read().split(";")]
+        sv_queries = [query.strip("\n") for query in sv.read().split(";")]
+
+        cf_queries = [query.strip("\n") for query in cf.read().split(";")]
 
         classify_transactions = PythonOperator(
             task_id="classify_transactions",
@@ -153,9 +158,9 @@ def create_dag() -> DAG:
             dag=dag,
         )
 
-        perform_aggregations = SnowflakeOperator(
-            task_id="perform_aggregations",
-            sql=queries,
+        sales_volume_benchmarks = SnowflakeOperator(
+            task_id="generate_sv_benchmarks",
+            sql=sv_queries,
             params={
                 "trx_table": "dbt_ario.fct_categorized_bank_transactions",
                 "merchant_table": "dbt_ario.dim_merchant",
@@ -167,7 +172,23 @@ def create_dag() -> DAG:
             dag=dag,
         )
 
-        classify_transactions >> perform_aggregations
+        cashflow_benchmarks = SnowflakeOperator(
+            task_id="generate_cf_benchmarks",
+            sql=cf_queries,
+            params={
+                "trx_table": "dbt_ario.fct_weekly_bank_account_balance",
+                "merchant_table": "dbt_ario.dim_merchant",
+                "sv_table": "dbt_reporting.fct_cashflow_industry_benchmarks",
+            },
+            database=f"{'analytics_production' if is_prod else 'analytics_development'}",
+            schema="dbt_reporting",
+            snowflake_conn_id="snowflake_production",
+            dag=dag,
+        )
+
+        classify_transactions >> sales_volume_benchmarks
+
+        cashflow_benchmarks
 
         return dag
 
