@@ -1,5 +1,6 @@
+import os
 import pendulum
-from datetime import timedelta
+from datetime import timedelta, datetime
 import tempfile
 
 import pandas as pd
@@ -7,6 +8,7 @@ from sqlalchemy import Table, MetaData
 from sqlalchemy.sql import select, func, text
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.models import Variable
@@ -120,6 +122,72 @@ def _classify_transactions(
         conn.execute(copy_stmt)
 
 
+def _upload_benchmarks(
+    snowflake_conn: str,
+    s3_conn: str,
+    s3_bucket: str,
+    database: str,
+    schema: str,
+    table: str,
+    file: str,
+) -> None:
+
+    s3_hook = S3Hook(aws_conn_id=s3_conn)
+
+    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine({"echo": True})
+    metadata = MetaData()
+
+    with engine.begin() as tx:
+
+        tx.execute(f"use database {database}")
+        tx.execute(f"use schema {schema}")
+
+    benchmarks = Table(
+        table,
+        metadata,
+        autoload_with=engine,
+        schema=schema,
+        snowflake_database=database,
+    )
+
+    benchmarks_select = select([benchmarks])
+
+    with engine.begin() as conn:
+
+        df_benchmarks = pd.read_sql(benchmarks_select, con=conn)
+
+        # cast week as string to preserve the format during json conversion
+        df_benchmarks["week"] = df_benchmarks["week"].astype(str)
+
+        # fetching the most recent load to upload to s3
+        df_benchmarks_latest = df_benchmarks[
+            df_benchmarks["report_ts"] == df_benchmarks["report_ts"].max()
+        ]
+
+        df_benchmarks_latest.drop(columns=["report_ts"], inplace=True)
+
+        df_benchmarks_latest = df_benchmarks_latest.sort_values(
+            by=["week"], ascending=False
+        )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+
+        today = f"{datetime.today():%Y_%m_%d}"
+        file_name = f"{today}_{file}"
+        file_path = os.path.join(temp_dir, file_name)
+
+        print({"file_path": file_path})
+
+        df_benchmarks_latest.to_json(file_path, orient="records")
+
+        s3_hook.load_file(
+            file_path,
+            key=f"benchmarks/{file_name}",
+            bucket_name=s3_bucket,
+            replace=True,
+        )
+
+
 def create_dag() -> DAG:
     with DAG(
         dag_id="insights_benchmarks",
@@ -168,7 +236,22 @@ def create_dag() -> DAG:
             },
             database=f"{'analytics_production' if is_prod else 'analytics_development'}",
             schema="dbt_reporting",
-            snowflake_conn_id="snowflake_production",
+            snowflake_conn_id="snowflake_dbt",
+            dag=dag,
+        )
+
+        upload_sv_benchmarks = PythonOperator(
+            task_id="upload_sv_benchmarks",
+            python_callable=_upload_benchmarks,
+            op_kwargs={
+                "snowflake_conn": "snowflake_dbt",
+                "s3_conn": "s3_dataops",
+                "s3_bucket": "tc-data-airflow-production",
+                "database": f"{'analytics_production' if is_prod else 'analytics_development'}",
+                "schema": "dbt_reporting",
+                "table": "fct_sales_volume_industry_benchmarks",
+                "file": "salesvolume_industry_benchmarks.json",
+            },
             dag=dag,
         )
 
@@ -186,9 +269,24 @@ def create_dag() -> DAG:
             dag=dag,
         )
 
-        classify_transactions >> sales_volume_benchmarks
+        upload_cf_benchmarks = PythonOperator(
+            task_id="upload_cf_benchmarks",
+            python_callable=_upload_benchmarks,
+            op_kwargs={
+                "snowflake_conn": "snowflake_dbt",
+                "s3_conn": "s3_dataops",
+                "s3_bucket": "tc-data-airflow-production",
+                "database": f"{'analytics_production' if is_prod else 'analytics_development'}",
+                "schema": "dbt_reporting",
+                "table": "fct_cashflow_industry_benchmarks",
+                "file": "cashflow_industry_benchmarks.json",
+            },
+            dag=dag,
+        )
 
-        cashflow_benchmarks
+        classify_transactions >> sales_volume_benchmarks >> upload_sv_benchmarks
+
+        cashflow_benchmarks >> upload_cf_benchmarks
 
         return dag
 
