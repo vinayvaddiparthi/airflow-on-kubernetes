@@ -89,6 +89,8 @@ def create_journal_entry_for_transaction(ds: str, **_: None) -> None:
     Returns:
         None
     """
+    logging.info(f"Created_date: {ds}")
+
     selectable = Select(
         [text("*")],
         from_obj=text(
