@@ -89,8 +89,8 @@ configparser==3.5.3
 coverage==6.3.1
 croniter==0.3.37
 Cython==0.29.27
-dbt-core==0.40.0
-dbt-extractor==1.0.0
+dbt-core==1.0.0
+dbt-extractor==0.4.0
 defusedxml==0.7.1
 dill==0.3.4
 dnspython==2.2.0
