@@ -176,8 +176,6 @@ def _upload_benchmarks(
         file_name = f"{today}_{file}"
         file_path = os.path.join(temp_dir, file_name)
 
-        print({"file_path": file_path})
-
         df_benchmarks_latest.to_json(file_path, orient="records")
 
         s3_hook.load_file(
