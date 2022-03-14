@@ -265,7 +265,7 @@ def create_dag() -> DAG:
             },
             database=f"{'analytics_production' if is_prod else 'analytics_development'}",
             schema="dbt_reporting",
-            snowflake_conn_id="snowflake_production",
+            snowflake_conn_id="snowflake_dbt",
             dag=dag,
         )
 
@@ -291,4 +291,4 @@ def create_dag() -> DAG:
         return dag
 
 
-globals()["sv_aggregates"] = create_dag()
+globals()["insights_benchmarks"] = create_dag()
