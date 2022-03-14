@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Any
-
+import logging
 import pendulum
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
@@ -11,7 +11,6 @@ from numpy import datetime64
 from sqlalchemy import text, cast, column, Date
 from sqlalchemy.sql import Select
 from zeep import Client
-
 from utils.failure_callbacks import slack_task
 
 
@@ -19,8 +18,19 @@ def build_journal_entry(
     correlation_guid: str,
     grouped_transactions: pd.DataFrame,
     client: Client,
-    created_at: datetime,
+    created_at: str,
 ) -> Any:
+    """Build the Journal Entry object to be added to Netsuite
+
+    Args:
+        correlation_guid: unique identifier (generated in Ario) that groups ledger transactions together
+        grouped_transactions: rows of transactions belonging to the same correlation_guid
+        client: zeep python SOAP client (zeep.objects.Client)
+        created_at: the DAG run logical date as YYYY-MM-DD.
+    Returns:
+        journal entry object: zeep.objects.JournalEntry
+
+    """
     # get subsidiary
     recordref_type = client.get_type("ns0:RecordRef")
     subsidiary = recordref_type(
@@ -71,69 +81,20 @@ def build_journal_entry(
     )
 
 
-def process_grouped_transactions(
-    correlation_guid: str,
-    grouped_transactions: pd.DataFrame,
-    client: Client,
-    passport: str,
-    app_info: str,
-    created_at: datetime,
-) -> str:
-    # check subsidiary: allow only one subsidiary value
-    if grouped_transactions["ns_subsidiary_id"].nunique() != 1:
-        raise ValueError("Different subsidiary")
+def create_journal_entry_for_transaction(ds: str, **_: None) -> None:
+    """Prepares group of ledger transactions to send to Netsuite by correlation_guid
 
-    # call Add(journal_entry)
-    re = client.service.add(
-        build_journal_entry(correlation_guid, grouped_transactions, client, created_at),
-        _soapheaders={"passport": passport, "applicationInfo": app_info},
-    )
-
-    # check response
-    status = re.body.writeResponse.status
-    if status.isSuccess and re.body.writeResponse.baseRef.internalId:
-        return re.body.writeResponse.baseRef.internalId
-    else:
-        raise ValueError(status)
-
-
-def print_endpoint(client: Client) -> None:
-    definitions = client.wsdl._definitions
-    definition = definitions[list(definitions.keys())[0]]
-    endpoint = (
-        definition.services["NetSuiteService"]
-        .ports["NetSuitePort"]
-        .binding_options["address"]
-    )
-    print(f"Endpoint: {endpoint}")
-
-
-def create_journal_entry_for_transaction(ds: datetime, **kwargs: Any) -> None:
-    snowflake_hook = BaseHook.get_connection("snowflake_platform_erp")
-    snowflake_vars = {
-        "src_schema": snowflake_hook.extra_dejson.get("src_schema"),
-        "src_database": snowflake_hook.extra_dejson.get("src_database"),
-    }
-
-    netsuite_hook = BaseHook.get_connection("netsuite")
-    netsuite_vars = {
-        "email": netsuite_hook.login,
-        "password": netsuite_hook.password,
-        "account": netsuite_hook.schema,
-        "app_id": netsuite_hook.extra_dejson.get("app_id"),
-        "endpoint": netsuite_hook.host,
-        "wsdl": netsuite_hook.extra_dejson.get("wsdl"),
-    }
-
-    created_date = ds
-    print(f"Created_date: {created_date}")
-
+    Args:
+        ds: the DAG run logical date as YYYY-MM-DD.
+    Returns:
+        None
+    """
     selectable = Select(
         [text("*")],
         from_obj=text(
-            f'"{snowflake_vars["src_database"]}".{snowflake_vars["src_schema"]}.fct_platform_erp_transactions'
+            "ANALYTICS_PRODUCTION.DBT_PLATFORM_ERP.FCT_PLATFORM_ERP_TRANSACTIONS"
         ),
-    ).where(cast(column("created_at"), Date) == text(f"'{created_date}'"))
+    ).where(cast(column("created_at"), Date) == text(f"'{ds}'"))
 
     with SnowflakeHook("snowflake_production").get_sqlalchemy_engine().begin() as tx:
         df = pd.read_sql(
@@ -165,8 +126,17 @@ def create_journal_entry_for_transaction(ds: datetime, **kwargs: Any) -> None:
         groups = df.groupby("correlation_guid")
         succeeded = []
         failed = []
-        # login SOAP client
-        client = Client(netsuite_vars["wsdl"])
+
+        netsuite_hook = BaseHook.get_connection("netsuite")
+        netsuite_vars = {
+            "email": netsuite_hook.login,
+            "password": netsuite_hook.password,
+            "account": netsuite_hook.schema,
+            "app_id": netsuite_hook.extra_dejson.get("app_id"),
+            "endpoint": netsuite_hook.host,
+            "wsdl": netsuite_hook.extra_dejson.get("wsdl"),
+        }
+        client = Client(netsuite_vars["wsdl"])  # zeep: python SOAP client
 
         passport_type = client.get_type("ns0:Passport")
         passport = passport_type(
@@ -182,30 +152,51 @@ def create_journal_entry_for_transaction(ds: datetime, **kwargs: Any) -> None:
             passport=passport, _soapheaders={"applicationInfo": app_info}
         )
 
-        print_endpoint(client)
+        definition = list(client.wsdl._definitions.values())[0]
+        endpoint = (
+            definition.services["NetSuiteService"]
+            .ports["NetSuitePort"]
+            .binding_options["address"]
+        )
+        logging.info(f"Endpoint: {endpoint}")
+
         data_center_urls = client.service.getDataCenterUrls(netsuite_vars["account"])
-        print(
+        logging.info(
             f"Use DataCenterUrl: {data_center_urls.body.getDataCenterUrlsResult.dataCenterUrls.webservicesDomain}"
         )
 
         for group in groups:
             correlation_guid = group[0]
+            grouped_transactions = group[1]
             try:
-                journal_entry_internal_id = process_grouped_transactions(
-                    correlation_guid, group[1], client, passport, app_info, created_date
+                # check subsidiary: allow only one subsidiary value
+                if grouped_transactions["ns_subsidiary_id"].nunique() != 1:
+                    raise ValueError("Different subsidiary")
+
+                re = client.service.add(
+                    build_journal_entry(
+                        correlation_guid, grouped_transactions, client, ds
+                    ),
+                    _soapheaders={"passport": passport, "applicationInfo": app_info},
                 )
-                print(
-                    f"Journal Entry uploaded: {correlation_guid} - {journal_entry_internal_id}"
-                )
-                succeeded.append(
-                    {
-                        "uploaded_at": datetime.utcnow(),
-                        "ns_journal_entry_internal_id": journal_entry_internal_id,
-                        "correlation_guid": correlation_guid,
-                    }
-                )
+
+                status = re.body.writeResponse.status
+                if status.isSuccess and re.body.writeResponse.baseRef.internalId:
+                    journal_entry_internal_id = re.body.writeResponse.baseRef.internalId
+                    logging.info(
+                        f"Journal Entry uploaded: {correlation_guid} - {journal_entry_internal_id}"
+                    )
+                    succeeded.append(
+                        {
+                            "uploaded_at": datetime.utcnow(),
+                            "ns_journal_entry_internal_id": journal_entry_internal_id,
+                            "correlation_guid": correlation_guid,
+                        }
+                    )
+                else:
+                    raise ValueError(status)
             except ValueError as e:
-                print(f"Error: Journal Entry failed: {correlation_guid} - {e}")
+                logging.error(f"Error: Journal Entry failed: {correlation_guid} - {e}")
                 failed.append(
                     {
                         "failed_at": datetime.utcnow(),
@@ -213,11 +204,12 @@ def create_journal_entry_for_transaction(ds: datetime, **kwargs: Any) -> None:
                         "correlation_guid": correlation_guid,
                     }
                 )
-        print(f"Total succeeded: {len(succeeded)} - Total failed: {len(failed)}")
+        # TODO: currently only the count is used. may be useful to save these successes and failures in a table for analytics.
+        logging.info(f"Total succeeded: {len(succeeded)} - Total failed: {len(failed)}")
 
 
 with DAG(
-    "platform_journal_entry",
+    dag_id="platform_journal_entry",
     max_active_runs=1,
     catchup=True,
     schedule_interval="@daily",
@@ -229,7 +221,7 @@ with DAG(
         "retry_delay": timedelta(minutes=30),
         "on_failure_callback": slack_task("slack_data_alerts"),
     },
-    description="Platform ERP Pipeline",
+    description="Exports ledger transactions (originally from Ario) from Snowflake to Netsuite, Finance team's ERP application.",
 ) as dag:
     dag << PythonOperator(
         task_id="get_transactions_by_created_date",
