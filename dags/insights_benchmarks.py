@@ -157,7 +157,7 @@ def _upload_benchmarks(
         df_benchmarks = pd.read_sql(benchmarks_select, con=conn)
 
         # cast week as string to preserve the format during json conversion
-        df_benchmarks["week"] = df_benchmarks["week"].astype(str)
+        df_benchmarks["month"] = df_benchmarks["month"].astype(str)
 
         # fetching the most recent load to upload to s3
         df_benchmarks_latest = df_benchmarks[
@@ -167,7 +167,7 @@ def _upload_benchmarks(
         df_benchmarks_latest.drop(columns=["report_ts"], inplace=True)
 
         df_benchmarks_latest = df_benchmarks_latest.sort_values(
-            by=["week"], ascending=False
+            by=["macro_industry", "month"]
         )
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -176,7 +176,7 @@ def _upload_benchmarks(
         file_name = f"{today}_{file}"
         file_path = os.path.join(temp_dir, file_name)
 
-        df_benchmarks_latest.to_json(file_path, orient="records")
+        df_benchmarks_latest.to_json(file_path, orient="records", indent=4)
 
         s3_hook.load_file(
             file_path,
@@ -201,9 +201,9 @@ def create_dag() -> DAG:
             2022, 3, 8, tzinfo=pendulum.timezone("America/Toronto")
         ),
     ) as dag, open(
-        "dags/sql/benchmarking/weekly_sales_volume_benchmarking.sql"
+        "dags/sql/benchmarking/sales_volume_benchmarks.sql"
     ) as sv, open(
-        "dags/sql/benchmarking/weekly_cashflow_benchmarking.sql"
+        "dags/sql/benchmarking/cashflow_benchmarks.sql"
     ) as cf:
 
         is_prod = Variable.get(key="environment") == "production"
@@ -257,7 +257,7 @@ def create_dag() -> DAG:
             task_id="generate_cf_benchmarks",
             sql=cf_queries,
             params={
-                "trx_table": "dbt_ario.fct_weekly_bank_account_balance",
+                "trx_table": "dbt_ario.fct_bank_account_transaction",
                 "merchant_table": "dbt_ario.dim_merchant",
                 "sv_table": "dbt_reporting.fct_cashflow_industry_benchmarks",
             },
