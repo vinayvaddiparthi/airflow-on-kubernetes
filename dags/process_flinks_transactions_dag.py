@@ -174,7 +174,7 @@ def copy_transactions(
         )
         .where(
             sqlalchemy.cast(func.get(documents.c.fields, "type"), VARCHAR)
-            == literal("LeadDocument")
+            == literal("MerchantDocument")
         )
         .select_from(merchants_documents_join)
     )
