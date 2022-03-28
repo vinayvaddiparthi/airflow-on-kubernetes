@@ -9,7 +9,7 @@ from airflow import DAG
 from typing import Any
 from helpers.aws_hack import hack_clear_aws_keys
 from sqlalchemy import Table, MetaData, VARCHAR
-from sqlalchemy.sql import select, func, text, literal_column, literal, join
+from sqlalchemy.sql import select, func, text, literal_column, literal, join, union_all
 from concurrent.futures.thread import ThreadPoolExecutor
 from utils.failure_callbacks import slack_task
 from datetime import timedelta
@@ -119,7 +119,14 @@ def copy_transactions(
         schema=schema,
     )
 
-    merchant_documents = Table(
+    leads = Table(
+        "leads",
+        metadata,
+        autoload_with=snowflake_engine,
+        schema=schema,
+    )
+
+    documents = Table(
         "documents",
         metadata,
         autoload_with=snowflake_engine,
@@ -133,12 +140,20 @@ def copy_transactions(
         schema=schema,
     )
 
-    merchants_merchant_documents_join = join(
-        merchant_documents,
+    merchants_documents_join = join(
+        documents,
         merchants,
         func.get(merchants.c.fields, "id")
-        == func.get(merchant_documents.c.fields, "document_owner_id"),
+        == func.get(documents.c.fields, "document_owner_id"),
     )
+
+    leads_documents_join = join(
+        documents,
+        leads,
+        func.get(leads.c.fields, "id")
+        == func.get(documents.c.fields, "document_owner_id"),
+    )
+
     merchant_documents_select = (
         select(
             columns=[
@@ -146,23 +161,52 @@ def copy_transactions(
                     "merchant_guid"
                 ),
                 sqlalchemy.cast(
-                    func.get(merchant_documents.c.fields, "cloud_file_path"),
+                    func.get(documents.c.fields, "cloud_file_path"),
                     VARCHAR,
                 ).label("file_path"),
                 text("1"),
             ],
-            from_obj=merchant_documents,
+            from_obj=documents,
         )
         .where(
-            sqlalchemy.cast(func.get(merchant_documents.c.fields, "doc_type"), VARCHAR)
+            sqlalchemy.cast(func.get(documents.c.fields, "doc_type"), VARCHAR)
             == literal("flinks_raw_response")
         )
-        .select_from(merchants_merchant_documents_join)
+        .where(
+            sqlalchemy.cast(func.get(documents.c.fields, "type"), VARCHAR)
+            == literal("MerchantDocument")
+        )
+        .select_from(merchants_documents_join)
     )
 
-    logging.info(
-        merchant_documents_select.compile(compile_kwargs={"literal_binds": True})
+    lead_documents_select = (
+        select(
+            columns=[
+                sqlalchemy.cast(func.get(leads.c.fields, "guid"), VARCHAR).label(
+                    "lead_guid"
+                ),
+                sqlalchemy.cast(
+                    func.get(documents.c.fields, "cloud_file_path"),
+                    VARCHAR,
+                ).label("file_path"),
+                text("1"),
+            ],
+            from_obj=documents,
+        )
+        .where(
+            sqlalchemy.cast(func.get(documents.c.fields, "doc_type"), VARCHAR)
+            == literal("flinks_raw_response")
+        )
+        .where(
+            sqlalchemy.cast(func.get(documents.c.fields, "type"), VARCHAR)
+            == literal("LeadDocument")
+        )
+        .select_from(leads_documents_join)
     )
+
+    all_documents_select = union_all(merchant_documents_select, lead_documents_select)
+
+    logging.info(all_documents_select.compile(compile_kwargs={"literal_binds": True}))
 
     flinks_raw_responses_select = select(
         columns=[
@@ -179,7 +223,7 @@ def copy_transactions(
 
     # Get the set of all the raw flinks responses
     all_flinks_responses = pd.read_sql_query(
-        merchant_documents_select,
+        all_documents_select,
         snowflake_engine,
         index_col=[
             "merchant_guid",
@@ -208,10 +252,6 @@ def copy_transactions(
                     )
                 ]
 
-                # We already have it
-                logging.info(
-                    f"⏩️️ Skipping generating projections for {row.name[0]} - {row.name[1]}"
-                )
             except KeyError:
                 # We don't have it
                 executor.submit(
