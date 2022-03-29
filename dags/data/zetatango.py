@@ -167,6 +167,7 @@ idp_decryption_spec = [
                 "referrer",
                 "sso_linked_account",
                 "loc_notification_preference",
+                "casl_preference"
             ]
         ),
     ),
