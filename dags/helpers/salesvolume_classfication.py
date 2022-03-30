@@ -1,6 +1,6 @@
 import pandas as pd
 import re
-from typing import Union, List
+from typing import Union, List, Tuple
 
 
 def clean_description(desc: str) -> str:
@@ -33,7 +33,7 @@ def categorize_transactions(
     transaction: pd.Series,
     precise_entries: pd.DataFrame,
     imprecise_entries: pd.DataFrame,
-) -> List[Union[str, bool]]:
+) -> Tuple[str, bool]:
 
     category = "no_match"
     is_nsd = False
@@ -107,31 +107,31 @@ def categorize_transactions(
 
 def get_industry_characteristics(
     df_merchant_industry: pd.DataFrame, merchant_guid: str
-):
+) -> Tuple[bool, bool]:
 
     # accept_e_transfer = df_merchant_industry.loc[df_merchant_industry['guid'] == merchant_guid, "accepts_e_transfer"].squeeze()
 
-    accepts_e_transfer = [
-        y
-        for x, y in zip(
+    accepts_e_transfer_list = [
+        flag
+        for m_guid, flag in zip(
             df_merchant_industry["guid"], df_merchant_industry["accepts_e_transfer"]
         )
-        if x == merchant_guid
+        if m_guid == merchant_guid
     ]
 
-    accepts_e_transfer = accepts_e_transfer[0] or False
+    accepts_e_transfer = accepts_e_transfer_list[0] or False
 
     # accept_lrc = df_merchant_industry.loc[df_merchant_industry['guid'] == merchant_guid, "accepts_lrc"].squeeze()
 
-    accepts_lrc = [
-        y
-        for x, y in zip(
+    accepts_lrc_list = [
+        flag
+        for m_guid, flag in zip(
             df_merchant_industry["guid"], df_merchant_industry["accepts_lrc"]
         )
-        if x == merchant_guid
+        if m_guid == merchant_guid
     ]
 
-    accepts_lrc = accepts_lrc[0] or False
+    accepts_lrc = accepts_lrc_list[0] or False
 
     return accepts_e_transfer, accepts_lrc
 
@@ -218,7 +218,7 @@ def process_reversal(
     flag = accepts_lrc or not is_lrc
 
     if (category not in ["Return", "Reversal"]) or not flag:
-        reversal = 0
+        reversal = 0.0
     elif flag:
         reversal = credit
 
@@ -230,7 +230,7 @@ def calculate_sales_volume(
     precise_entries: pd.DataFrame,
     imprecise_entries: pd.DataFrame,
     df_merchant_industry: pd.DataFrame,
-):
+) -> List[Union[str, bool, float]]:
     credit = transaction["credit"]
 
     is_lrc = credit > 10000 and credit % 10 == 0
