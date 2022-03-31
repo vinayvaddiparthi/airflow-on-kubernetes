@@ -352,7 +352,7 @@ def decrypt_pii_columns(
 
 def trigger_dbt_job() -> None:
     res = requests.post(
-        url="https://cloud.getdbt.com/api/v2/accounts/20518/jobs/54249/run/",
+        url="https://cloud.getdbt.com/api/v2/accounts/20518/jobs/72347/run/",
         headers={"Authorization": "Token " + Variable.get("DBT_API_KEY")},
         json={
             # Optionally pass a description that can be viewed within the dbt Cloud API.
