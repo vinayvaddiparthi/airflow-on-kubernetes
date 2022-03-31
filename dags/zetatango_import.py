@@ -360,7 +360,6 @@ def trigger_dbt_job() -> None:
             'cause': f"Triggered by Zetatango DAG.",
         }
     )
-
     try:
         res.raise_for_status()
     except:
