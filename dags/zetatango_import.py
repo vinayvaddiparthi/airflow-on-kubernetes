@@ -352,19 +352,19 @@ def decrypt_pii_columns(
 
 def trigger_dbt_job() -> None:
     res = requests.post(
-        url=f"https://cloud.getdbt.com/api/v2/accounts/20518/jobs/54249/run/",
+        url="https://cloud.getdbt.com/api/v2/accounts/20518/jobs/54249/run/",
         headers={"Authorization": "Token " + Variable.get("DBT_API_KEY")},
         json={
             # Optionally pass a description that can be viewed within the dbt Cloud API.
             # See the API docs for additional parameters that can be passed in,
             # including `schema_override`
-            "cause": f"Triggered by Zetatango DAG.",
+            "cause": "Triggered by Zetatango DAG.",
         },
     )
     try:
         res.raise_for_status()
     except:
-        print(f"Error: Couldn't trigger the dbt cloud job.")
+        print("Error: Couldn't trigger the dbt cloud job.")
         raise
 
     return None
