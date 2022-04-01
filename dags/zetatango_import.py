@@ -13,6 +13,7 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.operators.python_operator import PythonOperator
+from airflow.models import Variable
 from airflow import DAG
 from psycopg2._psycopg import connection
 from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
@@ -45,6 +46,7 @@ from utils import random_identifier
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
 from utils.failure_callbacks import slack_dag, slack_task
+import requests
 
 from data.zetatango import (
     DecryptionSpec,
@@ -348,6 +350,26 @@ def decrypt_pii_columns(
             logging.info(f"🔓 Successfully decrypted {spec}")
 
 
+def trigger_dbt_job() -> None:
+    res = requests.post(
+        url="https://cloud.getdbt.com/api/v2/accounts/20518/jobs/72347/run/",
+        headers={"Authorization": "Token " + Variable.get("DBT_API_KEY")},
+        json={
+            # Optionally pass a description that can be viewed within the dbt Cloud API.
+            # See the API docs for additional parameters that can be passed in,
+            # including `schema_override`
+            "cause": "Triggered by Zetatango DAG.",
+        },
+    )
+    try:
+        res.raise_for_status()
+    except:
+        print("Error: Couldn't trigger the dbt cloud job.")
+        raise
+
+    return None
+
+
 def create_dag() -> DAG:
     with DAG(
         dag_id="zetatango_import",
@@ -454,6 +476,12 @@ def create_dag() -> DAG:
             retries=1,
         )
 
+        dbt_refresh_job_trigger = PythonOperator(
+            task_id="dbt_refresh_job_trigger",
+            python_callable=trigger_dbt_job,
+            retries=1,
+        )
+
         dag << import_core_prod >> decrypt_core_prod
         dag << import_idp_prod >> decrypt_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
@@ -463,6 +491,7 @@ def create_dag() -> DAG:
                 decrypt_kyc_prod,
                 decrypt_idp_prod,
             ]
+            >> dbt_refresh_job_trigger
             >> dbt_run
             >> dbt_snapshot
             >> dbt_test
