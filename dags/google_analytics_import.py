@@ -119,8 +119,8 @@ def transform_raw_json(raw: Dict, ds: str, import_ts: str) -> Any:
 with DAG(
     dag_id="google_analytics_import",
     max_active_runs=1,
-        schedule_interval="0 */2 * * *",
-        default_args={
+    schedule_interval="0 */2 * * *",
+    default_args={
         "retries": 2,
         "retry_delay": timedelta(minutes=5),
         "on_failure_callback": slack_task("slack_data_alerts"),
