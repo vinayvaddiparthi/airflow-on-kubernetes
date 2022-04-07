@@ -268,7 +268,7 @@ def create_dag() -> DAG:
     with DAG(
         "process_flinks_transactions",
         max_active_runs=10,
-        schedule_interval="0 4 * * *",
+        schedule_interval="0 */4 * * *",
         start_date=pendulum.datetime(
             2020, 8, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
