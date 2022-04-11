@@ -125,6 +125,7 @@ def _classify_transactions(
 
         for df_transactions in dfs:
 
+            # trim the dataframe to only include the merchants present in df_transactions
             df_merchant_industry_subset = df_merchant_industry[
                 df_merchant_industry["guid"].isin(df_transactions["merchant_guid"])
             ]
