@@ -172,6 +172,10 @@ def stage_table_in_snowflake(
             f"put file://{pq_filepath} @{destination_schema}.{stage_table}"
         ).fetchall()
 
+        if table == 'lending_adjudications':
+            parquet_file = pq.ParquetFile(f"{pq_filepath}")
+            logging.info(parquet_file.metadata)
+
         tx.execute(
             f"create or replace transient table {destination_schema}.{table} as "  # nosec
             f"select $1 as fields from @{destination_schema}.{stage_table}"  # nosec
