@@ -306,8 +306,8 @@ def _process_large_table_incrementally(
 
         logging.info(f"insert new records from {destination_schema}.{table}_stage")
         tx.execute(
-                    f"insert into {destination_schema}.{table} "  # nosec
-                    f"select * from {destination_schema}.{table}_stage"  # nosec
+            f"insert into {destination_schema}.{table} "  # nosec
+            f"select * from {destination_schema}.{table}_stage"  # nosec
         )         
 
         # no need to keep stage table, drop it
