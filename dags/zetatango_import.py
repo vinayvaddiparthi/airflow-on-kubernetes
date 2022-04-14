@@ -218,11 +218,6 @@ def stage_table_in_snowflake(
                 f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
             ).fetchall()
 
-            tx.execute(
-                f"insert into {destination_schema}.{table} "
-                f"select $1 as fields from @{destination_schema}.{stage_guid}_part_2"
-            ).fetchall()
-
         else:
             tx.execute(
                 f"create or replace transient table {destination_schema}.{table} as "  # nosec
