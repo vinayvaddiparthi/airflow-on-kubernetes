@@ -152,7 +152,7 @@ def stage_table_in_snowflake(
                 ".pq"
             )
             tx.execute(
-                f"create or replace temporary stage {destination_schema}.{stage_guid_part_2}"
+                f"create or replace temporary stage {destination_schema}.{stage_guid_part_2} "
                 f"file_format=(type=parquet)"
             ).fetchall()
 
