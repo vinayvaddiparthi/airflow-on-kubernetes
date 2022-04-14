@@ -216,7 +216,7 @@ def stage_table_in_snowflake(
 
             stmts = [
                 f"create or replace transient table {destination_schema}.{table} as "  # nosec
-                f"select $1 as fields from @{destination_schema}.{stage_guid}",  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage_guid} ",  # nosec
                 f"insert into {destination_schema}.{table} "
                 f"select $1 as fields from @{destination_schema}.{stage_guid_part_2}",
             ]
