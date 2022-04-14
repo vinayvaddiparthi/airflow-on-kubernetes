@@ -130,15 +130,30 @@ def stage_table_in_snowflake(
     if table in ("versions", "job_reports", "job_statuses"):
         return f"⏭️️ Skipping table {table}"
     logging.info(f"start syncing table: {table}")
-    stage_table = f"{table}_stage"
+    stage_guid = random_identifier()
     with snowflake_engine.begin() as tx, cast(
         psycopg2.extensions.cursor, source_raw_conn.cursor()
     ) as cursor, tempfile.TemporaryDirectory() as tempdir:
 
         tx.execute(
-            f"create or replace stage {destination_schema}.{stage_table} "
+            f"create or replace temporary stage {destination_schema}.{stage_guid}"
             f"file_format=(type=parquet)"
         ).fetchall()
+
+        if table == "lending_adjudications":
+            csv_filepath_split_1 = Path(
+                tempfile.TemporaryDirectory().name, table
+            ).with_suffix(".csv")
+            csv_filepath_split_2 = Path(
+                tempfile.TemporaryDirectory().name, table
+            ).with_suffix(".csv")
+            pq_filepath_2 = Path(tempfile.TemporaryDirectory().name, table).with_suffix(
+                ".pq"
+            )
+            tx.execute(
+                f"create or replace temporary stage {destination_schema}.{stage_guid}_part_2"
+                f"file_format=(type=parquet)"
+            ).fetchall()
 
         csv_filepath = Path(tempdir, table).with_suffix(".csv")
         pq_filepath = Path(tempdir, table).with_suffix(".pq")
@@ -151,15 +166,33 @@ def stage_table_in_snowflake(
                 f"with csv header delimiter ',' quote '\"'",
                 csv_filedesc,
             )
+            if table == "lending_adjudications":
+                data = pd.read_csv(f"{csv_filepath}")
+                data[0:7000].to_csv(f"{csv_filepath_split_1}")
+                data[7000:].to_csv(f"{csv_filepath_split_2}")
 
         try:
             logging.info(f"read {csv_filepath} for {table}")
-            table_ = pv.read_csv(
-                f"{csv_filepath}",
-                read_options=ReadOptions(block_size=8388608),
-                parse_options=ParseOptions(newlines_in_values=True),
-            )
+
+            if table == "lending_adjudications":
+                table_ = pv.read_csv(
+                    f"{csv_filepath_split_1}",
+                    read_options=ReadOptions(block_size=8388608),
+                    parse_options=ParseOptions(newlines_in_values=True),
+                )
+                table_2 = pv.read_csv(
+                    f"{csv_filepath_split_2}",
+                    read_options=ReadOptions(block_size=8388608),
+                    parse_options=ParseOptions(newlines_in_values=True),
+                )
+            else:
+                table_ = pv.read_csv(
+                    f"{csv_filepath}",
+                    read_options=ReadOptions(block_size=8388608),
+                    parse_options=ParseOptions(newlines_in_values=True),
+                )
             logging.info(f"read {csv_filepath} for {table}: Done")
+
         except ArrowInvalid as exc:
             return f"❌ Failed to read table {table}: {exc}"
 
@@ -168,18 +201,29 @@ def stage_table_in_snowflake(
 
         pq.write_table(table_, f"{pq_filepath}")
 
+        if table == "lending_adjudications":
+            pq.write_table(table_2, f"{pq_filepath_2}")
+
         tx.execute(
-            f"put file://{pq_filepath} @{destination_schema}.{stage_table}"
+            f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
 
         if table == "lending_adjudications":
-            parquet_file = pq.ParquetFile(f"{pq_filepath}")
-            logging.info(parquet_file.metadata)
+            tx.execute(
+                f"put file://{pq_filepath_2} @{destination_schema}.{stage_guid}_part_2"
+            ).fetchall()
 
-        tx.execute(
-            f"create or replace transient table {destination_schema}.{table} as "  # nosec
-            f"select $1 as fields from @{destination_schema}.{stage_table}"  # nosec
-        ).fetchall()
+            tx.execute(
+                f"create or replace transient table {destination_schema}.{table} as "  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage_guid}_part_2"
+            ).fetchall()
+
+        else:
+            tx.execute(
+                f"create or replace transient table {destination_schema}.{table} as "  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
+            ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
 
