@@ -210,7 +210,7 @@ def stage_table_in_snowflake(
 
         if table == "lending_adjudications":
             tx.execute(
-                f"put file://{pq_filepath} @{destination_schema}.{stage_guid}_part_2"
+                f"put file://{pq_filepath_2} @{destination_schema}.{stage_guid}_part_2"
             ).fetchall()
 
             tx.execute(
