@@ -130,13 +130,13 @@ def stage_table_in_snowflake(
     if table in ("versions", "job_reports", "job_statuses"):
         return f"⏭️️ Skipping table {table}"
     logging.info(f"start syncing table: {table}")
-    stage_table = f"{table}_stage"
+    stage_guid = random_identifier()
     with snowflake_engine.begin() as tx, cast(
         psycopg2.extensions.cursor, source_raw_conn.cursor()
     ) as cursor, tempfile.TemporaryDirectory() as tempdir:
 
         tx.execute(
-            f"create or replace stage {destination_schema}.{stage_table} "
+            f"create or replace temporary stage {destination_schema}.{stage_guid} "
             f"file_format=(type=parquet)"
         ).fetchall()
 
@@ -169,16 +169,16 @@ def stage_table_in_snowflake(
         pq.write_table(table_, f"{pq_filepath}")
 
         tx.execute(
-            f"put file://{pq_filepath} @{destination_schema}.{stage_table}"
+            f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
 
-        if table == "lending_adjudications":
+        if table == 'lending_adjudications':
             parquet_file = pq.ParquetFile(f"{pq_filepath}")
             logging.info(parquet_file.metadata)
 
         tx.execute(
             f"create or replace transient table {destination_schema}.{table} as "  # nosec
-            f"select $1 as fields from @{destination_schema}.{stage_table}"  # nosec
+            f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
         ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
