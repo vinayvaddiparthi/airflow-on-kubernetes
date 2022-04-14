@@ -213,12 +213,14 @@ def stage_table_in_snowflake(
                 f"put file://{pq_filepath_2} @{destination_schema}.{stage_guid}_part_2"
             ).fetchall()
 
-            tx.execute(
+            stmts = [
                 f"create or replace transient table {destination_schema}.{table} as "  # nosec
                 f"select $1 as fields from @{destination_schema}.{stage_guid}",  # nosec
                 f"insert into {destination_schema}.{table} "
-                f"select $1 as fields from @{destination_schema}.{stage_guid}_part_2"
-            ).fetchall()
+                f"select $1 as fields from @{destination_schema}.{stage_guid}_part_2",
+            ]
+
+            [tx.execute(stmt).fetchall() for stmt in stmts]
 
         else:
             tx.execute(
