@@ -131,12 +131,12 @@ def stage_table_in_snowflake(
         return f"⏭️️ Skipping table {table}"
     if table in ("lending_adjudications"):
         return _process_large_table_incrementally(
-            source_raw_conn, 
-            snowflake_engine, 
+            source_raw_conn,
+            snowflake_engine,
             source_schema,
             destination_schema,
             table,
-            )    
+        )
     logging.info(f"start syncing table: {table}")
     stage_guid = random_identifier()
     stage_guid_part_2 = f"{stage_guid}_part2"
@@ -240,6 +240,7 @@ def stage_table_in_snowflake(
 
     return f"✔️ Successfully loaded table {table}"
 
+
 def _process_large_table_incrementally(
     source_raw_conn: connection,
     snowflake_engine: Engine,
@@ -264,7 +265,7 @@ def _process_large_table_incrementally(
         with csv_filepath.open("w+b") as csv_filedesc:
             logging.info(f"copy {source_schema}.{table}")
 
-            # instead of copeing the whole table, we select only new records 
+            # instead of copeing the whole table, we select only new records
             cursor.copy_expert(
                 f"copy (select * from {source_schema}.{table} where updated_at > '2022-04-12')  to stdout "
                 f"with csv header delimiter ',' quote '\"'",
@@ -308,13 +309,16 @@ def _process_large_table_incrementally(
         tx.execute(
             f"insert into {destination_schema}.{table} "  # nosec
             f"select * from {destination_schema}.{table}_stage"  # nosec
-        )         
+        )
 
         # no need to keep stage table, drop it
-        logging.info(f"dropping {destination_schema}.{table}_stage after merging into {destination_schema}.{table} ")
-        tx.execute(f"drop table {destination_schema}.{table}_stage")      
+        logging.info(
+            f"dropping {destination_schema}.{table}_stage after merging into {destination_schema}.{table} "
+        )
+        tx.execute(f"drop table {destination_schema}.{table}_stage")
 
     return f"✔️ Successfully loaded table {table}"
+
 
 def _json_converter(o: Any) -> Union[str, int, float, bool, List, Dict, None]:
     if isinstance(o, datetime.date):
