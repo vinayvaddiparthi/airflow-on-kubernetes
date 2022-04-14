@@ -265,7 +265,7 @@ def _process_large_table_incrementally(
         with csv_filepath.open("w+b") as csv_filedesc:
             logging.info(f"copy {source_schema}.{table}")
 
-            # instead of copeing the whole table, we select only new records
+            # instead of coping the whole table, we select only new records
             cursor.copy_expert(
                 f"copy (select * from {source_schema}.{table} where updated_at > %(cut_off_date)s', {'cut_off_date': '2022-04-12'}) to stdout "
                 f"with csv header delimiter ',' quote '\"'",
@@ -301,7 +301,7 @@ def _process_large_table_incrementally(
 
         # remove records in existing table if they are in the new stage table
         logging.info(f"removing dup records from {destination_schema}.{table}")
-        dedup_query = f"merge info transient table {destination_schema}.{table} t1 using {destination_schema}.{table}_stage t2 on t1.id = t2.id "
+        dedup_query = f"merge info transient table {destination_schema}.{table} t1 using {destination_schema}.{table}_stage t2 on t1.guid = t2.guid "
         dedup_query += "when matched then delete "
         tx.execute(dedup_query)
 
