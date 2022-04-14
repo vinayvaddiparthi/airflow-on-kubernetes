@@ -203,7 +203,7 @@ def stage_table_in_snowflake(
         pq.write_table(table_, f"{pq_filepath}")
 
         if table == "lending_adjudications":
-            pq.write_table(table_, f"{pq_filepath_2}")
+            pq.write_table(table_2, f"{pq_filepath_2}")
 
         tx.execute(
             f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
