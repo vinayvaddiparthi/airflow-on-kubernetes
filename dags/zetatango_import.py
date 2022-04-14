@@ -172,7 +172,7 @@ def stage_table_in_snowflake(
             f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
 
-        if table == 'lending_adjudications':
+        if table == "lending_adjudications":
             parquet_file = pq.ParquetFile(f"{pq_filepath}")
             logging.info(parquet_file.metadata)
 
