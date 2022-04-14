@@ -302,7 +302,7 @@ def _process_large_table_incrementally(
         # remove records in existing table if they are in the new stage table
         logging.info(f"removing dup records from {destination_schema}.{table}")
         dedup_query = f"merge info transient table {destination_schema}.{table} t1 using {destination_schema}.{table}_stage t2 on t1.id = t2.id "
-        dedup_query += f"when matched then delete "
+        dedup_query += "when matched then delete "
         tx.execute(dedup_query)
 
         logging.info(f"insert new records from {destination_schema}.{table}_stage")
