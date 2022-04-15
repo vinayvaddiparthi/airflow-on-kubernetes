@@ -266,7 +266,7 @@ def _process_large_table_incrementally(
             logging.info(f"copy {source_schema}.{table}")
 
             # instead of coping the whole table, we select only new records
-            copy_query = f"copy (select * from {source_schema}.{table} where updated_at > %(cut_off_date)s', {'cut_off_date': '2022-04-12'}) to stdout "  # nosec
+            copy_query = f"copy (select * from {source_schema}.{table} where updated_at > '2022-04-12') to stdout "  # nosec
             copy_query += "with csv header delimiter ',' quote '\"'"  # nosec
             cursor.copy_expert(
                 copy_query,
