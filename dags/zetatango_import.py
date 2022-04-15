@@ -144,14 +144,14 @@ def stage_table_in_snowflake(
         if table == "lending_adjudications":
             csv_file_dir_split_1 = tempfile.TemporaryDirectory()
             csv_file_dir_split_2 = tempfile.TemporaryDirectory()
-            pq_file_dir_2 = tempfile.TemporaryDirectory()
+            pq_file_dir = tempfile.TemporaryDirectory()
             csv_filepath_split_1 = Path(csv_file_dir_split_1.name, table).with_suffix(
                 ".csv"
             )
             csv_filepath_split_2 = Path(csv_file_dir_split_2.name, table).with_suffix(
                 ".csv"
             )
-            pq_filepath_2 = Path(pq_file_dir_2.name, table).with_suffix(".pq")
+            pq_filepath_2 = Path(pq_file_dir.name, table).with_suffix(".pq")
             tx.execute(
                 f"create or replace temporary stage {destination_schema}.{stage_guid_part_2} "
                 f"file_format=(type=parquet)"
@@ -170,12 +170,8 @@ def stage_table_in_snowflake(
             )
             if table == "lending_adjudications":
                 data = pd.read_csv(f"{csv_filepath}")
-                data[0:7000].to_csv(
-                    f"{csv_filepath_split_1}", index=False, compression="gzip"
-                )
-                data[7000:].to_csv(
-                    f"{csv_filepath_split_2}", index=False, compression="gzip"
-                )
+                data[0:7000].to_csv(f"{csv_filepath_split_1}")
+                data[7000:].to_csv(f"{csv_filepath_split_2}")
 
         try:
             logging.info(f"read {csv_filepath} for {table}")
