@@ -142,12 +142,8 @@ def stage_table_in_snowflake(
         ).fetchall()
 
         if table == "lending_adjudications":
-            csv_filepath_split_1 = Path(
-                tempfile.TemporaryDirectory().name, table
-            ).with_suffix(".csv")
-            csv_filepath_split_2 = Path(
-                tempfile.TemporaryDirectory().name, table
-            ).with_suffix(".csv")
+            csv_filepath_split_1 = Path(tempdir, f"{table}_1").with_suffix(".csv")
+            csv_filepath_split_2 = Path(tempdir, f"{table}_2").with_suffix(".csv")
             pq_filepath_2 = Path(tempfile.TemporaryDirectory().name, table).with_suffix(
                 ".pq"
             )
