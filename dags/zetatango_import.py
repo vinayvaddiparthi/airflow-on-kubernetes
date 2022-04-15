@@ -131,12 +131,13 @@ def stage_table_in_snowflake(
         return f"⏭️️ Skipping table {table}"
     logging.info(f"start syncing table: {table}")
     stage_guid = random_identifier()
+    stage_guid_part_2 = f"{stage_guid}_part2"
     with snowflake_engine.begin() as tx, cast(
         psycopg2.extensions.cursor, source_raw_conn.cursor()
     ) as cursor, tempfile.TemporaryDirectory() as tempdir:
 
         tx.execute(
-            f"create or replace temporary stage {destination_schema}.{stage_guid}"
+            f"create or replace temporary stage {destination_schema}.{stage_guid} "
             f"file_format=(type=parquet)"
         ).fetchall()
 
@@ -151,7 +152,7 @@ def stage_table_in_snowflake(
                 ".pq"
             )
             tx.execute(
-                f"create or replace temporary stage {destination_schema}.{stage_guid}_part_2"
+                f"create or replace temporary stage {destination_schema}.{stage_guid_part_2} "
                 f"file_format=(type=parquet)"
             ).fetchall()
 
@@ -210,14 +211,17 @@ def stage_table_in_snowflake(
 
         if table == "lending_adjudications":
             tx.execute(
-                f"put file://{pq_filepath_2} @{destination_schema}.{stage_guid}_part_2"
+                f"put file://{pq_filepath_2} @{destination_schema}.{stage_guid_part_2}"
             ).fetchall()
 
-            tx.execute(
+            stmts = [
                 f"create or replace transient table {destination_schema}.{table} as "  # nosec
-                f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
-                f"select $1 as fields from @{destination_schema}.{stage_guid}_part_2"
-            ).fetchall()
+                f"select $1 as fields from @{destination_schema}.{stage_guid} ",  # nosec
+                f"insert into {destination_schema}.{table} "  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage_guid_part_2}",  # nosec
+            ]
+
+            [tx.execute(stmt).fetchall() for stmt in stmts]
 
         else:
             tx.execute(
