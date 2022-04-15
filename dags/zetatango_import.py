@@ -17,8 +17,7 @@ from airflow.models import Variable
 from airflow import DAG
 from psycopg2._psycopg import connection
 from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
-import pyarrow.csv as pv
-import dask.dataframe as dd
+import pyarrow.csv as pv, pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
 from json import dumps as json_dumps
@@ -132,6 +131,7 @@ def stage_table_in_snowflake(
         return f"⏭️️ Skipping table {table}"
     logging.info(f"start syncing table: {table}")
     stage_guid = random_identifier()
+    stage_guid_part_2 = f"{stage_guid}_part2"
     with snowflake_engine.begin() as tx, cast(
         psycopg2.extensions.cursor, source_raw_conn.cursor()
     ) as cursor, tempfile.TemporaryDirectory() as tempdir:
@@ -141,7 +141,24 @@ def stage_table_in_snowflake(
             f"file_format=(type=parquet)"
         ).fetchall()
 
+        if table == "lending_adjudications":
+            csv_file_dir_split_1 = tempfile.TemporaryDirectory()
+            csv_file_dir_split_2 = tempfile.TemporaryDirectory()
+            pq_file_dir = tempfile.TemporaryDirectory()
+            csv_filepath_split_1 = Path(csv_file_dir_split_1.name, table).with_suffix(
+                ".csv"
+            )
+            csv_filepath_split_2 = Path(csv_file_dir_split_2.name, table).with_suffix(
+                ".csv"
+            )
+            pq_filepath_2 = Path(pq_file_dir.name, table).with_suffix(".pq")
+            tx.execute(
+                f"create or replace temporary stage {destination_schema}.{stage_guid_part_2} "
+                f"file_format=(type=parquet)"
+            ).fetchall()
+
         csv_filepath = Path(tempdir, table).with_suffix(".csv")
+        pq_filepath = Path(tempdir, table).with_suffix(".pq")
 
         with csv_filepath.open("w+b") as csv_filedesc:
             logging.info(f"copy {source_schema}.{table}")
@@ -151,15 +168,31 @@ def stage_table_in_snowflake(
                 f"with csv header delimiter ',' quote '\"'",
                 csv_filedesc,
             )
+            if table == "lending_adjudications":
+                data = pd.read_csv(f"{csv_filepath}")
+                data[0:7000].to_csv(f"{csv_filepath_split_1}")
+                data[7000:].to_csv(f"{csv_filepath_split_2}")
 
         try:
             logging.info(f"read {csv_filepath} for {table}")
 
-            table_ = pv.read_csv(
-                f"{csv_filepath}",
-                read_options=ReadOptions(block_size=8388608),
-                parse_options=ParseOptions(newlines_in_values=True),
-            )
+            if table == "lending_adjudications":
+                table_ = pv.read_csv(
+                    f"{csv_filepath_split_1}",
+                    read_options=ReadOptions(block_size=8388608),
+                    parse_options=ParseOptions(newlines_in_values=True),
+                )
+                table_2 = pv.read_csv(
+                    f"{csv_filepath_split_2}",
+                    read_options=ReadOptions(block_size=8388608),
+                    parse_options=ParseOptions(newlines_in_values=True),
+                )
+            else:
+                table_ = pv.read_csv(
+                    f"{csv_filepath}",
+                    read_options=ReadOptions(block_size=8388608),
+                    parse_options=ParseOptions(newlines_in_values=True),
+                )
             logging.info(f"read {csv_filepath} for {table}: Done")
 
         except ArrowInvalid as exc:
@@ -168,21 +201,34 @@ def stage_table_in_snowflake(
         if table_.num_rows == 0:
             return f"📝️ Skipping empty table {table}"
 
-        df = dd.read_csv(f"{csv_filepath}", header=True, index=False, blocksize="64MB")
-        ddf = dd.from_pandas(df, chunksize=1000)
-        ddf.to_parquet(f"{tempdir}")
+        pq.write_table(table_, f"{pq_filepath}")
 
-        for filename in os.listdir(f"{tempdir}"):
-            f = os.path.join(f"{tempdir}", filename)
-            if os.path.isfile(f):
-                tx.execute(
-                    f"put file://{f} @{destination_schema}.{stage_guid}"
-                ).fetchall()
+        if table == "lending_adjudications":
+            pq.write_table(table_2, f"{pq_filepath_2}")
 
         tx.execute(
-            f"create or replace transient table {destination_schema}.{table} as "  # nosec
-            f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
+            f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
+
+        if table == "lending_adjudications":
+            tx.execute(
+                f"put file://{pq_filepath_2} @{destination_schema}.{stage_guid_part_2}"
+            ).fetchall()
+
+            stmts = [
+                f"create or replace transient table {destination_schema}.{table} as "  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage_guid} ",  # nosec
+                f"insert into {destination_schema}.{table} "  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage_guid_part_2}",  # nosec
+            ]
+
+            [tx.execute(stmt).fetchall() for stmt in stmts]
+
+        else:
+            tx.execute(
+                f"create or replace transient table {destination_schema}.{table} as "  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
+            ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
 
