@@ -142,16 +142,15 @@ def stage_table_in_snowflake(
         ).fetchall()
 
         if table == "lending_adjudications":
-            csv_file_dir_split_1 = tempfile.TemporaryDirectory()
-            csv_file_dir_split_2 = tempfile.TemporaryDirectory()
-            pq_file_dir = tempfile.TemporaryDirectory()
-            csv_filepath_split_1 = Path(csv_file_dir_split_1.name, table).with_suffix(
-                ".csv"
+            csv_filepath_split_1 = Path(
+                tempfile.TemporaryDirectory().name, table
+            ).with_suffix(".csv")
+            csv_filepath_split_2 = Path(
+                tempfile.TemporaryDirectory().name, table
+            ).with_suffix(".csv")
+            pq_filepath_2 = Path(tempfile.TemporaryDirectory().name, table).with_suffix(
+                ".pq"
             )
-            csv_filepath_split_2 = Path(csv_file_dir_split_2.name, table).with_suffix(
-                ".csv"
-            )
-            pq_filepath_2 = Path(pq_file_dir.name, table).with_suffix(".pq")
             tx.execute(
                 f"create or replace temporary stage {destination_schema}.{stage_guid_part_2} "
                 f"file_format=(type=parquet)"
