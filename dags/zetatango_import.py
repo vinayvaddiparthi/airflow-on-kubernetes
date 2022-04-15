@@ -374,7 +374,7 @@ def decrypt_pii_columns(
 
             with SuspendAwsEnvVar():
                 for df in dfs:
-                    logging.info(df.size)
+                    logging.info(f"df size = {df.size}")
 
                 for df in dfs:
                     with tempfile.NamedTemporaryFile() as tempfile_:
