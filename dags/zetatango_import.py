@@ -168,7 +168,7 @@ def stage_table_in_snowflake(
         if table_.num_rows == 0:
             return f"📝️ Skipping empty table {table}"
 
-        df = dd.read_csv(f"{csv_filepath}", index=False, blocksize="64MB")
+        df = dd.read_csv(f"{csv_filepath}", header=True, index=False, blocksize="64MB")
         ddf = dd.from_pandas(df, chunksize=1000)
         ddf.to_parquet(f"{tempdir}")
 
