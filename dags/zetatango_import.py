@@ -177,7 +177,7 @@ def stage_table_in_snowflake(
             f = os.path.join(f"{tempdir}", filename)
             if os.path.isfile(f):
                 tx.execute(
-                    f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
+                    f"put file://{f} @{destination_schema}.{stage_guid}"
                 ).fetchall()
 
         tx.execute(
