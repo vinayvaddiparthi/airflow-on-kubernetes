@@ -142,7 +142,6 @@ def stage_table_in_snowflake(
         ).fetchall()
 
         csv_filepath = Path(tempdir, table).with_suffix(".csv")
-        pq_filepath = Path(tempdir, table).with_suffix(".pq")
 
         with csv_filepath.open("w+b") as csv_filedesc:
             logging.info(f"copy {source_schema}.{table}")
