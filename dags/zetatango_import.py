@@ -170,8 +170,12 @@ def stage_table_in_snowflake(
             )
             if table == "lending_adjudications":
                 data = pd.read_csv(f"{csv_filepath}")
-                data[0:7000].to_csv(f"{csv_filepath_split_1}")
-                data[7000:].to_csv(f"{csv_filepath_split_2}")
+                data[0:7000].to_csv(
+                    f"{csv_filepath_split_1}", index=False, compression="gzip"
+                )
+                data[7000:].to_csv(
+                    f"{csv_filepath_split_2}", index=False, compression="gzip"
+                )
 
         try:
             logging.info(f"read {csv_filepath} for {table}")
@@ -373,9 +377,6 @@ def decrypt_pii_columns(
                 select_froms = select_froms[:1]  # don't union if table doesn't exist.
 
             with SuspendAwsEnvVar():
-                for df in dfs:
-                    logging.info(f"df size = {df.size}")
-
                 for df in dfs:
                     with tempfile.NamedTemporaryFile() as tempfile_:
                         df = df.apply(
