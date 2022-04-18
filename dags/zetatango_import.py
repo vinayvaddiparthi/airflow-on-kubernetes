@@ -17,9 +17,8 @@ from airflow.models import Variable
 from airflow import DAG
 from psycopg2._psycopg import connection
 from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
-import pyarrow.csv as pv, pyarrow.parquet as pq
+import pyarrow.csv as pv
 import dask.dataframe as dd
-import os
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
 from json import dumps as json_dumps
