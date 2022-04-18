@@ -170,12 +170,8 @@ def stage_table_in_snowflake(
             )
             if table == "lending_adjudications":
                 data = pd.read_csv(f"{csv_filepath}")
-                data[0:7000].to_csv(
-                    f"{csv_filepath_split_1}", index=False, compression="gzip"
-                )
-                data[7000:].to_csv(
-                    f"{csv_filepath_split_2}", index=False, compression="gzip"
-                )
+                data[0:7000].to_csv(f"{csv_filepath_split_1}", index=False)
+                data[7000:].to_csv(f"{csv_filepath_split_2}", index=False)
 
         try:
             logging.info(f"read {csv_filepath} for {table}")
