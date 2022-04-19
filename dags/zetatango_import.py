@@ -172,10 +172,10 @@ def stage_table_in_snowflake(
                 lending_csv = csv_filedesc.readlines()
                 len_of_file = len(lending_csv)
                 linesPerFile = len_of_file / 2
-                for i in range(0, len_of_file, linesPerFile):
+                for i in range(0, linesPerFile):
                     with open(f"{csv_filepath}", "w+") as f:
                         f.writelines(csv_filepath_split_1[i : i + linesPerFile])
-                for i in range(linesPerFile, len_of_file, linesPerFile):
+                for i in range(linesPerFile, len_of_file):
                     with open(f"{csv_filepath}", "w+") as f:
                         f.writelines(csv_filepath_split_2[i : i + linesPerFile])
         try:
