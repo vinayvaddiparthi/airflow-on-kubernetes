@@ -174,10 +174,10 @@ def stage_table_in_snowflake(
                 linesPerFile = len_of_file / 2
                 for i in range(0, linesPerFile):
                     with open(f"{csv_filepath}", "w+") as f:
-                        f.writelines(csv_filepath_split_1[i : i + linesPerFile])
+                        f.writelines(csv_filepath_split_1)
                 for i in range(linesPerFile, len_of_file):
                     with open(f"{csv_filepath}", "w+") as f:
-                        f.writelines(csv_filepath_split_2[i : i + linesPerFile])
+                        f.writelines(csv_filepath_split_2)
         try:
             logging.info(f"read {csv_filepath} for {table}")
 
