@@ -90,21 +90,6 @@ core_decryption_spec = [
     ),
     DecryptionSpec(
         schema="CORE_PRODUCTION",
-        table="LENDING_ADJUDICATIONS",
-        columns=[
-            "offer_results",
-            "adjudication_results",
-            "notes",
-        ],
-        format=["yaml", "yaml", None],
-    ),
-    DecryptionSpec(
-        schema="CORE_PRODUCTION",
-        table="LENDING_ADJUDICATION_DECISIONS",
-        columns=["notes"],
-    ),
-    DecryptionSpec(
-        schema="CORE_PRODUCTION",
         table="LENDING_LOAN_ATTRIBUTES",
         columns=["value"],
         whereclause=literal_column("$1:key").in_(["external_id"]),
