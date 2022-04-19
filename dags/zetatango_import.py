@@ -169,6 +169,16 @@ def stage_table_in_snowflake(
                 csv_filedesc,
             )
             if table == "lending_adjudications":
+                csv_filepath = csv_filedesc.readlines()
+                linesPerFile = len(csv_filepath)/2
+                for i in range(0, len(csv_filepath)/2,linesPerFile):
+                    with open(f"{csv_filepath}", 'w+') as f:
+                        f.writelines(csv_filepath_split_1[i:i + linesPerFile])
+                for i in range(len(csv_filepath)/2, len(csv_filepath),linesPerFile):
+                    with open(f"{csv_filepath}", 'w+') as f:
+                        f.writelines(csv_filepath_split_2[i:i + linesPerFile])
+
+
                 data = pd.read_csv(f"{csv_filepath}")
                 data[0:7000].to_csv(f"{csv_filepath_split_1}", index=False)
                 data[7000:].to_csv(f"{csv_filepath_split_2}", index=False)
@@ -360,7 +370,7 @@ def decrypt_pii_columns(
                     if spec.whereclause is not None
                     else unknown_hashes_whereclause
                 )
-                dfs = pd.read_sql(stmt.where(whereclause), con=tx, chunksize=1000)
+                dfs = pd.read_sql(stmt.where(whereclause), con=tx, chunksize=500)
             except ProgrammingError:
                 dfs = pd.read_sql(
                     stmt.where(spec.whereclause)
