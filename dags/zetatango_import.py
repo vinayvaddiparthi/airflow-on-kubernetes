@@ -174,7 +174,7 @@ def stage_table_in_snowflake(
             lines_total = len(lending_csv)
             lines_per_file = int(lines_total / 2)
 
-            with open(csv_filepath_split_1) as csvfile:
+            with open(csv_filepath_split_1, "w+") as csvfile:
                 logging.info("Parsing split 1...")
                 csv_writer = csv.writer(csvfile, delimiter=",", quotechar='"')
                 for i in range(0, lines_per_file):
