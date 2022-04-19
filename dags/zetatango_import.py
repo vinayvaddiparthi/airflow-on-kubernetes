@@ -4,6 +4,7 @@ import tempfile
 from datetime import timedelta
 from pathlib import Path
 from typing import List, Optional, Any, cast, Union, Dict
+import csv
 
 import heroku3
 import pandas as pd
@@ -169,17 +170,27 @@ def stage_table_in_snowflake(
                 csv_filedesc,
             )
         if table == "lending_adjudications":
-            lending_csv = open(f"{csv_filepath}", "r").readlines()
-            len_of_file = sum(1 for row in lending_csv)
-            linesPerFile = int(len_of_file / 2)
-            logging.info("Rows in file", linesPerFile)
-            with open(csv_filepath_split_1, "w+") as f:
-                f.writelines(lending_csv[0:linesPerFile])
-            f.close()
-            with open(csv_filepath_split_2, "w+") as f:
-                f.write(lending_csv[0])
-                f.writelines(lending_csv[linesPerFile:])
-            f.close()
+            lending_csv = [line.rstrip() for line in open(f"{csv_filepath}")]
+            lines_total = len(lending_csv)
+            lines_per_file = int(lines_total / 2)
+
+            with open(csv_filepath_split_1) as csvfile:
+                logging.info("Parsing split 1...")
+                csv_writer = csv.writer(csvfile, delimiter=",", quotechar='"')
+                for i in range(0, lines_per_file):
+                    if 0 <= i <= 4:
+                        logging.info(f"Line {i} contains: {lending_csv[i]}")
+                    csv_writer.writerow(lending_csv[i])
+
+            with open(csv_filepath_split_2, "w+") as csvfile:
+                logging.info("Parsing split 2...")
+                csv_writer = csv.writer(csvfile, delimiter=",", quotechar='"')
+                csv_writer.writerow(lending_csv[0])
+                for i in range(lines_per_file, lines_total):
+                    if lines_per_file <= i <= lines_per_file + 4:
+                        logging.info(f"Line {i} contains: {lending_csv[i]}")
+                    csv_writer.writerow(lending_csv[i])
+
         try:
             logging.info(f"read {csv_filepath} for {table}")
 
