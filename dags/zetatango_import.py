@@ -169,12 +169,12 @@ def stage_table_in_snowflake(
                 csv_filedesc,
             )
             if table == "lending_adjudications":
-                csv_filepath = csv_filedesc.readlines()
-                linesPerFile = len(csv_filepath) / 2
-                for i in range(0, len(csv_filepath) / 2, linesPerFile):
+                lending_csv = csv_filedesc.readlines()
+                linesPerFile = len(lending_csv) / 2
+                for i in range(0, len(lending_csv) / 2, linesPerFile):
                     with open(f"{csv_filepath}", "w+") as f:
                         f.writelines(csv_filepath_split_1[i : i + linesPerFile])
-                for i in range(len(csv_filepath) / 2, len(csv_filepath), linesPerFile):
+                for i in range(len(lending_csv) / 2, len(lending_csv), linesPerFile):
                     with open(f"{csv_filepath}", "w+") as f:
                         f.writelines(csv_filepath_split_2[i : i + linesPerFile])
         try:
