@@ -439,7 +439,7 @@ def create_dag() -> DAG:
         start_date=pendulum.datetime(
             2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
         ),
-        schedule_interval=None,
+        schedule_interval="0 */6 * * *",
         default_args={
             "retries": 3,
             "retry_delay": timedelta(minutes=5),
