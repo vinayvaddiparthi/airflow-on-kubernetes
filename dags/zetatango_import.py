@@ -168,10 +168,20 @@ def stage_table_in_snowflake(
                 f"with csv header delimiter ',' quote '\"'",
                 csv_filedesc,
             )
-        if table == "lending_adjudications":
-            data = pd.read_csv(f"{csv_filepath}")
-            data[0:7000].to_csv(f"{csv_filepath_split_1}", index=False)
-            data[7000:].to_csv(f"{csv_filepath_split_2}", index=False)
+
+            if table == "lending_adjudications":
+                data = pd.read_csv(
+                    f"{csv_filepath}",
+                    dtype={
+                        "credit_box_version_id": "Int64",
+                        "offer_configuration_version_id": "Int64",
+                        "performer_id": "Int64",
+                        "account_sales_volume_set_id": "Int64",
+                        "applicant_id": "Int64",
+                    },
+                )
+                data[0:70000].to_csv(f"{csv_filepath_split_1}", index=False)
+                data[70000:].to_csv(f"{csv_filepath_split_2}", index=False)
 
         try:
             logging.info(f"read {csv_filepath} for {table}")
