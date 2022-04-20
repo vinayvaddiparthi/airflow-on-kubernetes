@@ -4,7 +4,6 @@ import tempfile
 from datetime import timedelta
 from pathlib import Path
 from typing import List, Optional, Any, cast, Union, Dict
-import csv
 
 import heroku3
 import pandas as pd
@@ -169,27 +168,20 @@ def stage_table_in_snowflake(
                 f"with csv header delimiter ',' quote '\"'",
                 csv_filedesc,
             )
-        if table == "lending_adjudications":
-            lending_csv = [line.rstrip() for line in open(f"{csv_filepath}")]
-            lines_total = len(lending_csv)
-            lines_per_file = int(lines_total / 2)
 
-            with open(csv_filepath_split_1, "w+") as csvfile:
-                logging.info("Parsing split 1...")
-                csv_writer = csv.writer(csvfile, delimiter=",", quotechar='"')
-                for i in range(0, lines_per_file):
-                    if 0 <= i <= 4:
-                        logging.info(f"Line {i} contains: {lending_csv[i]}")
-                    csv_writer.writerow(lending_csv[i])
-
-            with open(csv_filepath_split_2, "w+") as csvfile:
-                logging.info("Parsing split 2...")
-                csv_writer = csv.writer(csvfile, delimiter=",", quotechar='"')
-                csv_writer.writerow(lending_csv[0])
-                for i in range(lines_per_file, lines_total):
-                    if lines_per_file <= i <= lines_per_file + 4:
-                        logging.info(f"Line {i} contains: {lending_csv[i]}")
-                    csv_writer.writerow(lending_csv[i])
+            if table == "lending_adjudications":
+                data = pd.read_csv(
+                    f"{csv_filepath}",
+                    dtype={
+                        "credit_box_version_id": "Int64",
+                        "offer_configuration_version_id": "Int64",
+                        "performer_id": "Int64",
+                        "account_sales_volume_set_id": "Int64",
+                        "applicant_id": "Int64",
+                    },
+                )
+                data[0:70000].to_csv(f"{csv_filepath_split_1}", index=False)
+                data[70000:].to_csv(f"{csv_filepath_split_2}", index=False)
 
         try:
             logging.info(f"read {csv_filepath} for {table}")
