@@ -221,6 +221,17 @@ kyc_decryption_spec = [
             ]
         ),
     ),
+    DecryptionSpec(
+        schema="KYC_PRODUCTION",
+        table="ENTITIES_MERCHANT_ATTRIBUTES",
+        columns=["value"],
+        whereclause=literal_column("$1:key").in_(
+            [
+                "self_attested_average_monthly_sales",
+                "self_attested_date_established",
+            ]
+        ),
+    ),
 ]
 
 
