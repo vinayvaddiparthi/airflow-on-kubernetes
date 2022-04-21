@@ -248,5 +248,3 @@ qbo_decryption_spec = [
         ],
     ),
 ]
-
-# Some change
