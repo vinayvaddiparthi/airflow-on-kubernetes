@@ -208,7 +208,7 @@ kyc_decryption_spec = [
     ),
     DecryptionSpec(
         schema="KYC_PRODUCTION",
-        table="PLAID_REFRESH_RESULT",
+        table="PLAID_REFRESH_RESULTS",
         columns=["value"],
         whereclause=literal_column("$1:key").in_(
             [
