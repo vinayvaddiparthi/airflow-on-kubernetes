@@ -16,12 +16,16 @@ class DecryptionSpec:
 
 
 generic_import_executor_config = {
-    "resources": {"requests": {"memory": "2Gi"},},
+    "resources": {
+        "requests": {"memory": "2Gi"},
+    },
 }
 
 
 core_import_executor_config = {
-    "resources": {"requests": {"memory": "4Gi"},},
+    "resources": {
+        "requests": {"memory": "4Gi"},
+    },
 }
 
 
@@ -37,19 +41,25 @@ kubernetes_config = {
 
 decryption_executor_config = {
     **kubernetes_config,
-    "resources": {"requests": {"memory": "2Gi"},},
+    "resources": {
+        "requests": {"memory": "2Gi"},
+    },
 }
 
 
 quickbooks_decryption_executor_config = {
     **kubernetes_config,
-    "resources": {"requests": {"memory": "4Gi"},},
+    "resources": {
+        "requests": {"memory": "4Gi"},
+    },
 }
 
 
 core_decryption_spec = [
     DecryptionSpec(
-        schema="CORE_PRODUCTION", table="BANK_ACCOUNT_ATTRIBUTES", columns=["value"],
+        schema="CORE_PRODUCTION",
+        table="BANK_ACCOUNT_ATTRIBUTES",
+        columns=["value"],
     ),
     DecryptionSpec(
         schema="CORE_PRODUCTION",
@@ -81,7 +91,11 @@ core_decryption_spec = [
     DecryptionSpec(
         schema="CORE_PRODUCTION",
         table="LENDING_ADJUDICATIONS",
-        columns=["offer_results", "adjudication_results", "notes",],
+        columns=[
+            "offer_results",
+            "adjudication_results",
+            "notes",
+        ],
         format=["yaml", "yaml", None],
     ),
     DecryptionSpec(
@@ -164,10 +178,19 @@ kyc_decryption_spec = [
     DecryptionSpec(
         schema="KYC_PRODUCTION",
         table="INDIVIDUALS_APPLICANTS",
-        columns=["date_of_birth", "first_name", "last_name", "middle_name",],
+        columns=[
+            "date_of_birth",
+            "first_name",
+            "last_name",
+            "middle_name",
+        ],
     ),
     DecryptionSpec(
-        schema="KYC_PRODUCTION", table="FLINKS_LOGINS", columns=["login_id",],
+        schema="KYC_PRODUCTION",
+        table="FLINKS_LOGINS",
+        columns=[
+            "login_id",
+        ],
     ),
     DecryptionSpec(
         schema="KYC_PRODUCTION",
@@ -203,7 +226,10 @@ kyc_decryption_spec = [
         table="ENTITIES_MERCHANT_ATTRIBUTES",
         columns=["value"],
         whereclause=literal_column("$1:key").in_(
-            ["self_attested_average_monthly_sales", "self_attested_date_established",]
+            [
+                "self_attested_average_monthly_sales",
+                "self_attested_date_established",
+            ]
         ),
     ),
     DecryptionSpec(
@@ -238,6 +264,12 @@ qbo_decryption_spec = [
     DecryptionSpec(
         schema="CORE_PRODUCTION",
         table="QUICKBOOKS_ACCOUNTING_TRANSACTIONS",
-        columns=["account", "split", "additional_info", "description", "name",],
+        columns=[
+            "account",
+            "split",
+            "additional_info",
+            "description",
+            "name",
+        ],
     ),
 ]
