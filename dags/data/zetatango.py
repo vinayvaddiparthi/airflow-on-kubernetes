@@ -142,31 +142,6 @@ core_decryption_spec = [
         table="EMAILS",
         columns=["from", "html_body", "subject", "text_body", "to"],
     ),
-    DecryptionSpec(
-        schema="CORE_PRODUCTION",
-        table="PLAID_REFRESH_RESULTS",
-        columns=["value"],
-        whereclause=literal_column("$1:key").in_(
-            [
-                "partner_id",
-                "plaid_item_id",
-                "error_reason",
-                "result",
-                "performer_type",
-                "metadata",
-                "impacting",
-                "customer_reconnect",
-                "cache_enabled",
-                "started_at",
-                "completed_at",
-                "refreshed_at",
-                "created_at",
-                "updated_at",
-                "index_plaid_refresh_results_on_partner_id",
-                "index_plaid_refresh_results_on_plaid_item_id",
-            ]
-        ),
-    ),
 ]
 
 
