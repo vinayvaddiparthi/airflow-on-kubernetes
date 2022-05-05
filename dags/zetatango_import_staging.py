@@ -16,7 +16,6 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.operators.python_operator import PythonOperator
-from airflow.models import Variable
 from airflow import DAG
 from psycopg2._psycopg import connection
 from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
@@ -47,7 +46,6 @@ from sqlalchemy.sql import Select, ClauseElement
 from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils import random_identifier
 from utils.failure_callbacks import slack_dag, slack_task
-import requests
 
 from data.zetatango import (
     DecryptionSpec,
