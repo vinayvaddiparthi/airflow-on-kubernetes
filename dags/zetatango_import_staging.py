@@ -46,8 +46,6 @@ from sqlalchemy.sql import Select, ClauseElement
 
 from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils import random_identifier
-from dbt_extras.dbt_operator import DbtOperator
-from dbt_extras.dbt_action import DbtAction
 from utils.failure_callbacks import slack_dag, slack_task
 import requests
 
@@ -414,24 +412,24 @@ def decrypt_pii_columns(
             logging.info(f"🔓 Successfully decrypted {spec}")
 
 
-def trigger_dbt_job() -> None:
-    res = requests.post(
-        url="https://cloud.getdbt.com/api/v2/accounts/20518/jobs/72347/run/",
-        headers={"Authorization": "Token " + Variable.get("DBT_API_KEY")},
-        json={
-            # Optionally pass a description that can be viewed within the dbt Cloud API.
-            # See the API docs for additional parameters that can be passed in,
-            # including `schema_override`
-            "cause": "Triggered by Zetatango DAG.",
-        },
-    )
-    try:
-        res.raise_for_status()
-    except:
-        print("Error: Couldn't trigger the dbt cloud job.")
-        raise
+# def trigger_dbt_job() -> None:
+#    res = requests.post(
+#        url="https://cloud.getdbt.com/api/v2/accounts/20518/jobs/72347/run/",
+#        headers={"Authorization": "Token " + Variable.get("DBT_API_KEY")},
+#        json={
+# Optionally pass a description that can be viewed within the dbt Cloud API.
+# See the API docs for additional parameters that can be passed in,
+# including `schema_override`
+#            "cause": "Triggered by Zetatango DAG.",
+#        },
+#    )
+#    try:
+#        res.raise_for_status()
+#    except:
+#        print("Error: Couldn't trigger the dbt cloud job.")
+#        raise
 
-    return None
+#    return None
 
 
 def create_dag() -> DAG:
