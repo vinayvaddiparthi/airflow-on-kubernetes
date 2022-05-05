@@ -519,33 +519,6 @@ def create_dag() -> DAG:
             executor_config=decryption_executor_config,
         )
 
-        dbt_run = DbtOperator(
-            task_id="dbt_run",
-            execution_timeout=timedelta(hours=1),
-            action=DbtAction.run,
-            retries=1,
-        )
-
-        dbt_snapshot = DbtOperator(
-            task_id="dbt_snapshot",
-            execution_timeout=timedelta(hours=1),
-            action=DbtAction.snapshot,
-            retries=1,
-        )
-
-        dbt_test = DbtOperator(
-            task_id="dbt_test",
-            execution_timeout=timedelta(hours=1),
-            action=DbtAction.test,
-            retries=1,
-        )
-
-        dbt_refresh_job_trigger = PythonOperator(
-            task_id="dbt_refresh_job_trigger",
-            python_callable=trigger_dbt_job,
-            retries=1,
-        )
-
         dag << import_core_prod >> decrypt_core_prod
         dag << import_idp_prod >> decrypt_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
