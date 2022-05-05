@@ -555,10 +555,6 @@ def create_dag() -> DAG:
                 decrypt_kyc_prod,
                 decrypt_idp_prod,
             ]
-            >> dbt_refresh_job_trigger
-            >> dbt_run
-            >> dbt_snapshot
-            >> dbt_test
         )
 
     return dag
