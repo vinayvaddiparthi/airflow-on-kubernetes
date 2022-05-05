@@ -457,7 +457,7 @@ def create_dag() -> DAG:
             python_callable=export_to_snowflake,
             op_kwargs={
                 "heroku_app": "zt-staging-elt-core",
-                "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_00749F2C263CE53C5_URL",
+                "heroku_endpoint_url_env_var": "postgres://u7ujogqgek716a:p16bfe2184cbde1a3a5dec325e05949ce8fa0f223cbbb667ac5e60797e76b0e42@ec2-3-213-200-198.compute-1.amazonaws.com:5432/d2pa5j72etb26",
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.CORE_STAGING",
             },
@@ -480,7 +480,7 @@ def create_dag() -> DAG:
             python_callable=export_to_snowflake,
             op_kwargs={
                 "heroku_app": "zt-staging-elt-idp",
-                "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0DB594617CE5BEC42_URL",
+                "heroku_endpoint_url_env_var": "postgres://u7rg773u3v8ce2:p244562be80509acc65bb8966725ccf422bf7c398fd262aa36074430243fd8fbd@ec2-54-82-201-6.compute-1.amazonaws.com:5432/d5hjc032vhn35b",
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.IDP_STAGING",
             },
@@ -503,7 +503,7 @@ def create_dag() -> DAG:
             python_callable=export_to_snowflake,
             op_kwargs={
                 "heroku_app": "zt-staging-elt-kyc",
-                "heroku_endpoint_url_env_var": "DATABASE_ENDPOINT_0467EC30D24A2723A_URL",
+                "heroku_endpoint_url_env_var": "postgres://u1fe0se5ifppm5:p81f258a7cdaf8665a7047f05131564fa3860d8eb1c4ebb059934fdf2bcb9a178@ec2-54-237-253-8.compute-1.amazonaws.com:5432/dcguvrp6v3ls5h",
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.KYC_STAGING",
             },
