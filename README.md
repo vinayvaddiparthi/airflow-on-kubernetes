@@ -40,8 +40,8 @@ if you want to run parallel tasks.
 ```bash
 brew install postgresql
 postgres -V
+brew services start postgres
 ```
-
 #### Create database and user
 
 ```bash
@@ -51,20 +51,30 @@ CREATE USER airflow WITH PASSWORD 'airflow';
 GRANT ALL PRIVILEGES ON DATABASE airflow_db TO airflow;
 ```
 
-#### Update airflow configuration (i.e., airflow.cfg)
+### Update airflow configuration (i.e., airflow.cfg)
 
 ```buildoutcfg
 sql_alchemy_conn = postgresql+psycopg2://airflow:airflow@localhost:5432/airflow_db
 executor = LocalExecutor
 ```
 
-### Run the webserver and scheduler
+#### Remove example dags and default connections
+
+The airflow configuration (i.e., airflow.cfg) file is usually located in `~/airflow` directory. This file contains 
+important configurations for your local environment.
+
+- Set `load_default_connections = False` to not load default connections to your local Airflow environment.
+
+- Set `load_examples = False` to not load the example DAGs in your local Airflow environment.
+
 
 #### Set dags folder (in airflow.cfg)
 
 ```buildoutcfg
-dags_folder = /Users/xzhang/PycharmProjects/airflow-on-kubernetes/dags
+dags_folder = <<Path to the repo folder>>/airflow-on-kubernetes/dags
 ```
+
+### Run the webserver and scheduler
 
 #### Initialize database
 
@@ -214,14 +224,6 @@ Run the following to see how the installed packages depend on each other.
 pipdeptree
 ```
 
-### Remove example dags and default connections
-
-The airflow configuration (i.e., airflow.cfg) file is usually located in `~/airflow` directory. This file contains 
-important configurations for your local environment.
-
-- Set `load_default_connections = False` to not load default connections to your local Airflow environment.
-
-- Set `load_examples = False` to not load the example DAGs in your local Airflow environment.
 
 ### Slack alerts
 
