@@ -47,7 +47,7 @@ from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils import random_identifier
 from utils.failure_callbacks import slack_dag, slack_task
 
-from data.zetatango import (
+from data.zetatango_staging import (
     DecryptionSpec,
     generic_import_executor_config,
     core_import_executor_config,
