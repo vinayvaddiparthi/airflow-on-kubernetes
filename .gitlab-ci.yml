@@ -71,7 +71,9 @@ test:
     when: always
     reports:
       junit: pytest.xml
-      cobertura: cov.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/coverage.xml
   coverage: /^TOTAL.+?(\d+\%)$/
 
 sast:
