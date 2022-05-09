@@ -73,6 +73,7 @@ test:
       junit: pytest.xml
       coverage_report:
         coverage_format: cobertura
+        path: coverage/coverage.xml
   coverage: /^TOTAL.+?(\d+\%)$/
 
 sast:
