@@ -25,9 +25,8 @@ with monthly_balances as (
     merchant_guid,
     account_guid,
     date_trunc('month', date) as month,
-    coalesce(sum(credit),0)   as monthly_sales_volume
+    coalesce(sum(processed_credit),0) as monthly_sales_volume
     from {{ params.trx_table }}
-    where is_nsd = False
     group by merchant_guid, account_guid, month
     order by month desc
 ),

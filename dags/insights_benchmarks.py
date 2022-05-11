@@ -14,16 +14,14 @@ from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.models import Variable
 
 from utils.failure_callbacks import slack_task
-from helpers.salesvolume_classfication import (
-    categorize_transactions,
-)
+from helpers.salesvolume_classfication import calculate_sales_volume
 
 
 def _classify_transactions(
     snowflake_conn: str, database: str, schema: str, table: str
 ) -> None:
 
-    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine({"echo": True})
+    engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     metadata = MetaData()
 
     chunk_size = 100000
@@ -47,6 +45,22 @@ def _classify_transactions(
         snowflake_database=database,
     )
 
+    merchant = Table(
+        "dim_merchant",
+        metadata,
+        autoload_with=engine,
+        schema=schema,
+        snowflake_database=database,
+    )
+
+    industry_lookup = Table(
+        "fct_industry_lookup_entries",
+        metadata,
+        autoload_with=engine,
+        schema=schema,
+        snowflake_database=database,
+    )
+
     ranked_trx = select(
         [
             transactions,
@@ -64,13 +78,20 @@ def _classify_transactions(
 
     latest_trx_select = select([ranked_trx]).where(ranked_trx.c.ranked == 1)
 
-    cashflow_lookup_select = select([cash_flow_lookup]).where(
-        cash_flow_lookup.c.cash_flow_lookup_version_id == 120
-    )
+    cashflow_lookup_select = select([cash_flow_lookup])
+
+    merchant_select = select([merchant.c.guid, merchant.c.industry])
+
+    industry_lookup_select = select([industry_lookup])
 
     with engine.begin() as conn:
 
         df_lookup = pd.read_sql(cashflow_lookup_select, con=conn)
+
+        df_lookup = df_lookup[
+            df_lookup["cash_flow_lookup_version_id"]
+            == df_lookup["cash_flow_lookup_version_id"].max()
+        ]
 
         df_precise_entries = df_lookup[df_lookup["has_match"]]
 
@@ -89,11 +110,37 @@ def _classify_transactions(
 
         dfs = pd.read_sql(latest_trx_select, con=conn, chunksize=chunk_size)
 
+        df_merchant = pd.read_sql(merchant_select, con=conn)
+
+        df_industry_lookup = pd.read_sql(industry_lookup_select, con=conn)
+
+        df_industry_lookup = df_industry_lookup[
+            df_industry_lookup["industry_lookup_version_id"]
+            == df_industry_lookup["industry_lookup_version_id"].max()
+        ]
+
+        df_merchant_industry = df_merchant.merge(
+            df_industry_lookup, how="left", left_on="industry", right_on="industry"
+        )
+
         for df_transactions in dfs:
 
-            df_transactions[["predicted_category", "is_nsd"]] = df_transactions.apply(
-                categorize_transactions,
-                args=(df_precise_entries, df_inprecise_entries),
+            # trim the dataframe to only include the merchants present in df_transactions
+            df_merchant_industry_subset = df_merchant_industry[
+                df_merchant_industry["guid"].isin(df_transactions["merchant_guid"])
+            ]
+
+            df_merchant_industry_subset.drop_duplicates(subset="guid", inplace=True)
+
+            df_transactions[
+                ["predicted_category", "is_nsd", "processed_credit"]
+            ] = df_transactions.apply(
+                calculate_sales_volume,
+                args=(
+                    df_precise_entries,
+                    df_inprecise_entries,
+                    df_merchant_industry_subset,
+                ),
                 axis=1,
                 result_type="expand",
             )
