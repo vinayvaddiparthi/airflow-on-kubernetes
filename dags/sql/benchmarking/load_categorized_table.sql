@@ -16,7 +16,8 @@ copy into {table}
     date,
     description,
     predicted_category,
-    is_nsd
+    is_nsd,
+    processed_credit
 ) 
 from 
 (
@@ -37,7 +38,8 @@ from
     try_to_date($1:date::varchar),
     $1:description::varchar,
     $1:predicted_category::varchar,
-    $1:is_nsd::boolean 
+    $1:is_nsd::boolean ,
+    $1:processed_credit::number(38,2)
     from @{stage}
 )
 file_format=(type=parquet compression=auto) on_error=abort_statement
