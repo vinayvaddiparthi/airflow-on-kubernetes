@@ -15,7 +15,8 @@ create table if not exists {table} (
 	date date,
 	description varchar(10000),
 	predicted_category varchar(255),
-	is_nsd boolean
+	is_nsd boolean,
+	processed_credit number(38,2)
 );
 
 delete from {table};
