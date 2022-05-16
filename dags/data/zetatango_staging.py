@@ -33,7 +33,7 @@ kubernetes_config = {
     "KubernetesExecutor": {
         "annotations": {
             "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-            "KubernetesAirflowProductionZetatangoPiiRole"
+            "KubernetesAirflowNonProdZetatangoPiiRole"
         }
     },
 }
