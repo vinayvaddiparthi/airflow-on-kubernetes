@@ -194,13 +194,6 @@ kyc_decryption_spec = [
     ),
     DecryptionSpec(
         schema="KYC_STAGING",
-        table="INDIVIDUAL_ATTRIBUTES",
-        columns=["value"],
-        format="marshal",
-        whereclause=literal_column("$1:key").in_(["default_beacon_score"]),
-    ),
-    DecryptionSpec(
-        schema="KYC_STAGING",
         table="ENTITIES_BANK_ACCOUNT_ATTRIBUTES",
         columns=["value"],
         whereclause=literal_column("$1:key").in_(
