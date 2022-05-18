@@ -1,9 +1,6 @@
 import pandas as pd
 import re
 from typing import Union, List, Tuple
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def clean_description(desc: str) -> str:
