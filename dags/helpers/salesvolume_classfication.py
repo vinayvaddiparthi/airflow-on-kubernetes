@@ -166,7 +166,9 @@ def get_industry_characteristics(
         if m_guid == merchant_guid
     ]
 
-    accepts_e_transfer = accepts_e_transfer_list[0] or False
+    accepts_e_transfer = (
+        accepts_e_transfer_list[0] if accepts_e_transfer_list else False
+    )
 
     # accept_lrc = df_merchant_industry.loc[df_merchant_industry['guid'] == merchant_guid, "accepts_lrc"].squeeze()
     # Used a list comprehension along with zip to get the first value of the list instead of a simple df.loc since loc is slow
@@ -179,7 +181,7 @@ def get_industry_characteristics(
         if m_guid == merchant_guid
     ]
 
-    accepts_lrc = accepts_lrc_list[0] or False
+    accepts_lrc = accepts_lrc_list[0] if accepts_lrc_list else False
 
     return accepts_e_transfer, accepts_lrc
 
