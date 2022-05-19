@@ -66,10 +66,7 @@ def store_flinks_response(
     )
 
     flinks_raw_responses = Table(
-        "flinks_raw_responses",
-        metadata,
-        autoload_with=snowflake_engine,
-        schema=schema,
+        "flinks_raw_responses", metadata, autoload_with=snowflake_engine, schema=schema,
     )
 
     with snowflake_engine.begin() as tx:
@@ -86,12 +83,7 @@ def store_flinks_response(
             )
 
             insert_query = flinks_raw_responses.insert().from_select(
-                [
-                    "merchant_guid",
-                    "batch_timestamp",
-                    "file_path",
-                    "raw_response",
-                ],
+                ["merchant_guid", "batch_timestamp", "file_path", "raw_response",],
                 select_query,
             )
 
@@ -113,31 +105,17 @@ def copy_transactions(
     metadata = MetaData()
 
     merchants = Table(
-        "merchants",
-        metadata,
-        autoload_with=snowflake_engine,
-        schema=schema,
+        "merchants", metadata, autoload_with=snowflake_engine, schema=schema,
     )
 
-    leads = Table(
-        "leads",
-        metadata,
-        autoload_with=snowflake_engine,
-        schema=schema,
-    )
+    leads = Table("leads", metadata, autoload_with=snowflake_engine, schema=schema,)
 
     documents = Table(
-        "documents",
-        metadata,
-        autoload_with=snowflake_engine,
-        schema=schema,
+        "documents", metadata, autoload_with=snowflake_engine, schema=schema,
     )
 
     flinks_raw_responses = Table(
-        "flinks_raw_responses",
-        metadata,
-        autoload_with=snowflake_engine,
-        schema=schema,
+        "flinks_raw_responses", metadata, autoload_with=snowflake_engine, schema=schema,
     )
 
     merchants_documents_join = join(
@@ -161,8 +139,7 @@ def copy_transactions(
                     "merchant_guid"
                 ),
                 sqlalchemy.cast(
-                    func.get(documents.c.fields, "cloud_file_path"),
-                    VARCHAR,
+                    func.get(documents.c.fields, "cloud_file_path"), VARCHAR,
                 ).label("file_path"),
                 text("1"),
             ],
@@ -186,8 +163,7 @@ def copy_transactions(
                     "lead_guid"
                 ),
                 sqlalchemy.cast(
-                    func.get(documents.c.fields, "cloud_file_path"),
-                    VARCHAR,
+                    func.get(documents.c.fields, "cloud_file_path"), VARCHAR,
                 ).label("file_path"),
                 text("1"),
             ],
@@ -225,32 +201,21 @@ def copy_transactions(
     all_flinks_responses = pd.read_sql_query(
         all_documents_select,
         snowflake_engine,
-        index_col=[
-            "merchant_guid",
-            "file_path",
-        ],
+        index_col=["merchant_guid", "file_path",],
     )
 
     # Get the set of downloaded flinks responses
     downloaded_flinks_responses = pd.read_sql_query(
         flinks_raw_responses_select,
         snowflake_engine,
-        index_col=[
-            "merchant_guid",
-            "file_path",
-        ],
+        index_col=["merchant_guid", "file_path",],
     )
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         for _index, row in all_flinks_responses.iterrows():
             try:
                 # See if we already have it
-                downloaded_flinks_responses.loc[
-                    (
-                        row.name[0],
-                        row.name[1],
-                    )
-                ]
+                downloaded_flinks_responses.loc[(row.name[0], row.name[1],)]
 
             except KeyError:
                 # We don't have it

@@ -238,9 +238,6 @@ with DAG(
         dag << PythonOperator(
             task_id=f"task_{report}",
             python_callable=process,
-            op_kwargs={
-                "conn": "snowflake_production",
-                "table": report,
-            },
+            op_kwargs={"conn": "snowflake_production", "table": report,},
             provide_context=True,
         )

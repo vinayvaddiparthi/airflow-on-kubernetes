@@ -63,9 +63,7 @@ EXECUTOR_CONFIG = {
             "KubernetesAirflowProductionEquifaxCommercialRole"
         },
     },
-    "resources": {
-        "requests": {"memory": "512Mi"},
-    },
+    "resources": {"requests": {"memory": "512Mi"},},
 }
 
 
@@ -86,9 +84,7 @@ def _fetch_files_from_sftp(sftp_conn_id: str) -> List[str]:
     return commercial_files
 
 
-def _check_if_response_available(
-    sftp_conn_id: str,
-) -> bool:
+def _check_if_response_available(sftp_conn_id: str,) -> bool:
 
     commercial_file_list = _fetch_files_from_sftp(sftp_conn_id)
 
@@ -187,8 +183,7 @@ def _convert_to_parquet(
         with open(file, "rb") as reader:
             try:
                 table_ = csv.read_csv(
-                    reader,
-                    read_options=ReadOptions(block_size=8388608),
+                    reader, read_options=ReadOptions(block_size=8388608),
                 )
                 # add imported_file_name and import_month columns
                 table_ = table_.append_column(
@@ -239,9 +234,7 @@ check_if_files_downloaded = ShortCircuitOperator(
 check_if_response_available = ShortCircuitOperator(
     task_id="check_if_response_available",
     python_callable=_check_if_response_available,
-    op_kwargs={
-        "sftp_conn_id": SFTP_CONN,
-    },
+    op_kwargs={"sftp_conn_id": SFTP_CONN,},
     dag=dag,
 )
 
@@ -263,11 +256,7 @@ download_response_files = PythonOperator(
 decrypt_response_files = PythonOperator(
     task_id="decrypt_response_files",
     python_callable=_decrypt_response_files,
-    op_kwargs={
-        "s3_conn_id": S3_CONN,
-        "s3_bucket": S3_BUCKET,
-        "dir_path": DIR_PATH,
-    },
+    op_kwargs={"s3_conn_id": S3_CONN, "s3_bucket": S3_BUCKET, "dir_path": DIR_PATH,},
     provide_context=True,
     executor_config=EXECUTOR_CONFIG,
     dag=dag,

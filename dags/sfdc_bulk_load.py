@@ -209,8 +209,7 @@ def put_resps_on_snowflake(
 
 
 def describe_sobject(
-    salesforce: Salesforce,
-    sobject_name: str,
+    salesforce: Salesforce, sobject_name: str,
 ) -> Union[SobjectDescriptor, SalesforceMalformedRequest]:
     print(f"Getting metadata for sobject {sobject_name}")
     return SobjectDescriptor(
@@ -369,10 +368,7 @@ def process_sobject(
 
 
 def import_sfdc(
-    snowflake_conn: str,
-    salesforce_conn: str,
-    database: str,
-    schema: str,
+    snowflake_conn: str, salesforce_conn: str, database: str, schema: str,
 ) -> None:
     engine_ = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     salesforce_connection = BaseHook.get_connection(salesforce_conn)
@@ -434,11 +430,7 @@ def create_dag(instances: List[str]) -> DAG:
                 retry_delay=datetime.timedelta(hours=1),
                 retries=3,
                 on_failure_callback=slack_task("slack_data_alerts"),
-                executor_config={
-                    "resources": {
-                        "requests": {"memory": "8Gi"},
-                    },
-                },
+                executor_config={"resources": {"requests": {"memory": "8Gi"},},},
             )
 
         return dag
@@ -479,10 +471,7 @@ if __name__ == "__main__":
     ) as mock_conn, patch(
         "dags.sfdc_bulk_load.SnowflakeHook.get_sqlalchemy_engine",
         return_value=create_engine(
-            url,
-            connect_args={
-                "authenticator": "externalbrowser",
-            },
+            url, connect_args={"authenticator": "externalbrowser",},
         ),
     ) as mock_engine:
         import_sfdc("snowflake_conn", "salesforce_conn", database, "zetatango")
