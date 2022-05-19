@@ -226,7 +226,7 @@ kyc_decryption_spec = [
         ),
     ),
     DecryptionSpec(
-        schema="KYC_PRODUCTION",
+        schema="KYC_STAGING",
         table="INDIVIDUAL_ATTRIBUTES",
         columns=["value"],
         format="marshal",
