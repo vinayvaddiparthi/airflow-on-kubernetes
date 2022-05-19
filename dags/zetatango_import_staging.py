@@ -348,8 +348,7 @@ def decrypt_pii_columns(
                     from_obj=text(f"@{target_schema}.{dst_stage}"),
                 ),
                 Select(
-                    [literal_column("$1").label("fields")],
-                    from_obj=text(dst_table),
+                    [literal_column("$1").label("fields")], from_obj=text(dst_table),
                 ),
             ]
 
@@ -396,10 +395,7 @@ def decrypt_pii_columns(
                                 f"put file://{tempfile_.name} @{target_schema}.{dst_stage}"
                             )
                         ).fetchall()
-            stmt = Select(
-                [literal_column("*")],
-                from_obj=union_all(*select_froms),
-            )
+            stmt = Select([literal_column("*")], from_obj=union_all(*select_froms),)
 
             tx.execute(
                 f"create or replace transient table {dst_table} as {stmt} "  # nosec
@@ -519,11 +515,7 @@ def create_dag() -> DAG:
         dag << import_idp_prod >> decrypt_idp_prod
         dag << import_kyc_prod >> decrypt_kyc_prod
         (
-            [
-                decrypt_core_prod,
-                decrypt_kyc_prod,
-                decrypt_idp_prod,
-            ]
+            [decrypt_core_prod, decrypt_kyc_prod, decrypt_idp_prod,]
         )
 
     return dag
