@@ -119,7 +119,9 @@ def upload_file_s3(file: Any, path: str, bucket: str) -> None:
     try:
         client = get_s3_client()
         client.upload_file(
-            file.name, bucket, path,
+            file.name,
+            bucket,
+            path,
         )
     except:
         logging.error("Error when uploading file to s3")

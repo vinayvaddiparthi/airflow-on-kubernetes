@@ -153,7 +153,9 @@ def _classify_transactions(
             with tempfile.NamedTemporaryFile() as temp_file:
 
                 df_transactions.to_parquet(
-                    temp_file.name, engine="fastparquet", compression="gzip",
+                    temp_file.name,
+                    engine="fastparquet",
+                    compression="gzip",
                 )
 
                 conn.execute(text(f"put file://{temp_file.name} @{stage} parallel=4"))
