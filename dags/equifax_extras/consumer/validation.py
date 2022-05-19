@@ -101,7 +101,9 @@ def check_footer(footer: str, count: int) -> Any:
     return None
 
 
-def validate(file: IO,) -> Dict:
+def validate(
+    file: IO,
+) -> Dict:
     error: Dict[str, Any] = {
         "length": [],
         "header": [],

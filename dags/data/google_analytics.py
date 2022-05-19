@@ -17,7 +17,9 @@ reports: Dict[str, Any] = {
                 {
                     "viewId": VIEW_ID,
                     "dateRanges": [{"startDate": None, "endDate": None}],
-                    "metrics": [{"expression": "ga:sessions"},],
+                    "metrics": [
+                        {"expression": "ga:sessions"},
+                    ],
                     "dimensions": [
                         {"name": "ga:dimension6"},  # cid_ga
                         {"name": "ga:dimension5"},  # cid_platform
@@ -69,7 +71,9 @@ reports: Dict[str, Any] = {
                 {
                     "viewId": VIEW_ID,
                     "dateRanges": [{"startDate": None, "endDate": None}],
-                    "metrics": [{"expression": "ga:users"},],
+                    "metrics": [
+                        {"expression": "ga:users"},
+                    ],
                     "dimensions": [
                         {"name": "ga:dimension6"},  # cid_ga
                         {"name": "ga:hostname"},
@@ -95,7 +99,9 @@ reports: Dict[str, Any] = {
                 {
                     "viewId": VIEW_ID,
                     "dateRanges": [{"startDate": None, "endDate": None}],
-                    "metrics": [{"expression": "ga:users"},],
+                    "metrics": [
+                        {"expression": "ga:users"},
+                    ],
                     "dimensions": [
                         {"name": "ga:dimension5"},  # cid_platform
                         {"name": "ga:hostname"},
@@ -120,7 +126,9 @@ reports: Dict[str, Any] = {
                 {
                     "viewId": VIEW_ID,
                     "dateRanges": [{"startDate": None, "endDate": None}],
-                    "metrics": [{"expression": "ga:newUsers"},],
+                    "metrics": [
+                        {"expression": "ga:newUsers"},
+                    ],
                     "dimensions": [
                         {"name": "ga:dimension6"},  # cid_ga
                         {"name": "ga:sourceMedium"},
@@ -144,7 +152,9 @@ reports: Dict[str, Any] = {
                 {
                     "viewId": VIEW_ID,
                     "dateRanges": [{"startDate": None, "endDate": None}],
-                    "metrics": [{"expression": "ga:uniquePageViews"},],
+                    "metrics": [
+                        {"expression": "ga:uniquePageViews"},
+                    ],
                     "dimensions": [
                         {"name": "ga:dimension6"},  # cid_ga
                         {"name": "ga:sourceMedium"},

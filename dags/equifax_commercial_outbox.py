@@ -49,7 +49,9 @@ EXECUTOR_CONFIG = {
             "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowProductionEquifaxCommercialRole"
         },
     },
-    "resources": {"requests": {"memory": "512Mi"},},
+    "resources": {
+        "requests": {"memory": "512Mi"},
+    },
 }
 
 
@@ -64,17 +66,30 @@ def _mark_request_as_sent(context: Dict) -> None:
 
 
 def _encrypt_request_file(
-    s3_conn: str, bucket_name: str, download_key: str, upload_key: str,
+    s3_conn: str,
+    bucket_name: str,
+    download_key: str,
+    upload_key: str,
 ) -> None:
     s3 = S3Hook(aws_conn_id=s3_conn)
-    filename = s3.download_file(key=download_key, bucket_name=bucket_name,)
+    filename = s3.download_file(
+        key=download_key,
+        bucket_name=bucket_name,
+    )
     with open(filename, "rb") as reader:
         gpg = init_gnupg()
-        encrypted_msg = gpg.encrypt_file(reader, "sts@equifax.com", always_trust=True,)
+        encrypted_msg = gpg.encrypt_file(
+            reader,
+            "sts@equifax.com",
+            always_trust=True,
+        )
     with open(filename, "wb") as writer:
         writer.write(encrypted_msg.data)
         s3.load_file(
-            filename=filename, key=upload_key, bucket_name=bucket_name, replace=True,
+            filename=filename,
+            key=upload_key,
+            bucket_name=bucket_name,
+            replace=True,
         )
 
 

@@ -252,7 +252,10 @@ generate_file = PythonOperator(
         "folder": output_folder,
     },
     executor_config={
-        "resources": {"requests": {"memory": "512Mi"}, "limits": {"memory": "1Gi"},},
+        "resources": {
+            "requests": {"memory": "512Mi"},
+            "limits": {"memory": "1Gi"},
+        },
     },
     execution_timeout=timedelta(hours=3),
     provide_context=True,

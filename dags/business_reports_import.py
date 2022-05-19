@@ -91,12 +91,19 @@ def _download_business_report(
 
 
 def _download_all_business_reports(
-    snowflake_conn_id: str, schema: str, s3_bucket: str, ts: str, **_: None,
+    snowflake_conn_id: str,
+    schema: str,
+    s3_bucket: str,
+    ts: str,
+    **_: None,
 ) -> None:
     engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
     metadata_obj = MetaData()
     entities_business_reports = Table(
-        "entities_business_reports", metadata_obj, autoload_with=engine, schema=schema,
+        "entities_business_reports",
+        metadata_obj,
+        autoload_with=engine,
+        schema=schema,
     )
     raw_business_report_responses = Table(
         "raw_business_report_responses",
@@ -162,7 +169,9 @@ download_business_reports = PythonOperator(
                 "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/Access-ZtPortalUploadProduction-S3-Bucket-In-Zetatango-Prod-AWS"
             }
         },
-        "resources": {"requests": {"memory": "8Gi"},},
+        "resources": {
+            "requests": {"memory": "8Gi"},
+        },
     },
     dag=dag,
 )
