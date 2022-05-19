@@ -42,7 +42,7 @@ def guardrail_linear_regression(
     sum_xx = cash_flow_copy_df["x^2"].sum()
     sum_xy = cash_flow_copy_df["xy"].sum()
 
-    b = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x**2)
+    b = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x ** 2)
     a = 1 / n * sum_y - b / n * sum_x
 
     cash_flow_copy_df["yf"] = cash_flow_copy_df["x"] * b + a

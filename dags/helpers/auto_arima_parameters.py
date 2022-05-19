@@ -20,7 +20,7 @@ class AutoArimaParameters:
     random: bool = attr.ib(default=True)
     n_fits: int = attr.ib(default=50)
     with_intercept: bool = attr.ib(default=False)
-    random_state: int = attr.ib(default=secrets.randbelow(10**20))
+    random_state: int = attr.ib(default=secrets.randbelow(10 ** 20))
 
 
 @attr.s(kw_only=True)

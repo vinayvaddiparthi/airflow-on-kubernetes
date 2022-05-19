@@ -7,11 +7,7 @@ from typing import Any
 
 
 def notify_subscribers(
-    rabbit_url: str,
-    exchange_label: str,
-    topic: str,
-    dag_run: DagRun,
-    **kwargs: Any,
+    rabbit_url: str, exchange_label: str, topic: str, dag_run: DagRun, **kwargs: Any,
 ) -> None:
     if "merchant_guid" in dag_run.conf:
         merchant_guid = dag_run.conf["merchant_guid"]

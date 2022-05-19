@@ -56,10 +56,7 @@ def _mark_request_as_sent(context: Dict) -> None:
 
 
 def _encrypt_request_file(
-    s3_conn: str,
-    bucket_name: str,
-    download_key: str,
-    upload_key: str,
+    s3_conn: str, bucket_name: str, download_key: str, upload_key: str,
 ) -> None:
     s3 = S3Hook(aws_conn_id=s3_conn)
     filename = s3.download_file(key=download_key, bucket_name=bucket_name)
