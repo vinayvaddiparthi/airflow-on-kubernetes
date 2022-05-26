@@ -1,13 +1,13 @@
 import pandas as pd
 import re
 from transliterate import translit
-from transliterate.base import TranslitLanguagePack, registry
+from transliterate.base import registry
 from typing import Union, List, Tuple
 from utils.french_language_pack import FrenchLanguagePack
 
 
 class SalesClassification:
-    def __init__(self):
+    def __init__(self) -> None:
 
         registry.register(UpdatedFrenchLanguagePack)
 
