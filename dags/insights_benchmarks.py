@@ -14,7 +14,7 @@ from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.models import Variable
 
 from utils.failure_callbacks import slack_task
-from helpers.salesvolume_classfication import calculate_sales_volume
+from helpers.salesvolume_classfication import SalesClassification
 
 
 def _classify_transactions(
@@ -23,6 +23,8 @@ def _classify_transactions(
 
     engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
     metadata = MetaData()
+
+    svc = SalesClassification()
 
     chunk_size = 100000
 
@@ -135,7 +137,7 @@ def _classify_transactions(
             df_transactions[
                 ["predicted_category", "is_nsd", "processed_credit"]
             ] = df_transactions.apply(
-                calculate_sales_volume,
+                svc.calculate_sales_volume,
                 args=(
                     df_precise_entries,
                     df_inprecise_entries,
