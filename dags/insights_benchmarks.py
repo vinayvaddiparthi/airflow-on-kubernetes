@@ -94,6 +94,8 @@ def _classify_transactions(
             df_lookup["cash_flow_lookup_version_id"]
             == df_lookup["cash_flow_lookup_version_id"].max()
         ]
+        
+        df_lookup.sort_values("position", ascending=True, inplace=True)
 
         df_precise_entries = df_lookup[df_lookup["has_match"]]
 
