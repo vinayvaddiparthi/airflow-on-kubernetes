@@ -2,7 +2,7 @@ import pandas as pd
 import re
 from transliterate import translit
 from transliterate.base import registry
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Optional
 from utils.french_language_pack import FrenchLanguagePack
 
 
@@ -28,7 +28,9 @@ class SalesClassification:
 
         return description
 
-    def __refine_e_transfer_lookup(self, description: str, is_nsd: bool) -> bool:
+    def __refine_e_transfer_lookup(
+        self, description: str, is_nsd: Optional[bool]
+    ) -> Optional[bool]:
         """
         Refines the non-sales deposit flag for e-transfer transactions
 
@@ -56,7 +58,7 @@ class SalesClassification:
         transaction: pd.Series,
         precise_entries: pd.DataFrame,
         imprecise_entries: pd.DataFrame,
-    ) -> Tuple[str, bool]:
+    ) -> Tuple[str, Optional[bool]]:
         """
         Categories the transaction based on the description
 
@@ -72,7 +74,7 @@ class SalesClassification:
         """
 
         category = "no-match"
-        is_nsd = False
+        is_nsd = None
 
         desc = transaction["description"]
 
@@ -197,7 +199,7 @@ class SalesClassification:
         accepts_e_transfer: bool,
         accepts_lrc: bool,
         is_lrc: bool,
-        is_nsd: bool,
+        is_nsd: Optional[bool],
     ) -> float:
         """
         Processes each transaction and returns the true sales amount. Will be 0 if the transaction is a
@@ -339,7 +341,7 @@ class SalesClassification:
         precise_entries: pd.DataFrame,
         imprecise_entries: pd.DataFrame,
         df_merchant_industry: pd.DataFrame,
-    ) -> List[Union[str, bool, float]]:
+    ) -> List[Union[str, Optional[bool], float]]:
         """
         Calculates the sales volume for a transaction
         The logic for the calculation has been ported from the sales_volume_service in Zetatango
