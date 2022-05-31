@@ -259,7 +259,7 @@ class SalesClassification:
             float: processed credit amount of the transaction
         """
 
-        revenue = 0.0
+        revenue = credit
 
         if not accepts_e_transfer and not accepts_lrc:
             if (
