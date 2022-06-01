@@ -15,6 +15,30 @@ import csv
 # def read_data_from_snowflake():
 # Pretty sure that we need to connect to snowflake to pull whatever data is going to be used here for full automation
 # Expected Steps for this function:
+# def copy_transactions(
+#     snowflake_connection: str,
+#     schema: str,
+#     bucket_name: str,
+#     num_threads: int = 4,
+#     **kwargs: Any,
+# ) -> None:
+#     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
+#     metadata = MetaData()
+#
+#     dim_loan = Table(
+#         "dim_loan",
+#         metadata,
+#         autoload_with=snowflake_engine,
+#         schema=schema
+#     )
+#
+#     holidays = Table(
+#         "holidays",
+#         metadata,
+#         autoload_with=snowflake_engine,
+#         schema=schema
+#     )
+
 # 1.) Connect to snowflake
 # 2.) Pull the table(s) of interest
 # 3.) Load the tables into memory (if possible)
@@ -47,17 +71,17 @@ def read_temp_csv_data(filepath: str) -> None:
         ]
         df = df[fields_for_use]
         df["ACTIVATED_AT"] = pd.to_datetime(df["ACTIVATED_AT"])
-        logging.info(f"✅ Processed the {filepath} data")
+        logging.info(f"✅ Processed the data")
     elif "holiday" in filepath:
         df = pd.read_csv(filepath)
         df["date"] = pd.to_datetime(df["date"])
         for i, row in df.iterrows():
             df.at[i, "date"] = row["date"].date()
-        logging.info(f"✅ Processed the {filepath} data")
+        logging.info(f"✅ Processed the data")
     else:
         df = False
         logging.info(
-            f"❌ Could not process the {filepath} data, many errors to follow..."
+            f"❌ Could not process the data, many errors to follow..."
         )
     return df
 
@@ -191,7 +215,7 @@ def calculate_all_paydown_schedules(filepath: str) -> None:
                 # Check the hash map to see if the date is a holiday or not
                 while repayment_date in holiday_schedule.keys():
                     repayment_date = repayment_date + timedelta(days=1)
-                    logging.info(f"✅ Checked the Hash Map for {repayment_date}")
+                    logging.info(f"✅ Checked the Hash Map for the date")
                 # Finally; write the data to a csv to save the result of this calculation.
                 write_data_to_csv(
                     guid,
