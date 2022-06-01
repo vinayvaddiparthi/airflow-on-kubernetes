@@ -12,16 +12,16 @@ import pandas as pd
 import csv
 
 # to-do Need to collect the appropriate data to work with from ❄️ look @ dim_loan and holidays and repayment_amount
-#def read_data_from_snowflake():
-    # Pretty sure that we need to connect to snowflake to pull whatever data is going to be used here for full automation
-    # Expected Steps for this function:
-    # 1.) Connect to snowflake
-    # 2.) Pull the table(s) of interest
-    # 3.) Load the tables into memory (if possible)
-    # 4.) Return the tables for use in the paydown calculation
-    # 5.) NB: This might need to be done in a chunkwise fashion as the data input may be too large
-    #logging.info(f"Successfully connected to ❄️ for data collection")
-    # pass
+# def read_data_from_snowflake():
+# Pretty sure that we need to connect to snowflake to pull whatever data is going to be used here for full automation
+# Expected Steps for this function:
+# 1.) Connect to snowflake
+# 2.) Pull the table(s) of interest
+# 3.) Load the tables into memory (if possible)
+# 4.) Return the tables for use in the paydown calculation
+# 5.) NB: This might need to be done in a chunkwise fashion as the data input may be too large
+# logging.info(f"Successfully connected to ❄️ for data collection")
+# pass
 
 
 # This function just pulls in data from disk to a pandas df object and then processes with pandas for the table
@@ -205,7 +205,7 @@ def calculate_all_paydown_schedules(filepath):
             continue
 
 
-#calculate_all_paydown_schedules("../data/dim_loan.csv")
+# calculate_all_paydown_schedules("../data/dim_loan.csv")
 # Airflow constructors - this will make sure that it is a fully automated process and is run on the cloud T.T
 
 # def create_dag() -> DAG:
