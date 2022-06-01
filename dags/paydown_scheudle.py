@@ -27,7 +27,7 @@ import csv
 # This function just pulls in data from disk to a pandas df object and then processes with pandas for the table
 # Can be adjusted for PyArrow compatability at a later point in time if needed.
 # NB: This is not a permanent function - will be replaced by read_data_from_snowflake for production
-def read_temp_csv_data(filepath: str):
+def read_temp_csv_data(filepath: str) -> pd.dataframe:
     if "dim_loan" in filepath:
         df = pd.read_csv(filepath)
         # Pre-Processing for later in the pipe
@@ -62,7 +62,7 @@ def read_temp_csv_data(filepath: str):
     return df
 
 
-def all_known_holidays(holiday_filepath: str):
+def all_known_holidays(holiday_filepath: str) -> dict:
     df = read_temp_csv_data(holiday_filepath)
     # Successfully makes a dictionary (hash map) of all holiday data provided in the read in csv (SQL statement)
     # Ensure that date lookup becomes O(1) instead of O(n^2)
@@ -72,7 +72,7 @@ def all_known_holidays(holiday_filepath: str):
 
 
 # Schedule in days will return a datetime object to show how many days are in between different payment schedules
-def schedule_in_days(frequency: str):
+def schedule_in_days(frequency: str) -> timedelta:
     try:
         if frequency == "daily":
             return timedelta(days=1)
@@ -86,7 +86,7 @@ def schedule_in_days(frequency: str):
         )
 
 
-def interval_float(frequency: str):
+def interval_float(frequency: str) -> float:
     try:
         if frequency == "daily":
             return float(1)
@@ -108,7 +108,7 @@ def write_data_to_csv(
     interest: float,
     ending_balance: float,
     filepath: str,
-):
+) -> None:
     file = open(filepath, "a", newline="")
     with file:
         header = [
@@ -137,7 +137,7 @@ def write_data_to_csv(
     logging.info(f"✅ Wrote some lines successfully")
 
 
-def calculate_all_paydown_schedules(filepath: str):
+def calculate_all_paydown_schedules(filepath: str) -> None:
     # Call the Holiday Hash Map creation for this script, load in the data that is to be worked with
     holiday_schedule = all_known_holidays(
         "../data/holiday.csv"
