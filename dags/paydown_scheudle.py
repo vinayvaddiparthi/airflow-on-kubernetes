@@ -27,7 +27,7 @@ import csv
 # This function just pulls in data from disk to a pandas df object and then processes with pandas for the table
 # Can be adjusted for PyArrow compatability at a later point in time if needed.
 # NB: This is not a permanent function - will be replaced by read_data_from_snowflake for production
-def read_temp_csv_data(filepath: str) -> pd.dataframe:
+def read_temp_csv_data(filepath: str) -> None:
     if "dim_loan" in filepath:
         df = pd.read_csv(filepath)
         # Pre-Processing for later in the pipe
@@ -72,7 +72,7 @@ def all_known_holidays(holiday_filepath: str) -> dict:
 
 
 # Schedule in days will return a datetime object to show how many days are in between different payment schedules
-def schedule_in_days(frequency: str) -> timedelta:
+def schedule_in_days(frequency: str) -> timedelta | None:
     try:
         if frequency == "daily":
             return timedelta(days=1)
@@ -84,9 +84,10 @@ def schedule_in_days(frequency: str) -> timedelta:
         logging.info(
             f" ❌ Likely an issue in the data present; data did not fit daily/weekly/bi-weekly as expected"
         )
+        return None
 
 
-def interval_float(frequency: str) -> float:
+def interval_float(frequency: str) -> float | None:
     try:
         if frequency == "daily":
             return float(1)
@@ -98,11 +99,12 @@ def interval_float(frequency: str) -> float:
         logging.info(
             f" ❌ Likely an issue in the data present; data did not fit daily/weekly/bi-weekly as expected"
         )
+        return None
 
 
 def write_data_to_csv(
     guid: str,
-    repayment_date: datetime.date,
+    repayment_date: datetime,
     beginning_balance: float,
     repayment_amount: float,
     interest: float,
