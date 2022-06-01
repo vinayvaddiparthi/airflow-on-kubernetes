@@ -80,9 +80,7 @@ def read_temp_csv_data(filepath: str) -> None:
         logging.info(f"✅ Processed the data")
     else:
         df = False
-        logging.info(
-            f"❌ Could not process the data, many errors to follow..."
-        )
+        logging.info(f"❌ Could not process the data, many errors to follow...")
     return df
 
 
