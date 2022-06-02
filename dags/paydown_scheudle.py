@@ -28,37 +28,37 @@ import csv
 # This function just pulls in data from disk to a pandas df object and then processes with pandas for the table
 # Can be adjusted for PyArrow compatability at a later point in time if needed.
 # NB: This is not a permanent function - will be replaced by read_data_from_snowflake for production
-# def read_temp_csv_data(filepath: str) -> pd.dataframe :
-#     if "dim_loan" in filepath:
-#         df = pd.read_csv(filepath)
-#         # Pre-Processing for later in the pipe
-#         fields_for_use = [
-#             "GUID",
-#             "ACTIVATED_AT",
-#             "APR",
-#             "PRINCIPAL_AMOUNT",
-#             "REPAYMENT_AMOUNT",
-#             "TOTAL_REPAYMENTS_AMOUNT",
-#             "INTEREST_AMOUNT",
-#             "REPAYMENT_SCHEDULE",
-#             "STATE",
-#             "REMAINING_PRINCIPAL",
-#             "INTEREST_BALANCE",
-#             "OUTSTANDING_BALANCE",
-#         ]
-#         df = df[fields_for_use]
-#         df["ACTIVATED_AT"] = pd.to_datetime(df["ACTIVATED_AT"])
-#         logging.info(f"✅ Processed the data")
-#     elif "holiday" in filepath:
-#         df = pd.read_csv(filepath)
-#         df["date"] = pd.to_datetime(df["date"])
-#         for i, row in df.iterrows():
-#             df.at[i, "date"] = row["date"].date()
-#         logging.info(f"✅ Processed the data")
-#     else:
-#         df = False
-#         logging.info(f"❌ Could not process the data, many errors to follow...")
-#     return df
+def read_temp_csv_data(filepath: str) -> pd.core.frame.DataFrame:
+    if "dim_loan" in filepath:
+        df = pd.read_csv(filepath)
+        # Pre-Processing for later in the pipe
+        fields_for_use = [
+            "GUID",
+            "ACTIVATED_AT",
+            "APR",
+            "PRINCIPAL_AMOUNT",
+            "REPAYMENT_AMOUNT",
+            "TOTAL_REPAYMENTS_AMOUNT",
+            "INTEREST_AMOUNT",
+            "REPAYMENT_SCHEDULE",
+            "STATE",
+            "REMAINING_PRINCIPAL",
+            "INTEREST_BALANCE",
+            "OUTSTANDING_BALANCE",
+        ]
+        df = df[fields_for_use]
+        df["ACTIVATED_AT"] = pd.to_datetime(df["ACTIVATED_AT"])
+        logging.info(f"✅ Processed the data")
+    elif "holiday" in filepath:
+        df = pd.read_csv(filepath)
+        df["date"] = pd.to_datetime(df["date"])
+        for i, row in df.iterrows():
+            df.at[i, "date"] = row["date"].date()
+        logging.info(f"✅ Processed the data")
+    else:
+        df = False
+        logging.info(f"❌ Could not process the data, many errors to follow...")
+    return df
 
 
 def all_known_holidays(holiday_filepath: str) -> dict:
