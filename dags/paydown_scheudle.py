@@ -71,31 +71,23 @@ def all_known_holidays(holiday_filepath: str) -> dict:
 
 
 # Schedule in days will return a datetime object to show how many days are in between different payment schedules
-def schedule_in_days(frequency: str) -> timedelta | None:
+def schedule_in_days(frequency: str) -> timedelta:
     if frequency == "daily":
         return timedelta(days=1)
     elif frequency == "weekly":
         return timedelta(days=7)
     elif frequency == "bi-weekly":
         return timedelta(days=14)
-    else:
-        logging.info(" ❌ Could not convert the frequency to a timedelta object ")
-        return None
 
 
-def interval_float(frequency: str) -> float | None:
-    try:
-        if frequency == "daily":
-            return float(1)
-        elif frequency == "weekly":
-            return float(7)
-        elif frequency == "bi-weekly":
-            return float(14)
-    except ValueError:
-        logging.info(
-            " ❌ Likely an issue in the data present; data did not fit daily/weekly/bi-weekly as expected"
-        )
-        return None
+def interval_float(frequency: str) -> float:
+    if frequency == "daily":
+        return float(1)
+    elif frequency == "weekly":
+        return float(7)
+    elif frequency == "bi-weekly":
+        return float(14)
+
 
 
 def write_data_to_csv(
