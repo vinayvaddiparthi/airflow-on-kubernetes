@@ -11,7 +11,6 @@ import logging
 from datetime import datetime, timedelta
 import pandas as pd
 import csv
-import snowflake.connector
 from snowflake.sqlalchemy import URL
 from sqlalchemy import create_engine
 
@@ -117,7 +116,7 @@ where state = 'repaying' """
 #     return df
 
 
-def all_known_holidays(df_holidays) -> dict:
+def all_known_holidays(df_holidays: pd.core.frame.DataFrame) -> dict:
     df = df_holidays
     # Successfully makes a dictionary (hash map) of all holiday data provided in the read in csv (SQL statement)
     # Ensure that date lookup becomes O(1) instead of O(n^2)
