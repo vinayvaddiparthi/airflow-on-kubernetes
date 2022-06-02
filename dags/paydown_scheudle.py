@@ -48,16 +48,16 @@ def read_temp_csv_data(filepath: str) -> pd.core.frame.DataFrame:
         ]
         df = df[fields_for_use]
         df["ACTIVATED_AT"] = pd.to_datetime(df["ACTIVATED_AT"])
-        logging.info(f"✅ Processed the data")
+        logging.info("✅ Processed the data")
     elif "holiday" in filepath:
         df = pd.read_csv(filepath)
         df["date"] = pd.to_datetime(df["date"])
         for i, row in df.iterrows():
             df.at[i, "date"] = row["date"].date()
-        logging.info(f"✅ Processed the data")
+        logging.info("✅ Processed the data")
     else:
         df = False
-        logging.info(f"❌ Could not process the data, many errors to follow...")
+        logging.info("❌ Could not process the data, many errors to follow...")
     return df
 
 
@@ -78,6 +78,8 @@ def schedule_in_days(frequency: str) -> timedelta:
         return timedelta(days=7)
     elif frequency == "bi-weekly":
         return timedelta(days=14)
+    else:
+        return timedelta(days=0)
 
 
 def interval_float(frequency: str) -> float:
@@ -87,6 +89,8 @@ def interval_float(frequency: str) -> float:
         return float(7)
     elif frequency == "bi-weekly":
         return float(14)
+    else:
+        return float(0)
 
 
 def write_data_to_csv(
