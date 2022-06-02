@@ -89,7 +89,6 @@ def interval_float(frequency: str) -> float:
         return float(14)
 
 
-
 def write_data_to_csv(
     guid: str,
     repayment_date: datetime,
