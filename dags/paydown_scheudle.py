@@ -15,29 +15,6 @@ import csv
 # def read_data_from_snowflake():
 # Pretty sure that we need to connect to snowflake to pull whatever data is going to be used here for full automation
 # Expected Steps for this function:
-# def copy_transactions(
-#     snowflake_connection: str,
-#     schema: str,
-#     bucket_name: str,
-#     num_threads: int = 4,
-#     **kwargs: Any,
-# ) -> None:
-#     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
-#     metadata = MetaData()
-#
-#     dim_loan = Table(
-#         "dim_loan",
-#         metadata,
-#         autoload_with=snowflake_engine,
-#         schema=schema
-#     )
-#
-#     holidays = Table(
-#         "holidays",
-#         metadata,
-#         autoload_with=snowflake_engine,
-#         schema=schema
-#     )
 
 # 1.) Connect to snowflake
 # 2.) Pull the table(s) of interest
@@ -51,37 +28,37 @@ import csv
 # This function just pulls in data from disk to a pandas df object and then processes with pandas for the table
 # Can be adjusted for PyArrow compatability at a later point in time if needed.
 # NB: This is not a permanent function - will be replaced by read_data_from_snowflake for production
-def read_temp_csv_data(filepath: str) -> None:
-    if "dim_loan" in filepath:
-        df = pd.read_csv(filepath)
-        # Pre-Processing for later in the pipe
-        fields_for_use = [
-            "GUID",
-            "ACTIVATED_AT",
-            "APR",
-            "PRINCIPAL_AMOUNT",
-            "REPAYMENT_AMOUNT",
-            "TOTAL_REPAYMENTS_AMOUNT",
-            "INTEREST_AMOUNT",
-            "REPAYMENT_SCHEDULE",
-            "STATE",
-            "REMAINING_PRINCIPAL",
-            "INTEREST_BALANCE",
-            "OUTSTANDING_BALANCE",
-        ]
-        df = df[fields_for_use]
-        df["ACTIVATED_AT"] = pd.to_datetime(df["ACTIVATED_AT"])
-        logging.info(f"✅ Processed the data")
-    elif "holiday" in filepath:
-        df = pd.read_csv(filepath)
-        df["date"] = pd.to_datetime(df["date"])
-        for i, row in df.iterrows():
-            df.at[i, "date"] = row["date"].date()
-        logging.info(f"✅ Processed the data")
-    else:
-        df = False
-        logging.info(f"❌ Could not process the data, many errors to follow...")
-    return df
+# def read_temp_csv_data(filepath: str) -> pd.dataframe :
+#     if "dim_loan" in filepath:
+#         df = pd.read_csv(filepath)
+#         # Pre-Processing for later in the pipe
+#         fields_for_use = [
+#             "GUID",
+#             "ACTIVATED_AT",
+#             "APR",
+#             "PRINCIPAL_AMOUNT",
+#             "REPAYMENT_AMOUNT",
+#             "TOTAL_REPAYMENTS_AMOUNT",
+#             "INTEREST_AMOUNT",
+#             "REPAYMENT_SCHEDULE",
+#             "STATE",
+#             "REMAINING_PRINCIPAL",
+#             "INTEREST_BALANCE",
+#             "OUTSTANDING_BALANCE",
+#         ]
+#         df = df[fields_for_use]
+#         df["ACTIVATED_AT"] = pd.to_datetime(df["ACTIVATED_AT"])
+#         logging.info(f"✅ Processed the data")
+#     elif "holiday" in filepath:
+#         df = pd.read_csv(filepath)
+#         df["date"] = pd.to_datetime(df["date"])
+#         for i, row in df.iterrows():
+#             df.at[i, "date"] = row["date"].date()
+#         logging.info(f"✅ Processed the data")
+#     else:
+#         df = False
+#         logging.info(f"❌ Could not process the data, many errors to follow...")
+#     return df
 
 
 def all_known_holidays(holiday_filepath: str) -> dict:
@@ -95,17 +72,14 @@ def all_known_holidays(holiday_filepath: str) -> dict:
 
 # Schedule in days will return a datetime object to show how many days are in between different payment schedules
 def schedule_in_days(frequency: str) -> timedelta | None:
-    try:
-        if frequency == "daily":
-            return timedelta(days=1)
-        elif frequency == "weekly":
-            return timedelta(days=7)
-        elif frequency == "bi-weekly":
-            return timedelta(days=14)
-    except ValueError:
-        logging.info(
-            f" ❌ Likely an issue in the data present; data did not fit daily/weekly/bi-weekly as expected"
-        )
+    if frequency == "daily":
+        return timedelta(days=1)
+    elif frequency == "weekly":
+        return timedelta(days=7)
+    elif frequency == "bi-weekly":
+        return timedelta(days=14)
+    else:
+        logging.info(" ❌ Could not convert the frequency to a timedelta object ")
         return None
 
 
@@ -119,7 +93,7 @@ def interval_float(frequency: str) -> float | None:
             return float(14)
     except ValueError:
         logging.info(
-            f" ❌ Likely an issue in the data present; data did not fit daily/weekly/bi-weekly as expected"
+            " ❌ Likely an issue in the data present; data did not fit daily/weekly/bi-weekly as expected"
         )
         return None
 
@@ -158,7 +132,7 @@ def write_data_to_csv(
             }
         )
     file.close()
-    logging.info(f"✅ Wrote some lines successfully")
+    logging.info("✅ Wrote some lines successfully")
 
 
 def calculate_all_paydown_schedules(filepath: str) -> None:
@@ -202,18 +176,18 @@ def calculate_all_paydown_schedules(filepath: str) -> None:
             interest_percent_per_cycle = row["APR"] / (
                 365 / interval_float(row["REPAYMENT_SCHEDULE"])
             )  # This is the float interval
-            logging.info(f" ✅ Collected all the values to proceed with calculations")
+            logging.info(" ✅ Collected all the values to proceed with calculations")
             for i in range(0, number_of_pay_cycles):
                 beginning_balance = principal
                 principal = principal - repayment_amount
                 ending_balance = principal
                 repayment_date = repayment_date + interval
                 interest = beginning_balance * interest_percent_per_cycle
-                logging.info(f" ✅ Completed the calculations required")
+                logging.info(" ✅ Completed the calculations required")
                 # Check the hash map to see if the date is a holiday or not
                 while repayment_date in holiday_schedule.keys():
                     repayment_date = repayment_date + timedelta(days=1)
-                    logging.info(f"✅ Checked the Hash Map for the date")
+                    logging.info("✅ Checked the Hash Map for the date")
                 # Finally; write the data to a csv to save the result of this calculation.
                 write_data_to_csv(
                     guid,
@@ -224,7 +198,7 @@ def calculate_all_paydown_schedules(filepath: str) -> None:
                     ending_balance,
                     "../data/paydown_schedule.csv",
                 )
-                logging.info(f"✅ Wrote the required data to the target location")
+                logging.info("✅ Wrote the required data to the target location")
         else:
             continue
 
