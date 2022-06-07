@@ -254,7 +254,7 @@ def create_dag() -> DAG:
     ) as dag:
         calculate_all_paydown_schedules = PythonOperator(
             task_id="paydown_schedule",
-            python_callable=calculate_all_paydown_schedules(),
+            python_callable=calculate_all_paydown_schedules,
             op_kwargs={
                 "snowflake_connection_dim_loan": "snowflake_production",
                 "target_schema": "ANALYTICS_PRODUCTION.DBT_ARIO",
