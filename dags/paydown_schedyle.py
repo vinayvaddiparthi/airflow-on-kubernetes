@@ -4,32 +4,23 @@
 
 # Import statements
 import logging
-
-# from airflow.operators.python_operator import PythonOperator
-# from airflow import DAG
-
 from datetime import datetime, timedelta
+from typing import Any, Union
+import pendulum
 import pandas as pd
 import csv
-from snowflake.sqlalchemy import URL
-from sqlalchemy import create_engine
+import tempfile
+from pathlib import Path
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
+from utils.failure_callbacks import slack_dag, slack_task
 
-# to-do Need to collect the appropriate data to work with from ❄️ look @ dim_loan and holidays and repayment_amount
 
+def read_data_from_snowflake(snowflake_conn_id: str) -> pd.core.frame.DataFrame:
+    engine = SnowflakeHook(snowflake_conn_id).get_sqlalchemy_engine()
+    connection = engine.connect()
 
-def read_data_from_snowflake() -> pd.core.frame.DataFrame:
-    # URL for the dim loan data
-    url_dim_loan = URL(
-        user="XXX",
-        password="XXX",
-        account="thinkingcapital.ca-central-1.aws",
-        warehouse="ETL",
-        database="analytics_production",
-        schema="dbt_ario",
-        role="DBT_DEVELOPMENT",
-    )
-    engine_dim_loan = create_engine(url_dim_loan)
-    connection_dim_loan = engine_dim_loan.connect()
     query_dim_loan = """select GUID,
        ACTIVATED_AT,
        APR,
@@ -44,22 +35,10 @@ def read_data_from_snowflake() -> pd.core.frame.DataFrame:
    OUTSTANDING_BALANCE
 from analytics_production.dbt_ario.dim_loan
 where state = 'repaying' """
-    df_dim_loan = pd.read_sql(query_dim_loan, connection_dim_loan)
-
-    # The connection for the holidays data
-    url_holidays = URL(
-        user="XXX",
-        password="XXX",
-        account="thinkingcapital.ca-central-1.aws",
-        warehouse="ETL",
-        database="ANALYTICS_REVIEW_UPDATE_SNA_UJQGCO",
-        schema="dbt",
-        role="DBT_DEVELOPMENT",
-    )
-    engine_holidays = create_engine(url_holidays)
-    connection_holidays = engine_holidays.connect()
     query_holidays = """select * from analytics_review_update_sna_ujqgco.dbt.holidays where "is_holiday"=1"""
-    df_holidays = pd.read_sql(query_holidays, connection_holidays)
+
+    df_holidays = pd.read_sql(query_holidays, connection)
+    df_dim_loan = pd.read_sql(query_dim_loan, connection)
 
     # Process the holiday table to create the holiday hash later
     df_holidays["date"] = pd.to_datetime(df_holidays["date"])
@@ -69,51 +48,42 @@ where state = 'repaying' """
     return df_dim_loan, df_holidays
 
 
-# Pretty sure that we need to connect to snowflake to pull whatever data is going to be used here for full automation
-# Expected Steps for this function:
-
-# 1.) Connect to snowflake
-# 2.) Pull the table(s) of interest
-# 3.) Load the tables into memory (if possible)
-# 4.) Return the tables for use in the paydown calculation
-# 5.) NB: This might need to be done in a chunkwise fashion as the data input may be too large
-# logging.info(f"Successfully connected to ❄️ for data collection")
-
-
 # This function just pulls in data from disk to a pandas df object and then processes with pandas for the table
-# Can be adjusted for PyArrow compatability at a later point in time if needed.
+# Can be adjusted for PyArrow/parquet compatability at a later point in time if needed.
 # NB: This is not a permanent function - will be replaced by read_data_from_snowflake for production
-# def read_temp_csv_data(filepath: str) -> pd.core.frame.DataFrame:
-#     if "dim_loan" in filepath:
-#         df = pd.read_csv(filepath)
-#         # Pre-Processing for later in the pipe
-#         fields_for_use = [
-#             "GUID",
-#             "ACTIVATED_AT",
-#             "APR",
-#             "PRINCIPAL_AMOUNT",
-#             "REPAYMENT_AMOUNT",
-#             "TOTAL_REPAYMENTS_AMOUNT",
-#             "INTEREST_AMOUNT",
-#             "REPAYMENT_SCHEDULE",
-#             "STATE",
-#             "REMAINING_PRINCIPAL",
-#             "INTEREST_BALANCE",
-#             "OUTSTANDING_BALANCE",
-#         ]
-#         df = df[fields_for_use]
-#         df["ACTIVATED_AT"] = pd.to_datetime(df["ACTIVATED_AT"])
-#         logging.info("✅ Processed the data")
-#     elif "holiday" in filepath:
-#         df = pd.read_csv(filepath)
-#         df["date"] = pd.to_datetime(df["date"])
-#         for i, row in df.iterrows():
-#             df.at[i, "date"] = row["date"].date()
-#         logging.info("✅ Processed the data")
-#     else:
-#         df = False
-#         logging.info("❌ Could not process the data, many errors to follow...")
-#     return df
+
+
+def read_temp_csv_data(filepath: str) -> pd.core.frame.DataFrame:
+    if "dim_loan" in filepath:
+        df = pd.read_csv(filepath)
+        # Pre-Processing for later in the pipe
+        fields_for_use = [
+            "GUID",
+            "ACTIVATED_AT",
+            "APR",
+            "PRINCIPAL_AMOUNT",
+            "REPAYMENT_AMOUNT",
+            "TOTAL_REPAYMENTS_AMOUNT",
+            "INTEREST_AMOUNT",
+            "REPAYMENT_SCHEDULE",
+            "STATE",
+            "REMAINING_PRINCIPAL",
+            "INTEREST_BALANCE",
+            "OUTSTANDING_BALANCE",
+        ]
+        df = df[fields_for_use]
+        df["ACTIVATED_AT"] = pd.to_datetime(df["ACTIVATED_AT"])
+        logging.info("✅ Processed the data")
+    elif "holiday" in filepath:
+        df = pd.read_csv(filepath)
+        df["date"] = pd.to_datetime(df["date"])
+        for i, row in df.iterrows():
+            df.at[i, "date"] = row["date"].date()
+        logging.info("✅ Processed the data")
+    else:
+        df = False
+        logging.info("❌ Could not process the data, many errors to follow...")
+    return df
 
 
 def all_known_holidays(df_holidays: pd.core.frame.DataFrame) -> dict:
@@ -155,7 +125,7 @@ def write_data_to_csv(
     repayment_amount: float,
     interest: float,
     ending_balance: float,
-    filepath: str,
+    filepath: Path,
 ) -> None:
     file = open(filepath, "a", newline="")
     with file:
@@ -185,14 +155,17 @@ def write_data_to_csv(
     logging.info("✅ Wrote some lines successfully")
 
 
-def calculate_all_paydown_schedules(filepath: str) -> None:
+def calculate_all_paydown_schedules(snowflake_conn_id: str) -> None:
     # Call the Holiday Hash Map creation for this script, load in the data that is to be worked with
-    df_dim_loan, df_holidays = read_data_from_snowflake()
-
+    df_dim_loan, df_holidays = read_data_from_snowflake(snowflake_conn_id)
     holiday_schedule = all_known_holidays(df_holidays)
 
+    csv_filepath: Path = Path(tempfile.TemporaryFile()).with_suffix(".csv")
+    destination = "yet another val"  # TODO - fill in the required destination
+    stage_guid = "some val"  # TODO - fill in the required stage_guid
+
     # Write out a header column to make the csv easier to read
-    file = open("paydown_schedule_test.csv", "a", newline="")
+    file = open(csv_filepath, "a", newline="")
     with file:
         header = [
             "GUID",
@@ -245,35 +218,47 @@ def calculate_all_paydown_schedules(filepath: str) -> None:
                     repayment_amount,
                     interest,
                     ending_balance,
-                    "../data/paydown_schedule.csv",
+                    csv_filepath,
                 )
                 logging.info("✅ Wrote the required data to the target location")
         else:
             continue
+    # try to send the data to snowflake and log it as a success or failure
+    with snowflake_engine as tx:
+        try:
+            tx.execute(
+                f"put file://{csv_filepath} @{destination}.{stage_guid}"
+            ).fetchall()
+            logging.info(f"Put temp csv file in {destination} successfully")
+        except:
+            logging.info(
+                f"Did not manage to put the csv file into {destination} successfully"
+            )
 
 
-# calculate_all_paydown_schedules("../data/dim_loan.csv")
-# Airflow constructors - this will make sure that it is a fully automated process and is run on the cloud T.T
-
-# def create_dag() -> DAG:
-#     with DAG(
-#         dag_id="paydown_schedule",
-#         start_date=pendulumn.datetime(
-#             2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
-#         ),
-#         schedule_interval="0 0 1 1 1",
-#         default_args={
-#             "retries": 3,
-#             "retry_delay": timedelta(minutes=5),
-#             "on_failure_callback": slack_task("slack_data_alerts"),
-#         },
-#         catchup=False,
-#         max_active_runs=1,
-#         on_failure_callback=slack_dag("slack_data_alerts"),
-#     ) as dag:
-#         calculate_all_paydown_schedules() = PythonOperator(
-#             task_id="paydown_schedule",
-#             python_callable=calculate_all_paydown_schedules('../data/dim_loan.csv'),
-#         )
-#         dag << estimated_lms_repayment_schedules
-#     return dag
+def create_dag() -> DAG:
+    with DAG(
+        dag_id="paydown_schedule",
+        start_date=pendulum.datetime(
+            2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
+        ),
+        schedule_interval="0 0 1 1 1",
+        default_args={
+            "retries": 3,
+            "retry_delay": timedelta(minutes=5),
+            "on_failure_callback": slack_task("slack_data_alerts"),
+        },
+        catchup=False,
+        max_active_runs=1,
+        on_failure_callback=slack_dag("slack_data_alerts"),
+    ) as dag:
+        calculate_all_paydown_schedules = PythonOperator(
+            task_id="paydown_schedule",
+            python_callable=calculate_all_paydown_schedules(),
+            op_kwargs={
+                "snowflake_connection_dim_loan": "snowflake_production",
+                "target_schema": "ANALYTICS_PRODUCTION.DBT_ARIO",
+            },
+        )
+        dag << calculate_all_paydown_schedules
+    return dag
