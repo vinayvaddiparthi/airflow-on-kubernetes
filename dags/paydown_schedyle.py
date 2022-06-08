@@ -124,8 +124,9 @@ def calculate_all_paydown_schedules(
     holiday_schedule = all_known_holidays(df_holidays)
 
     csv_filepath = tempfile.TemporaryFile(mode="a", suffix=".csv")
-    destination = "yet another val"  # TODO - fill in the required destination
-    stage_guid = "some val"  # TODO - fill in the required stage_guid
+    destination_schema = "DBT_REPORTING"
+    stage = "AMORTIZATION_SCHEDULES"
+    table = "FCT_AMORTIZATION_SCHEDULES"
 
     # Write out a header column to make the csv easier to read
     header = [
@@ -187,15 +188,35 @@ def calculate_all_paydown_schedules(
             continue
     # try to send the data to snowflake and log it as a success or failure
     with snowflake_engine as tx:
+        tx.execute(
+            f"create or replace stage {destination_schema}.{stage} "
+            f"file_format=(type=csv)"
+        ).fetchall()
         try:
             tx.execute(
-                f"put file://{csv_filepath} @{destination}.{stage_guid} "
+                f"put file://{csv_filepath} @{destination_schema}.{stage} "
             ).fetchall()
-            logging.info(f"Put temp csv file in {destination} successfully")
+
+            stmts = [
+                f"create or replace transient table {destination_schema}.{table} as "  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage} ",  # nosec
+                f"insert into {destination_schema}.{table} "  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage}",  # nosec
+            ]
+
+            [tx.execute(stmt).fetchall() for stmt in stmts]
+
+            logging.info(f"Put temp csv file in {destination_schema} successfully")
         except:
             logging.info("Amortization Schedule not uploaded")
+        # try:
+        #     tx.execute(
+        #         f"insert into {destination_schema}.{table} "  # nosec
+        #         f"select $1 as fields from @{destination_schema}.{stage}",  # nosec
+        #     )
 
 
+#
 def create_dag() -> DAG:
     with DAG(
         dag_id="paydown_schedule",
