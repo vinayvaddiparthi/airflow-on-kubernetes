@@ -125,7 +125,7 @@ def write_data_to_csv(
     repayment_amount: float,
     interest: float,
     ending_balance: float,
-    filepath: _io.BufferedRandom,
+    filepath,
 ) -> None:
     # file = open(filepath, "a", newline="")
     # with file:
