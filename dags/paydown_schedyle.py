@@ -125,7 +125,7 @@ def write_data_to_csv(
     repayment_amount: float,
     interest: float,
     ending_balance: float,
-    filepath: tempfile.TemporaryFile(),
+    filepath: tempfile.TemporaryFile,
 ) -> None:
     # file = open(filepath, "a", newline="")
     # with file:
