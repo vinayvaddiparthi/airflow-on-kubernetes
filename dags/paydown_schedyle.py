@@ -5,7 +5,6 @@
 # Import statements
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Union
 import pendulum
 import pandas as pd
 import csv
@@ -15,6 +14,7 @@ from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from utils.failure_callbacks import slack_dag, slack_task
+from sqlalchemy.engine import Engine
 
 
 def read_data_from_snowflake(snowflake_conn_id: str) -> pd.core.frame.DataFrame:
@@ -155,12 +155,14 @@ def write_data_to_csv(
     logging.info("✅ Wrote some lines successfully")
 
 
-def calculate_all_paydown_schedules(snowflake_conn_id: str) -> None:
+def calculate_all_paydown_schedules(
+    snowflake_conn_id: str, snowflake_engine: Engine
+) -> None:
     # Call the Holiday Hash Map creation for this script, load in the data that is to be worked with
     df_dim_loan, df_holidays = read_data_from_snowflake(snowflake_conn_id)
     holiday_schedule = all_known_holidays(df_holidays)
 
-    csv_filepath: Path = Path(tempfile.TemporaryFile()).with_suffix(".csv")
+    csv_filepath = Path(tempfile.TemporaryFile()).with_suffix(".csv")
     destination = "yet another val"  # TODO - fill in the required destination
     stage_guid = "some val"  # TODO - fill in the required stage_guid
 
@@ -231,9 +233,7 @@ def calculate_all_paydown_schedules(snowflake_conn_id: str) -> None:
             ).fetchall()
             logging.info(f"Put temp csv file in {destination} successfully")
         except:
-            logging.info(
-                f"Did not manage to put the csv file into {destination} successfully"
-            )
+            logging.info(f"Amortization Schedule not uploaded")
 
 
 def create_dag() -> DAG:
