@@ -118,29 +118,29 @@ def interval_float(frequency: str) -> float:
         return float(0)
 
 
-def write_data_to_csv(
-    guid: str,
-    repayment_date: datetime,
-    beginning_balance: float,
-    repayment_amount: float,
-    interest: float,
-    ending_balance: float,
-    filepath: tempfile,
-) -> None:
-    # file = open(filepath, "a", newline="")
-    filepath.writelines(
-        {
-            "GUID": guid,
-            "Date": repayment_date,
-            "Beginning_Balance": beginning_balance,
-            "Repayment_Amount": repayment_amount,
-            "Interest": interest,
-            "Principal": repayment_amount - interest,
-            "Ending_Balance": ending_balance,
-        }
-    )
-    # file.close()
-    logging.info("✅ Wrote some lines successfully")
+# def write_data_to_csv(
+#     guid: str,
+#     repayment_date: datetime,
+#     beginning_balance: float,
+#     repayment_amount: float,
+#     interest: float,
+#     ending_balance: float,
+#     filepath,
+# ) -> None:
+#     # file = open(filepath, "a", newline="")
+#     filepath.writelines(
+#         {
+#             "GUID": guid,
+#             "Date": repayment_date,
+#             "Beginning_Balance": beginning_balance,
+#             "Repayment_Amount": repayment_amount,
+#             "Interest": interest,
+#             "Principal": repayment_amount - interest,
+#             "Ending_Balance": ending_balance,
+#         }
+#     )
+#     # file.close()
+#     logging.info("✅ Wrote some lines successfully")
 
 
 def calculate_all_paydown_schedules(
@@ -199,15 +199,27 @@ def calculate_all_paydown_schedules(
                     repayment_date = repayment_date + timedelta(days=1)
                     logging.info("✅ Checked the Hash Map for the date")
                 # Finally; write the data to a csv to save the result of this calculation.
-                write_data_to_csv(
-                    guid,
-                    repayment_date,
-                    beginning_balance,
-                    repayment_amount,
-                    interest,
-                    ending_balance,
-                    csv_filepath,
+                csv_filepath.writelines(
+                    {
+                        "GUID": guid,
+                        "Date": repayment_date,
+                        "Beginning_Balance": beginning_balance,
+                        "Repayment_Amount": repayment_amount,
+                        "Interest": interest,
+                        "Principal": repayment_amount - interest,
+                        "Ending_Balance": ending_balance,
+                    }
                 )
+
+                # write_data_to_csv(
+                #     guid,
+                #     repayment_date,
+                #     beginning_balance,
+                #     repayment_amount,
+                #     interest,
+                #     ending_balance,
+                #     csv_filepath,
+                # )
                 logging.info("✅ Wrote the required data to the target location")
         else:
             continue
