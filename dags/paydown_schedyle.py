@@ -162,7 +162,7 @@ def calculate_all_paydown_schedules(
     df_dim_loan, df_holidays = read_data_from_snowflake(snowflake_conn_id)
     holiday_schedule = all_known_holidays(df_holidays)
 
-    csv_filepath = tempfile.TemporaryFile(mode='a',suffix=".csv")
+    csv_filepath = tempfile.TemporaryFile(mode="a", suffix=".csv")
     destination = "yet another val"  # TODO - fill in the required destination
     stage_guid = "some val"  # TODO - fill in the required stage_guid
 
