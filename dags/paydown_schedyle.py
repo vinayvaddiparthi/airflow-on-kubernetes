@@ -163,7 +163,7 @@ def calculate_all_paydown_schedules(
     holiday_schedule = all_known_holidays(df_holidays)
 
     tempfile_path = tempfile.TemporaryFile()
-    csv_filepath = Path(tempfile_path).with_suffix(".csv")
+    csv_filepath = tempfile_path.with_suffix(".csv")
     destination = "yet another val"  # TODO - fill in the required destination
     stage_guid = "some val"  # TODO - fill in the required stage_guid
 
