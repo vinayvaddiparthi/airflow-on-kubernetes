@@ -162,7 +162,8 @@ def calculate_all_paydown_schedules(
     df_dim_loan, df_holidays = read_data_from_snowflake(snowflake_conn_id)
     holiday_schedule = all_known_holidays(df_holidays)
 
-    csv_filepath = Path(tempfile.TemporaryFile()).with_suffix(".csv")
+    tempfile_path = tempfile.TemporaryFile()
+    csv_filepath = Path(tempfile_path).with_suffix(".csv")
     destination = "yet another val"  # TODO - fill in the required destination
     stage_guid = "some val"  # TODO - fill in the required stage_guid
 
@@ -229,11 +230,11 @@ def calculate_all_paydown_schedules(
     with snowflake_engine as tx:
         try:
             tx.execute(
-                f"put file://{csv_filepath} @{destination}.{stage_guid}"
+                f"put file://{csv_filepath} @{destination}.{stage_guid} "
             ).fetchall()
             logging.info(f"Put temp csv file in {destination} successfully")
         except:
-            logging.info(f"Amortization Schedule not uploaded")
+            logging.info("Amortization Schedule not uploaded")
 
 
 def create_dag() -> DAG:
@@ -252,7 +253,7 @@ def create_dag() -> DAG:
         max_active_runs=1,
         on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
-        calculate_all_paydown_schedules = PythonOperator(
+        amortization_schedules = PythonOperator(
             task_id="paydown_schedule",
             python_callable=calculate_all_paydown_schedules,
             op_kwargs={
@@ -260,5 +261,5 @@ def create_dag() -> DAG:
                 "target_schema": "ANALYTICS_PRODUCTION.DBT_ARIO",
             },
         )
-        dag << calculate_all_paydown_schedules
+        dag << amortization_schedules
     return dag
