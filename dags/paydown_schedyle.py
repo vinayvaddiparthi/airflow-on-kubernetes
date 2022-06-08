@@ -125,33 +125,21 @@ def write_data_to_csv(
     repayment_amount: float,
     interest: float,
     ending_balance: float,
-    filepath: Path,
+    filepath: tempfile,
 ) -> None:
-    file = open(filepath, "a", newline="")
-    with file:
-        header = [
-            "GUID",
-            "Date",
-            "Beginning_Balance",
-            "Repayment_Amount",
-            "Interest",
-            "Principal",
-            "Ending_Balance",
-        ]
-        writer = csv.DictWriter(file, fieldnames=header)
-
-        writer.writerow(
-            {
-                "GUID": guid,
-                "Date": repayment_date,
-                "Beginning_Balance": beginning_balance,
-                "Repayment_Amount": repayment_amount,
-                "Interest": interest,
-                "Principal": repayment_amount - interest,
-                "Ending_Balance": ending_balance,
-            }
-        )
-    file.close()
+    # file = open(filepath, "a", newline="")
+    filepath.writelines(
+        {
+            "GUID": guid,
+            "Date": repayment_date,
+            "Beginning_Balance": beginning_balance,
+            "Repayment_Amount": repayment_amount,
+            "Interest": interest,
+            "Principal": repayment_amount - interest,
+            "Ending_Balance": ending_balance,
+        }
+    )
+    # file.close()
     logging.info("✅ Wrote some lines successfully")
 
 
@@ -168,18 +156,16 @@ def calculate_all_paydown_schedules(
 
     # Write out a header column to make the csv easier to read
     file = open(csv_filepath, "a", newline="")
-    with file:
-        header = [
-            "GUID",
-            "Date",
-            "Beginning_Balance",
-            "Repayment_Amount",
-            "Interest",
-            "Principal",
-            "Ending_Balance",
-        ]
-        writer = csv.DictWriter(file, fieldnames=header)
-        writer.writeheader()
+    header = [
+        "GUID",
+        "Date",
+        "Beginning_Balance",
+        "Repayment_Amount",
+        "Interest",
+        "Principal",
+        "Ending_Balance",
+    ]
+    csv_filepath.writelines(header)
 
     # The big loop - this will do the calculations for each of the amortization values needed in the final csv
     # The time complexity of this is expected to be O(n^2) given the loop inside a loop
