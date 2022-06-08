@@ -4,12 +4,10 @@
 
 # Import statements
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 import pendulum
 import pandas as pd
-import csv
 import tempfile
-from pathlib import Path
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -118,52 +116,6 @@ def interval_float(frequency: str) -> float:
         return float(0)
 
 
-# def write_data_to_csv(
-#     guid: str,
-#     repayment_date: datetime,
-#     beginning_balance: float,
-#     repayment_amount: float,
-#     interest: float,
-#     ending_balance: float,
-#     filepath: io.BufferedRandom,
-# ) -> None:
-#     # file = open(filepath, "a", newline="")
-#     # with file:
-#     #     header = [
-#     #         "GUID",
-#     #         "Date",
-#     #         "Beginning_Balance",
-#     #         "Repayment_Amount",
-#     #         "Interest",
-#     #         "Principal",
-#     #         "Ending_Balance",
-#     #     ]
-#     #     writer = csv.DictWriter(file, fieldnames=header)
-#     my_line = {
-#         "GUID": guid,
-#         "Date": repayment_date,
-#         "Beginning_Balance": beginning_balance,
-#         "Repayment_Amount": repayment_amount,
-#         "Interest": interest,
-#         "Principal": repayment_amount - interest,
-#         "Ending_Balance": ending_balance,
-#     }
-#     filepath.write(my_line)
-#     # writer.writerow(
-#     #     {
-#     #         "GUID": guid,
-#     #         "Date": repayment_date,
-#     #         "Beginning_Balance": beginning_balance,
-#     #         "Repayment_Amount": repayment_amount,
-#     #         "Interest": interest,
-#     #         "Principal": repayment_amount - interest,
-#     #         "Ending_Balance": ending_balance,
-#     #     }
-#     # )
-#     # file.close()
-#     logging.info("✅ Wrote some lines successfully")
-
-
 def calculate_all_paydown_schedules(
     snowflake_conn_id: str, snowflake_engine: Engine
 ) -> None:
@@ -176,7 +128,6 @@ def calculate_all_paydown_schedules(
     stage_guid = "some val"  # TODO - fill in the required stage_guid
 
     # Write out a header column to make the csv easier to read
-    # file = open(csv_filepath, "a", newline="")
     header = [
         "GUID",
         "Date",
@@ -186,8 +137,6 @@ def calculate_all_paydown_schedules(
         "Principal",
         "Ending_Balance",
     ]
-    # writer = csv.DictWriter(file, fieldnames=header)
-    # writer.writeheader()
     csv_filepath.writelines(header)
 
     # The big loop - this will do the calculations for each of the amortization values needed in the final csv
@@ -233,15 +182,6 @@ def calculate_all_paydown_schedules(
                 }
                 csv_filepath.writelines(my_line)
 
-                # write_data_to_csv(
-                #     guid,
-                #     repayment_date,
-                #     beginning_balance,
-                #     repayment_amount,
-                #     interest,
-                #     ending_balance,
-                #     csv_filepath,
-                # )
                 logging.info("✅ Wrote the required data to the target location")
         else:
             continue
