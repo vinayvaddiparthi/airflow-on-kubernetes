@@ -133,9 +133,7 @@ def calculate_all_paydown_schedules(snowflake_conn_id: str) -> None:
                     "Principal": repayment_amount - interest,
                     "Ending_Balance": ending_balance,
                 }
-                with csv_filepath as f:
-                    f.writelines(my_line)
-                    f.close()
+                csv_filepath.writelines(my_line)
 
                 logging.info("✅ Wrote the required data to the target location")
         else:
@@ -188,5 +186,5 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_dbt",
             },
         )
-        dag = amortization_schedules
+        dag << amortization_schedules
     return dag
