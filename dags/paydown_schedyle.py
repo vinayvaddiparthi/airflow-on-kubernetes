@@ -192,4 +192,5 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_dbt",
             },
         )
+        dag = amortization_schedules
     return dag
