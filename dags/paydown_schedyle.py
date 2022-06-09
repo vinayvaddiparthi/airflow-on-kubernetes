@@ -1,3 +1,4 @@
+import sqlalchemy.engine
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -74,13 +75,11 @@ def interval_float(frequency: str) -> float:
         return float(0)
 
 
-def calculate_all_paydown_schedules(
-    snowflake_conn_id: str, snowflake_engine: Engine
-) -> None:
+def calculate_all_paydown_schedules(snowflake_conn_id: str) -> None:
     # Call the Holiday Hash Map creation for this script, load in the data that is to be worked with
     df_dim_loan, df_holidays = read_data_from_snowflake(snowflake_conn_id)
     holiday_schedule = all_known_holidays(df_holidays)
-
+    snowflake_engine = SnowflakeHook(snowflake_conn_id).get_sqlalchemy_engine()
     csv_filepath = tempfile.TemporaryFile(mode="a", suffix=".csv")
     destination_schema = "DBT_REPORTING"
     stage = "AMORTIZATION_SCHEDULES"
