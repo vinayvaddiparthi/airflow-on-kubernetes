@@ -1,18 +1,13 @@
-# Python Code for Translation Task
-# Author: Amit Chandna
-# Overall objective: Output an amortization table for all ongoing loans in the database
-
-# Import statements
-import logging
-from datetime import timedelta
-import pendulum
-import pandas as pd
-import tempfile
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
-from utils.failure_callbacks import slack_dag, slack_task
+from datetime import timedelta
+import logging
+import pendulum
+import pandas as pd
 from sqlalchemy.engine import Engine
+import tempfile
+from utils.failure_callbacks import slack_dag, slack_task
 
 
 def read_data_from_snowflake(snowflake_conn_id: str) -> pd.core.frame.DataFrame:
