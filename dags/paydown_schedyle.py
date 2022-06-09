@@ -6,7 +6,6 @@ from datetime import timedelta
 import logging
 import pendulum
 import pandas as pd
-from sqlalchemy.engine import Engine
 import tempfile
 from utils.failure_callbacks import slack_dag, slack_task
 
