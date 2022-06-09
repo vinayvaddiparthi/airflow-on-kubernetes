@@ -1,4 +1,3 @@
-import sqlalchemy.engine
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
