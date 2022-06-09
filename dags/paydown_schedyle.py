@@ -33,55 +33,18 @@ def read_data_from_snowflake(snowflake_conn_id: str) -> pd.core.frame.DataFrame:
    OUTSTANDING_BALANCE
 from analytics_production.dbt_ario.dim_loan
 where state = 'repaying' """
-    query_holidays = """select * from analytics_review_update_sna_ujqgco.dbt.holidays where "is_holiday"=1"""
+    query_holidays = (
+        """select * from analytics_production.dbt.holidays where "is_holiday"=1"""
+    )
 
     df_holidays = pd.read_sql(query_holidays, connection)
     df_dim_loan = pd.read_sql(query_dim_loan, connection)
 
     # Process the holiday table to create the holiday hash later
     df_holidays["date"] = pd.to_datetime(df_holidays["date"])
-    for i, row in df_holidays.iterrows():
-        df_holidays.at[i, "date"] = row["date"].date()
+    df_holidays["date"] = pd.to_datetime(df_holidays["date"]).dt.date
 
     return df_dim_loan, df_holidays
-
-
-# This function just pulls in data from disk to a pandas df object and then processes with pandas for the table
-# Can be adjusted for PyArrow/parquet compatability at a later point in time if needed.
-# NB: This is not a permanent function - will be replaced by read_data_from_snowflake for production
-
-
-def read_temp_csv_data(filepath: str) -> pd.core.frame.DataFrame:
-    if "dim_loan" in filepath:
-        df = pd.read_csv(filepath)
-        # Pre-Processing for later in the pipe
-        fields_for_use = [
-            "GUID",
-            "ACTIVATED_AT",
-            "APR",
-            "PRINCIPAL_AMOUNT",
-            "REPAYMENT_AMOUNT",
-            "TOTAL_REPAYMENTS_AMOUNT",
-            "INTEREST_AMOUNT",
-            "REPAYMENT_SCHEDULE",
-            "STATE",
-            "REMAINING_PRINCIPAL",
-            "INTEREST_BALANCE",
-            "OUTSTANDING_BALANCE",
-        ]
-        df = df[fields_for_use]
-        df["ACTIVATED_AT"] = pd.to_datetime(df["ACTIVATED_AT"])
-        logging.info("✅ Processed the data")
-    elif "holiday" in filepath:
-        df = pd.read_csv(filepath)
-        df["date"] = pd.to_datetime(df["date"])
-        for i, row in df.iterrows():
-            df.at[i, "date"] = row["date"].date()
-        logging.info("✅ Processed the data")
-    else:
-        df = False
-        logging.info("❌ Could not process the data, many errors to follow...")
-    return df
 
 
 def all_known_holidays(df_holidays: pd.core.frame.DataFrame) -> dict:
@@ -166,11 +129,9 @@ def calculate_all_paydown_schedules(
                 ending_balance = principal
                 repayment_date = repayment_date + interval
                 interest = beginning_balance * interest_percent_per_cycle
-                logging.info(" ✅ Completed the calculations required")
                 # Check the hash map to see if the date is a holiday or not
                 while repayment_date in holiday_schedule.keys():
                     repayment_date = repayment_date + timedelta(days=1)
-                    logging.info("✅ Checked the Hash Map for the date")
                 # Finally; write the data to a csv to save the result of this calculation.
                 my_line = {
                     "GUID": guid,
@@ -181,7 +142,9 @@ def calculate_all_paydown_schedules(
                     "Principal": repayment_amount - interest,
                     "Ending_Balance": ending_balance,
                 }
-                csv_filepath.writelines(my_line)
+                with csv_filepath as f:
+                    f.writelines(my_line)
+                    f.close()
 
                 logging.info("✅ Wrote the required data to the target location")
         else:
@@ -198,7 +161,7 @@ def calculate_all_paydown_schedules(
             ).fetchall()
 
             stmts = [
-                f"create or replace transient table {destination_schema}.{table} as "  # nosec
+                f"create or replace table {destination_schema}.{table} as "  # nosec
                 f"select $1 as fields from @{destination_schema}.{stage} ",  # nosec
                 f"insert into {destination_schema}.{table} "  # nosec
                 f"select $1 as fields from @{destination_schema}.{stage}",  # nosec
@@ -209,21 +172,15 @@ def calculate_all_paydown_schedules(
             logging.info(f"Put temp csv file in {destination_schema} successfully")
         except:
             logging.info("Amortization Schedule not uploaded")
-        # try:
-        #     tx.execute(
-        #         f"insert into {destination_schema}.{table} "  # nosec
-        #         f"select $1 as fields from @{destination_schema}.{stage}",  # nosec
-        #     )
 
 
-#
 def create_dag() -> DAG:
     with DAG(
         dag_id="paydown_schedule",
         start_date=pendulum.datetime(
-            2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
+            2022, 6, 10, tzinfo=pendulum.timezone("America/Toronto")
         ),
-        schedule_interval="0 0 1 1 1",
+        schedule_interval="30 4 * * 0",
         default_args={
             "retries": 3,
             "retry_delay": timedelta(minutes=5),
@@ -236,10 +193,6 @@ def create_dag() -> DAG:
         amortization_schedules = PythonOperator(
             task_id="paydown_schedule",
             python_callable=calculate_all_paydown_schedules,
-            op_kwargs={
-                "snowflake_connection_dim_loan": "snowflake_production",
-                "target_schema": "ANALYTICS_PRODUCTION.DBT_ARIO",
-            },
+            op_kwargs={"snowflake_connection": "snowflake_dbt",},
         )
-        dag << amortization_schedules
     return dag
