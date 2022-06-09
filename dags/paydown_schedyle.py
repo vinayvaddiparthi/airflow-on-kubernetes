@@ -35,7 +35,6 @@ where state = 'repaying' """
     df_dim_loan = pd.read_sql(query_dim_loan, connection)
 
     # Process the holiday table to create the holiday hash later
-    df_holidays["date"] = pd.to_datetime(df_holidays["date"])
     df_holidays["date"] = pd.to_datetime(df_holidays["date"]).dt.date
 
     return df_dim_loan, df_holidays
