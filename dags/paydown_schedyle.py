@@ -155,7 +155,7 @@ def calculate_all_paydown_schedules(snowflake_conn_id: str) -> None:
             stmts = [
                 f"create or replace table {destination_schema}.{table} as "  # nosec
                 f"select $1 as fields from @{destination_schema}.{stage} ",  # nosec
-                f"insert into {destination_schema}.{table} "  # nosec
+                f"insert overwrite into {destination_schema}.{table} "  # nosec
                 f"select $1 as fields from @{destination_schema}.{stage}",  # nosec
             ]
 
