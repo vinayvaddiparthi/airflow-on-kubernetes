@@ -139,6 +139,7 @@ def calculate_all_paydown_schedules(snowflake_conn_id: str) -> None:
         else:
             continue
     # try to send the data to snowflake and log it as a success or failure
+    csv_filepath.close()
     with snowflake_engine as tx:
         tx.execute(
             f"create or replace stage {destination_schema}.{stage} "
@@ -151,9 +152,9 @@ def calculate_all_paydown_schedules(snowflake_conn_id: str) -> None:
 
             stmts = [
                 f"create or replace table {destination_schema}.{table} as "  # nosec
-                f"select $1 as fields from @{destination_schema}.{stage} ",  # nosec
-                f"insert overwrite into {destination_schema}.{table} "  # nosec
-                f"select $1 as fields from @{destination_schema}.{stage}",  # nosec
+                f"select $1 as GUID, $2 as Date, $3 as Beginning_Balance,$4 as Repayment_Amount ,"
+                f"$5 Interest, $6 as Principal,$7 as Ending_Balance as fields from @{destination_schema}.{stage} ",
+                # nosec
             ]
 
             [tx.execute(stmt).fetchall() for stmt in stmts]
