@@ -116,10 +116,10 @@ def calculate_all_paydown_schedules(snowflake_conn_id: str) -> None:
             logging.info(" ✅ Collected all the values to proceed with calculations")
             for i in range(0, number_of_pay_cycles):
                 beginning_balance = principal
-                principal = principal - repayment_amount
-                ending_balance = principal
                 repayment_date = repayment_date + interval
                 interest = beginning_balance * interest_percent_per_cycle
+                principal = principal - (repayment_amount - interest)
+                ending_balance = principal
                 # Check the hash map to see if the date is a holiday or not
                 while repayment_date in holiday_schedule.keys():
                     repayment_date = repayment_date + timedelta(days=1)
@@ -181,7 +181,7 @@ def create_dag() -> DAG:
         on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
         amortization_schedules = PythonOperator(
-            task_id="paydown_schedule",
+            task_id="calculate_paydown_schedules",
             python_callable=calculate_all_paydown_schedules,
             op_kwargs={
                 "snowflake_connection": "snowflake_dbt",
@@ -189,3 +189,6 @@ def create_dag() -> DAG:
         )
         dag << amortization_schedules
     return dag
+
+
+globals()["paydown_schedule"] = create_dag()
