@@ -181,7 +181,7 @@ def create_dag() -> DAG:
         on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
         amortization_schedules = PythonOperator(
-            task_id="paydown_schedule",
+            task_id="calculate_paydown_schedules",
             python_callable=calculate_all_paydown_schedules,
             op_kwargs={
                 "snowflake_connection": "snowflake_dbt",
@@ -189,3 +189,5 @@ def create_dag() -> DAG:
         )
         dag << amortization_schedules
     return dag
+
+globals()["paydown_schedule"] = create_dag()
