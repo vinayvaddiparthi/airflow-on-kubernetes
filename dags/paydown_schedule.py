@@ -190,4 +190,5 @@ def create_dag() -> DAG:
         dag << amortization_schedules
     return dag
 
+
 globals()["paydown_schedule"] = create_dag()
