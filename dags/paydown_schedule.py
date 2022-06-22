@@ -1,170 +1,193 @@
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
-from datetime import timedelta
 import logging
 import pendulum
 import pandas as pd
+import numpy as np
+import csv
 import tempfile
+from datetime import timedelta
+from typing import Tuple
+
+from airflow import DAG
+from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
+from airflow.operators.python_operator import PythonOperator
+from airflow.models import Variable
+
+from sqlalchemy.sql import select
+from sqlalchemy import Table, MetaData, literal_column, engine
+
 from utils.failure_callbacks import slack_dag, slack_task
 
 
-def read_data_from_snowflake(snowflake_conn_id: str) -> pd.core.frame.DataFrame:
-    engine = SnowflakeHook(snowflake_conn_id).get_sqlalchemy_engine()
-    connection = engine.connect()
+def read_data_from_snowflake(
+    snowflake_engine: engine, database: str, schema: str
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Fetches the required data from Snowflake and converts them into pandas dataframes
 
-    query_dim_loan = """select GUID,
-       ACTIVATED_AT,
-       APR,
-       PRINCIPAL_AMOUNT,
-       REPAYMENT_AMOUNT,
-       TOTAL_REPAYMENTS_AMOUNT,
-       INTEREST_AMOUNT,
-       REPAYMENT_SCHEDULE,
-       STATE,
-       REMAINING_PRINCIPAL,
-       INTEREST_BALANCE,
-   OUTSTANDING_BALANCE
-from analytics_production.dbt_ario.dim_loan
-where state = 'repaying' """
-    query_holidays = (
-        """select * from analytics_production.dbt.holidays where "is_holiday"=1"""
+    Args:
+        snowflake_engine (engine): SQL Alchemy engine for connecting to Snowflake
+        database (str): snowflake database
+        schema (str): snowflake schema
+
+    Returns:
+        Tuple(pd.DataFrame, pd.DataFrame): pandas dataframes of dim_loan and dim_holidays tables
+    """
+
+    metadata = MetaData()
+
+    loan = Table(
+        "dim_loan",
+        metadata,
+        autoload_with=snowflake_engine,
+        schema=schema,
+        snowflake_database=database,
     )
 
-    df_holidays = pd.read_sql(query_holidays, connection)
-    df_dim_loan = pd.read_sql(query_dim_loan, connection)
+    holidays = Table(
+        "holidays",
+        metadata,
+        autoload_with=snowflake_engine,
+        snowflake_database=database,
+    )
 
-    # Process the holiday table to create the holiday hash later
+    loan_select = select(
+        [
+            loan.c.guid,
+            loan.c.activated_at,
+            loan.c.apr,
+            loan.c.principal_amount,
+            loan.c.repayment_amount,
+            loan.c.total_repayments_amount,
+            loan.c.interest_amount,
+            loan.c.repayment_schedule,
+            loan.c.state,
+            loan.c.remaining_principal,
+            loan.c.interest_balance,
+            loan.c.outstanding_balance,
+        ]
+    ).where(loan.c.state == "repaying")
+
+    holidays_select = select([holidays]).where(literal_column('"is_holiday"') == 1)
+
+    with snowflake_engine.begin() as conn:
+
+        df_loan = pd.read_sql(loan_select, conn)
+        df_holidays = pd.read_sql(holidays_select, conn)
+
+    df_loan = df_loan.astype({"repayment_amount": float, "interest_amount": float})
+
     df_holidays["date"] = pd.to_datetime(df_holidays["date"]).dt.date
 
-    return df_dim_loan, df_holidays
+    return df_loan, df_holidays
 
 
-def all_known_holidays(df_holidays: pd.core.frame.DataFrame) -> dict:
-    df = df_holidays
-    # Successfully makes a dictionary (hash map) of all holiday data provided in the read in csv (SQL statement)
-    # Ensure that date lookup becomes O(1) instead of O(n^2)
-    holiday_hash = dict(zip(df.date, df.is_holiday))
-    logging.info("✅ Collected all the Holiday info and made a hash map ")
-    return holiday_hash
+def _calculate_all_paydown_schedules(
+    snowflake_conn: str, database: str, schema: str
+) -> None:
+    """Calculates the amortization schedule for repaying loans and loads them to a Snowflake stage
 
+    Args:
+        snowflake_conn (str): Airflow connection to be used
+        database (str): source and destination database in Snowflake
+        schema (str): source schema in Snowflake
 
-# Schedule in days will return a datetime object to show how many days are in between different payment schedules
-def schedule_in_days(frequency: str) -> timedelta:
-    if frequency == "daily":
-        return timedelta(days=1)
-    elif frequency == "weekly":
-        return timedelta(days=7)
-    elif frequency == "bi-weekly":
-        return timedelta(days=14)
-    else:
-        return timedelta(days=0)
+    """
 
+    snowflake_engine = SnowflakeHook(snowflake_conn).get_sqlalchemy_engine()
 
-def interval_float(frequency: str) -> float:
-    if frequency == "daily":
-        return float(1)
-    elif frequency == "weekly":
-        return float(7)
-    elif frequency == "bi-weekly":
-        return float(14)
-    else:
-        return float(0)
+    df_loan, df_holidays = read_data_from_snowflake(snowflake_engine, database, schema)
 
+    # dictionary of holidays for faster lookup
+    holiday_schedule = dict(zip(df_holidays.date, df_holidays.is_holiday))
 
-def calculate_all_paydown_schedules(snowflake_conn_id: str) -> None:
-    # Call the Holiday Hash Map creation for this script, load in the data that is to be worked with
-    df_dim_loan, df_holidays = read_data_from_snowflake(snowflake_conn_id)
-    holiday_schedule = all_known_holidays(df_holidays)
-    snowflake_engine = SnowflakeHook(snowflake_conn_id).get_sqlalchemy_engine()
-    csv_filepath = tempfile.TemporaryFile(mode="a", suffix=".csv")
-    destination_schema = "DBT_REPORTING"
-    stage = "AMORTIZATION_SCHEDULES"
-    table = "FCT_AMORTIZATION_SCHEDULES"
+    destination_schema = "dbt_reporting"
+    stage = f"{database}.{destination_schema}.amortization_schedules"
 
-    # Write out a header column to make the csv easier to read
-    header = [
-        "GUID",
-        "Date",
-        "Beginning_Balance",
-        "Repayment_Amount",
-        "Interest",
-        "Principal",
-        "Ending_Balance",
-    ]
-    csv_filepath.writelines(header)
+    df_loan["number_of_pay_cycles"] = (
+        df_loan["principal_amount"] / df_loan["repayment_amount"]
+    ).astype(int)
 
-    # The big loop - this will do the calculations for each of the amortization values needed in the final csv
-    # The time complexity of this is expected to be O(n^2) given the loop inside a loop
-    for index, row in df_dim_loan.iterrows():
+    repayment_schedule = df_loan["repayment_schedule"]
 
-        # Only looks at pending loans/not fully paid off loans and collects the information for each GUID
-        if row["PRINCIPAL_AMOUNT"] > 0:
-            number_of_pay_cycles = int(
-                row["PRINCIPAL_AMOUNT"] / row["REPAYMENT_AMOUNT"]
-            )
-            principal = row["PRINCIPAL_AMOUNT"]
-            repayment_amount = row["REPAYMENT_AMOUNT"]
-            interval = schedule_in_days(
-                row["REPAYMENT_SCHEDULE"]
-            )  # This is the timeseries interval
-            repayment_date = row["ACTIVATED_AT"].date()
-            guid = row["GUID"]
-            interest_percent_per_cycle = row["APR"] / (
-                365 / interval_float(row["REPAYMENT_SCHEDULE"])
-            )  # This is the float interval
-            logging.info(" ✅ Collected all the values to proceed with calculations")
-            for i in range(0, number_of_pay_cycles):
-                beginning_balance = principal
-                repayment_date = repayment_date + interval
-                interest = beginning_balance * interest_percent_per_cycle
-                principal = principal - (repayment_amount - interest)
-                ending_balance = principal
-                # Check the hash map to see if the date is a holiday or not
-                while repayment_date in holiday_schedule.keys():
-                    repayment_date = repayment_date + timedelta(days=1)
-                # Finally; write the data to a csv to save the result of this calculation.
-                my_line = {
-                    "GUID": guid,
-                    "Date": repayment_date,
-                    "Beginning_Balance": beginning_balance,
-                    "Repayment_Amount": repayment_amount,
-                    "Interest": interest,
-                    "Principal": repayment_amount - interest,
-                    "Ending_Balance": ending_balance,
-                }
-                csv_filepath.writelines(my_line)
+    df_loan["interval"] = pd.Series(
+        np.select(
+            [
+                repayment_schedule == "daily",
+                repayment_schedule == "weekly",
+                repayment_schedule == "bi-weekly",
+            ],
+            [1, 7, 14],
+            0,
+        ),
+        index=df_loan.index,
+    )
 
-                logging.info("✅ Wrote the required data to the target location")
-        else:
-            continue
-    # try to send the data to snowflake and log it as a success or failure
-    csv_filepath.close()
-    with snowflake_engine as tx:
-        tx.execute(
-            f"create or replace stage {destination_schema}.{stage} "
-            f"file_format=(type=csv)"
-        ).fetchall()
-        try:
-            tx.execute(
-                f"put file://{csv_filepath} @{destination_schema}.{stage} "
-            ).fetchall()
+    df_loan["interest_percent_per_cycle"] = df_loan["apr"] / 365.0 / df_loan["interval"]
 
-            stmts = [
-                f"create or replace table {destination_schema}.{table} as "  # nosec
-                f"select $1 as GUID, $2 as Date, $3 as Beginning_Balance,$4 as Repayment_Amount ,"
-                f"$5 Interest, $6 as Principal,$7 as Ending_Balance as fields from @{destination_schema}.{stage} ",
-                # nosec
-            ]
+    df_loan["activated_at"] = pd.to_datetime(df_loan["activated_at"]).dt.date
 
-            [tx.execute(stmt).fetchall() for stmt in stmts]
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv") as csv_file:
 
-            logging.info(f"Put temp csv file in {destination_schema} successfully")
-        except:
-            logging.info("Amortization Schedule not uploaded")
+        csv_writer = csv.writer(csv_file)
+
+        for row in df_loan.itertuples():
+
+            # Only looks at pending loans/not fully paid off loans and collects the information for each GUID
+            if row.principal_amount > 0:
+
+                guid = row.guid
+                number_of_pay_cycles = row.number_of_pay_cycles
+                interval = row.interval
+                interest_percent_per_cycle = row.interest_percent_per_cycle
+                repayment_amount = row.repayment_amount
+                principal = row.principal_amount
+                repayment_date = row.activated_at
+
+                for _ in range(0, number_of_pay_cycles):
+                    opening_balance = principal
+                    repayment_date = repayment_date + timedelta(days=interval)
+                    interest = opening_balance * interest_percent_per_cycle
+                    principal = principal - (repayment_amount - interest)
+                    closing_balance = principal
+                    # Check the hash map to see if the date is a holiday or not
+                    while repayment_date in holiday_schedule.keys():
+                        repayment_date = repayment_date + timedelta(days=1)
+
+                    csv_writer.writerow(
+                        [
+                            guid,
+                            repayment_date,
+                            opening_balance,
+                            repayment_amount,
+                            interest,
+                            principal,
+                            closing_balance,
+                        ]
+                    )
+            else:
+                continue
+
+        logging.info("✅ Amortization schedule written to a csv file")
+
+        with snowflake_engine.begin() as conn:
+
+            try:
+                conn.execute(f"create or replace stage {stage} file_format=(type=csv)")
+
+                logging.info(f"✅ Created snowflake stage successfully: {stage}")
+
+                conn.execute(f"put file://{csv_file.name} @{stage}")
+
+                logging.info("✅ Copied the csv file to snowflake stage succesfully")
+
+            except Exception as e:
+                raise Exception(
+                    f"Amortization schedule not copied to snowflake stage. Exception details: {e} "
+                )
 
 
 def create_dag() -> DAG:
+
     with DAG(
         dag_id="paydown_schedule",
         start_date=pendulum.datetime(
@@ -172,22 +195,44 @@ def create_dag() -> DAG:
         ),
         schedule_interval="30 4 * * 0",
         default_args={
-            "retries": 3,
+            "retries": 2,
             "retry_delay": timedelta(minutes=5),
             "on_failure_callback": slack_task("slack_data_alerts"),
         },
         catchup=False,
         max_active_runs=1,
         on_failure_callback=slack_dag("slack_data_alerts"),
-    ) as dag:
+    ) as dag, open("dags/sql/paydown_schedule.sql") as paydown_sql:
+
+        is_prod = Variable.get(key="environment") == "production"
+
+        queries = [query.strip("\n") for query in paydown_sql.read().split(";")]
+
         amortization_schedules = PythonOperator(
             task_id="calculate_paydown_schedules",
-            python_callable=calculate_all_paydown_schedules,
+            python_callable=_calculate_all_paydown_schedules,
             op_kwargs={
-                "snowflake_connection": "snowflake_dbt",
+                "snowflake_conn": "snowflake_dbt",
+                "database": f"{'analytics_production' if is_prod else 'analytics_development'}",
+                "schema": "dbt_ario",
             },
         )
-        dag << amortization_schedules
+
+        load_to_snowflake = SnowflakeOperator(
+            task_id="load_to_snowflake",
+            sql=queries,
+            params={
+                "stage": "amortization_schedules",
+                "table": "fct_amortization_schedules",
+            },
+            database=f"{'analytics_production' if is_prod else 'analytics_development'}",
+            schema="dbt_reporting",
+            snowflake_conn_id="snowflake_dbt",
+            dag=dag,
+        )
+
+        amortization_schedules >> load_to_snowflake
+
     return dag
 
 
