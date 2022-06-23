@@ -4,7 +4,7 @@ create or replace table {{ params.table }} (
     opening_balance number(38,2),
     repayment_amount number(38,2),
     interest number(38,2),
-	principal number(38,2),
+	remaining_principal number(38,2),
 	closing_balance number(38,2)
 );
 
@@ -19,6 +19,6 @@ $2 as repayment_date,
 $3 as opening_balance,
 $4 as repayment_amount,
 $5 as interest,
-$6 as principal,
+$6 as remaining_principal,
 $7 as closing_balance
 from @{{ params.stage }}

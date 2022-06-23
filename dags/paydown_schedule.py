@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import csv
 import tempfile
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Tuple
 
 from airflow import DAG
@@ -50,22 +50,25 @@ def read_data_from_snowflake(
         snowflake_database=database,
     )
 
-    loan_select = select(
-        [
-            loan.c.guid,
-            loan.c.activated_at,
-            loan.c.apr,
-            loan.c.principal_amount,
-            loan.c.repayment_amount,
-            loan.c.total_repayments_amount,
-            loan.c.interest_amount,
-            loan.c.repayment_schedule,
-            loan.c.state,
-            loan.c.remaining_principal,
-            loan.c.interest_balance,
-            loan.c.outstanding_balance,
-        ]
-    ).where(loan.c.state == "repaying")
+    loan_select = (
+        select(
+            [
+                loan.c.guid,
+                loan.c.apr,
+                loan.c.principal_amount,
+                loan.c.repayment_amount,
+                loan.c.total_repayments_amount,
+                loan.c.interest_amount,
+                loan.c.repayment_schedule,
+                loan.c.state,
+                loan.c.remaining_principal,
+                loan.c.interest_balance,
+                loan.c.outstanding_balance,
+            ]
+        )
+        .where(loan.c.state == "repaying")
+        .where(loan.c.repayment_type == "fixed")
+    )
 
     holidays_select = select([holidays]).where(literal_column('"is_holiday"') == 1)
 
@@ -84,7 +87,7 @@ def read_data_from_snowflake(
 def _calculate_all_paydown_schedules(
     snowflake_conn: str, database: str, schema: str
 ) -> None:
-    """Calculates the amortization schedule for repaying loans and loads them to a Snowflake stage
+    """Calculates the amortization schedule for loans in 'repaying' state and loads them to a Snowflake stage
 
     Args:
         snowflake_conn (str): Airflow connection to be used
@@ -104,7 +107,7 @@ def _calculate_all_paydown_schedules(
     stage = f"{database}.{destination_schema}.amortization_schedules"
 
     df_loan["number_of_pay_cycles"] = (
-        df_loan["principal_amount"] / df_loan["repayment_amount"]
+        df_loan["remaining_principal"] / df_loan["repayment_amount"]
     ).astype(int)
 
     repayment_schedule = df_loan["repayment_schedule"]
@@ -117,14 +120,12 @@ def _calculate_all_paydown_schedules(
                 repayment_schedule == "bi-weekly",
             ],
             [1, 7, 14],
-            0,
+            1,
         ),
         index=df_loan.index,
     )
 
     df_loan["interest_percent_per_cycle"] = df_loan["apr"] / 365.0 / df_loan["interval"]
-
-    df_loan["activated_at"] = pd.to_datetime(df_loan["activated_at"]).dt.date
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".csv") as csv_file:
 
@@ -132,7 +133,7 @@ def _calculate_all_paydown_schedules(
 
         for row in df_loan.itertuples():
 
-            # Only looks at pending loans/not fully paid off loans and collects the information for each GUID
+            # Only looks at loans in 'repaying' state
             if row.principal_amount > 0:
 
                 guid = row.guid
@@ -140,17 +141,19 @@ def _calculate_all_paydown_schedules(
                 interval = row.interval
                 interest_percent_per_cycle = row.interest_percent_per_cycle
                 repayment_amount = row.repayment_amount
-                principal = row.principal_amount
-                repayment_date = row.activated_at
+                remaining_principal = row.remaining_principal
+                repayment_date = datetime.today().date()
 
                 for _ in range(0, number_of_pay_cycles):
-                    opening_balance = principal
+                    opening_balance = remaining_principal
                     repayment_date = repayment_date + timedelta(days=interval)
                     interest = opening_balance * interest_percent_per_cycle
-                    principal = principal - (repayment_amount - interest)
-                    closing_balance = principal
+                    remaining_principal = remaining_principal - (
+                        repayment_amount - interest
+                    )
+                    closing_balance = remaining_principal
                     # Check the hash map to see if the date is a holiday or not
-                    while repayment_date in holiday_schedule.keys():
+                    if repayment_date in holiday_schedule:
                         repayment_date = repayment_date + timedelta(days=1)
 
                     csv_writer.writerow(
@@ -160,7 +163,7 @@ def _calculate_all_paydown_schedules(
                             opening_balance,
                             repayment_amount,
                             interest,
-                            principal,
+                            remaining_principal,
                             closing_balance,
                         ]
                     )
