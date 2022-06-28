@@ -153,7 +153,7 @@ def _calculate_all_paydown_schedules(
                     )
                     closing_balance = remaining_principal
                     # Check the hash map to see if the date is a holiday or not
-                    if repayment_date in holiday_schedule:
+                    while repayment_date in holiday_schedule:
                         repayment_date = repayment_date + timedelta(days=1)
 
                     csv_writer.writerow(
