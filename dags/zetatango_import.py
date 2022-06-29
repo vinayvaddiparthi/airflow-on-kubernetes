@@ -80,8 +80,7 @@ def export_to_snowflake(
         if heroku_postgres_connection
         else create_engine(
             heroku3.from_key(
-                # HttpHook.get_connection("heroku_production_api_key").password
-                HttpHook.get_connection("heroku_staging_api_key").password
+                HttpHook.get_connection("heroku_production_api_key").password
             )
             .app(heroku_app)
             .config()[heroku_endpoint_url_env_var],
