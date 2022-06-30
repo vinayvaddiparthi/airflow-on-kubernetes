@@ -152,7 +152,7 @@ def stage_table_in_snowflake(
                 logging.info(f"Performing incremental export for {table} table")
 
                 result = tx.execute(
-                    f"select max(fields:updated_at::varchar) from {destination_schema}.{table}"
+                    f"select max(fields:updated_at::varchar) from {destination_schema}.{table}"  # nosec
                 ).fetchone()
 
                 latest_ts = result[0]
@@ -193,7 +193,10 @@ def stage_table_in_snowflake(
             return f"❌ Failed to read table {table}: {exc}"
 
         if table_.num_rows == 0:
-            return f"📝️ Skipping empty table {table}"
+            if table == "lending_adjudications":
+                return f"📝️ No new records to insert for table: {table}"
+            else:
+                return f"📝️ Skipping empty table {table}"
 
         pq.write_table(table_, f"{pq_filepath}")
 
