@@ -46,6 +46,7 @@ from sqlalchemy.sql import Select, ClauseElement
 from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils import random_identifier
 from utils.failure_callbacks import slack_dag, slack_task
+from utils.common_utils import get_utc_timestamp
 
 from data.zetatango_staging import (
     DecryptionSpec,
@@ -128,7 +129,6 @@ def stage_table_in_snowflake(
         return f"⏭️️ Skipping table {table}"
     logging.info(f"start syncing table for staging: {table}")
     stage_guid = random_identifier()
-    stage_guid_part_2 = f"{stage_guid}_part2"
     with snowflake_engine.begin() as tx, cast(
         psycopg2.extensions.cursor, source_raw_conn.cursor()
     ) as cursor, tempfile.TemporaryDirectory() as tempdir:
@@ -138,98 +138,75 @@ def stage_table_in_snowflake(
             f"file_format=(type=parquet)"
         ).fetchall()
 
-        if table == "lending_adjudications":
-            csv_file_dir_split_1 = tempfile.TemporaryDirectory()
-            csv_file_dir_split_2 = tempfile.TemporaryDirectory()
-            pq_file_dir_2 = tempfile.TemporaryDirectory()
-            csv_filepath_split_1 = Path(csv_file_dir_split_1.name, table).with_suffix(
-                ".csv"
-            )
-            csv_filepath_split_2 = Path(csv_file_dir_split_2.name, table).with_suffix(
-                ".csv"
-            )
-            pq_filepath_2 = Path(pq_file_dir_2.name, table).with_suffix(".pq")
-            tx.execute(
-                f"create or replace temporary stage {destination_schema}.{stage_guid_part_2} "
-                f"file_format=(type=parquet)"
-            ).fetchall()
-
         csv_filepath = Path(tempdir, table).with_suffix(".csv")
         pq_filepath = Path(tempdir, table).with_suffix(".pq")
 
         with csv_filepath.open("w+b") as csv_filedesc:
             logging.info(f"copy {source_schema}.{table} for staging")
 
-            cursor.copy_expert(
-                f"copy {source_schema}.{table} to stdout "
-                f"with csv header delimiter ',' quote '\"'",
-                csv_filedesc,
-            )
+            if table in ("lending_adjudications", "ledger_transactions"):
 
-            if table == "lending_adjudications":
-                data = pd.read_csv(
-                    f"{csv_filepath}",
-                    dtype={
-                        "credit_box_version_id": "Int64",
-                        "offer_configuration_version_id": "Int64",
-                        "performer_id": "Int64",
-                        "account_sales_volume_set_id": "Int64",
-                        "applicant_id": "Int64",
-                    },
+                logging.info(f"Performing incremental export for {table} table")
+
+                result = tx.execute(
+                    f"select max(fields:updated_at::varchar) from {destination_schema}.{table}"  # nosec
+                ).fetchone()
+
+                latest_ts = result[0]
+
+                logging.info(f"Latest updated_at timestamp in {table}: {latest_ts}")
+
+                utc_time_now = get_utc_timestamp()
+
+                logging.info(f"Fetching records with timestamp > {latest_ts}")
+
+                latest_ts_stmt = f"select *, '{utc_time_now}' as import_ts from {source_schema}.{table} where updated_at > '{latest_ts}'"
+
+                cursor.copy_expert(
+                    f"copy ({latest_ts_stmt}) to stdout "
+                    f"with csv header delimiter ',' quote '\"'",
+                    csv_filedesc,
                 )
-                data[0:70000].to_csv(f"{csv_filepath_split_1}", index=False)
-                data[70000:].to_csv(f"{csv_filepath_split_2}", index=False)
+            else:
+                cursor.copy_expert(
+                    f"copy {source_schema}.{table} to stdout "
+                    f"with csv header delimiter ',' quote '\"'",
+                    csv_filedesc,
+                )
+
+            logging.info(f"Records fetched for {table}: {cursor.rowcount}")
 
         try:
             logging.info(f"read {csv_filepath} for {table} for staging")
 
-            if table == "lending_adjudications":
-                table_ = pv.read_csv(
-                    f"{csv_filepath_split_1}",
-                    read_options=ReadOptions(block_size=8388608),
-                    parse_options=ParseOptions(newlines_in_values=True),
-                )
-                table_2 = pv.read_csv(
-                    f"{csv_filepath_split_2}",
-                    read_options=ReadOptions(block_size=8388608),
-                    parse_options=ParseOptions(newlines_in_values=True),
-                )
-            else:
-                table_ = pv.read_csv(
-                    f"{csv_filepath}",
-                    read_options=ReadOptions(block_size=8388608),
-                    parse_options=ParseOptions(newlines_in_values=True),
-                )
+            table_ = pv.read_csv(
+                f"{csv_filepath}",
+                read_options=ReadOptions(block_size=8388608),
+                parse_options=ParseOptions(newlines_in_values=True),
+            )
             logging.info(f"read {csv_filepath} for {table}: Done")
 
         except ArrowInvalid as exc:
             return f"❌ Failed to read table {table}: {exc}"
 
         if table_.num_rows == 0:
-            return f"📝️ Skipping empty table {table}"
+            if table in ("lending_adjudications", "ledger_transactions"):
+                return f"📝️ No new records to insert for table: {table}"
+            else:
+                return f"📝️ Skipping empty table {table}"
 
         pq.write_table(table_, f"{pq_filepath}")
-
-        if table == "lending_adjudications":
-            pq.write_table(table_2, f"{pq_filepath_2}")
 
         tx.execute(
             f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
 
-        if table == "lending_adjudications":
+        if table in ("lending_adjudications", "ledger_transactions"):
+
             tx.execute(
-                f"put file://{pq_filepath_2} @{destination_schema}.{stage_guid_part_2}"
-            ).fetchall()
-
-            stmts = [
-                f"create or replace transient table {destination_schema}.{table} as "  # nosec
-                f"select $1 as fields from @{destination_schema}.{stage_guid} ",  # nosec
                 f"insert into {destination_schema}.{table} "  # nosec
-                f"select $1 as fields from @{destination_schema}.{stage_guid_part_2}",  # nosec
-            ]
-
-            [tx.execute(stmt).fetchall() for stmt in stmts]
+                f"select $1 as fields from @{destination_schema}.{stage_guid}",  # nosec
+            )
 
         else:
             tx.execute(

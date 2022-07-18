@@ -147,7 +147,7 @@ def stage_table_in_snowflake(
         with csv_filepath.open("w+b") as csv_filedesc:
             logging.info(f"copy {source_schema}.{table}")
 
-            if table == "lending_adjudications":
+            if table in ("lending_adjudications", "ledger_transactions"):
 
                 logging.info(f"Performing incremental export for {table} table")
 
@@ -193,7 +193,7 @@ def stage_table_in_snowflake(
             return f"❌ Failed to read table {table}: {exc}"
 
         if table_.num_rows == 0:
-            if table == "lending_adjudications":
+            if table in ("lending_adjudications", "ledger_transactions"):
                 return f"📝️ No new records to insert for table: {table}"
             else:
                 return f"📝️ Skipping empty table {table}"
@@ -204,7 +204,7 @@ def stage_table_in_snowflake(
             f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
 
-        if table == "lending_adjudications":
+        if table in ("lending_adjudications", "ledger_transactions"):
 
             tx.execute(
                 f"insert into {destination_schema}.{table} "  # nosec
