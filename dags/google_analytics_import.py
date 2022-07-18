@@ -7,7 +7,7 @@ import tempfile
 from typing import Any, Dict
 from pathlib import Path
 import pendulum
-from datetime import timedelta
+from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -16,6 +16,8 @@ from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from googleapiclient.discovery import build as AnalyticsBuild
 from oauth2client.service_account import ServiceAccountCredentials
+from dateutil import tz
+import pytz
 
 from utils import random_identifier
 from utils.failure_callbacks import slack_task
@@ -150,7 +152,12 @@ with DAG(
 
     def process(table: str, conn: str, **context: Any) -> None:
         ds = context["ds"]
+        ds_utc = datetime.strptime(ds, "%Y-%m-%d")
+        ds_utc = ds_utc.replace(tzinfo=pytz.UTC)
+        tz_est = tz.gettz("America/Toronto")
+        ds_est = ds_utc.astimezone(tz_est).date()
         logging.info(f"Date Range: {ds}")
+        logging.info(f"Date Range (EST): {ds_est}")
         utc_time_now = get_utc_timestamp()
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
