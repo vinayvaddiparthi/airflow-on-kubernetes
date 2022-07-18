@@ -7,7 +7,7 @@ import tempfile
 from typing import Any, Dict
 from pathlib import Path
 import pendulum
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
@@ -152,9 +152,9 @@ with DAG(
 
     def process(table: str, conn: str, **context: Any) -> None:
         ds = context["ds"]
-        ds_utc = datetime.datetime.strptime(ds,'%Y-%m-%d')
+        ds_utc = datetime.strptime(ds, "%Y-%m-%d")
         ds_utc = ds_utc.replace(tzinfo=pytz.UTC)
-        tz_est = tz.gettz('America/Toronto')
+        tz_est = tz.gettz("America/Toronto")
         ds_est = ds_utc.astimezone(tz_est).date()
         logging.info(f"Date Range: {ds}")
         logging.info(f"Date Range (EST): {ds_est}")
