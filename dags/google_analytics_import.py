@@ -159,8 +159,6 @@ with DAG(
         logging.info(f"Date Range: {ds}")
         logging.info(f"Date Range (EST): {ts_est}")
         ds = ts_est
-        logging.info(f"Date Range: {ds}")
-        logging.info(f"Date Range (EST): {ts_est}")
         utc_time_now = get_utc_timestamp()
         analytics = initialize_analytics_reporting()
         google_analytics_hook = BaseHook.get_connection("google_analytics_snowflake")
