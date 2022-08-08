@@ -26,4 +26,3 @@ $8 as provision_loss,
 CURRENT_TIMESTAMP()
 from @{{ params.stage }};
 
-select count(*) from {{params.table}}

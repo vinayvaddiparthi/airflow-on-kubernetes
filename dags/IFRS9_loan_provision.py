@@ -14,8 +14,6 @@ import logging
 import pendulum
 import pandas as pd
 import numpy as np
-import csv
-import tempfile
 
 
 def read_data_from_snowflake(
@@ -49,20 +47,20 @@ def read_data_from_snowflake(
 
 def provision_rate(row: pd.Series) -> float:
     if row["calculated_dpd"] in range(1, 15):
-        loss = 47.48 / 100
+        rate = 0.4748
     elif row["calculated_dpd"] in range(16, 30):
-        loss = 59.52 / 100
+        rate = 0.5952
     elif row["calculated_dpd"] in range(31, 90):
-        loss = 70.14 / 100
+        rate = 0.7014
     elif row["calculated_dpd"] in range(91, 150):
-        loss = 71.14 / 100
+        rate = 0.7114
     elif row["calculated_dpd"] in range(151, 180):
-        loss = 84.01 / 100
+        rate = 0.8401
     elif row["calculated_dpd"] > 180:
-        loss = 100 / 100
+        rate = 1
     else:
-        loss = 5.38 / 100
-    return loss
+        rate = 0.0538
+    return rate
 
 
 def provision_loss_calculation(snowflake_conn: str, database: str, schema: str) -> None:
@@ -83,38 +81,25 @@ def provision_loss_calculation(snowflake_conn: str, database: str, schema: str) 
     destination_schema = "dbt_reporting"
     stage = f"{database}.{destination_schema}.provision_loss"
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv") as csv_file:
-        csv_writer = csv.writer(csv_file)
-        for r in df.itertuples():
-            csv_writer.writerow(
-                [
-                    r.id,
-                    r.guid,
-                    r.default_flag,
-                    r.bankruptcy,
-                    r.outstanding_balance,
-                    r.calculated_dpd,
-                    r.provision_rate,
-                    r.provision_loss,
-                ]
+    df.to_csv("IFRS9", index=False, header=False)
+
+    logging.info("✅ IFRS9 provision loss report written to a csv file")
+
+    with snowflake_engine.begin() as conn:
+
+        try:
+            conn.execute(f"create or replace stage {stage} file_format=(type=csv)")
+
+            logging.info(f"✅ Created snowflake stage successfully: {stage}")
+
+            conn.execute(f"put file://IFRS9 @{stage}")
+
+            logging.info("✅ Copied the csv file to snowflake stage succesfully")
+
+        except Exception as e:
+            raise Exception(
+                f"Provision Loss Report  not copied to snowflake stage. Exception details: {e} "
             )
-        logging.info("✅ IFRS9 provision loss report written to a csv file")
-
-        with snowflake_engine.begin() as conn:
-
-            try:
-                conn.execute(f"create or replace stage {stage} file_format=(type=csv)")
-
-                logging.info(f"✅ Created snowflake stage successfully: {stage}")
-
-                conn.execute(f"put file://{csv_file.name} @{stage}")
-
-                logging.info("✅ Copied the csv file to snowflake stage succesfully")
-
-            except Exception as e:
-                raise Exception(
-                    f"Provision Loss Report  not copied to snowflake stage. Exception details: {e} "
-                )
 
 
 def create_dag() -> DAG:
@@ -122,7 +107,7 @@ def create_dag() -> DAG:
 
     with DAG(
         dag_id="IFRS9",
-        description="This DAG will give IFRS 9 Loan provision for credit loss report: when a customer does not repay the loan on time",
+        description="This DAG will give IFRS9 Loan provision for credit loss report: when a customer does not repay the loan on time",
         start_date=pendulum.datetime(
             2022, 8, 4, tzinfo=pendulum.timezone("America/Toronto")
         ),
@@ -131,7 +116,7 @@ def create_dag() -> DAG:
             "retry_delay": timedelta(minutes=5),
             "on_failure_callback": slack_task("slack_data_alerts"),
         },
-        schedule_interval="00 10 * * 5",
+        schedule_interval="0 10 * * 5",
         catchup=False,
         max_active_runs=1,
         on_failure_callback=slack_dag("slack_data_alerts"),
@@ -143,7 +128,6 @@ def create_dag() -> DAG:
             op_kwargs={
                 "snowflake_conn": "snowflake_dbt",
                 "database": f"{'analytics_production' if is_prod else 'analytics_development'}",
-                # "database":"analytics_development",
                 "schema": "dbt_ario",
             },
             provide_context=False,
@@ -157,10 +141,8 @@ def create_dag() -> DAG:
                 "table": "fct_provision_loss",
             },
             database=f"{'analytics_production' if is_prod else 'analytics_development'}",
-            # database = "analytics_development",
             schema="dbt_reporting",
             snowflake_conn_id="snowflake_dbt",
-            role="DBT_DEVELOPMENT",
             dag=dag,
         )
 
