@@ -214,7 +214,7 @@ with DAG(
     dag_id="platform_journal_entry",
     max_active_runs=1,
     catchup=True,
-    schedule_interval="@daily",
+    schedule_interval="0 2 * * *",
     start_date=pendulum.datetime(
         2020, 8, 29, tzinfo=pendulum.timezone("America/Toronto")
     ),
