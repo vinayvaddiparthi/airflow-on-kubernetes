@@ -17,6 +17,20 @@ def slack_dag(conn_id: str) -> Callable:
     return func
 
 
+def slack_dag_success(conn_id: str) -> Callable:
+    def func(context: Dict) -> str:
+        return SlackWebhookOperator(
+            task_id="slack_success",
+            channel="#monthly_bureau_pulls",
+            http_conn_id=conn_id,
+            message=f"✅ DAG run successful. Equifax Batch Data has been uploaded\n"
+            f'*DAG ID*:{context["task_instance"].dag_id}\n'
+            f'*Execution Time*: {context["execution_date"]}',
+        ).execute(context=context)
+
+    return func
+
+
 def slack_task(conn_id: str) -> Callable:
     def func(context: Dict) -> str:
         return SlackWebhookOperator(
