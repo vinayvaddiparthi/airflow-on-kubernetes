@@ -49,7 +49,7 @@ dag = DAG(
     schedule_interval="0 12 * * *",
     default_args=default_args,
     template_searchpath="dags/sql",
-    catchup=False
+    catchup=False,
 )
 dag.doc_md = __doc__
 
@@ -350,7 +350,6 @@ for file, table in [("risk", "comm"), ("dv", "tcap")]:
         dag=dag,
     )
 
-
     (
         convert_to_parquet
         >> create_staging_table
@@ -358,6 +357,3 @@ for file, table in [("risk", "comm"), ("dv", "tcap")]:
         >> insert_from_staging_table
         >> refresh_dbt_model
     )
-
-
-
