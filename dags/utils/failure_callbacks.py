@@ -23,7 +23,7 @@ def slack_dag_success(conn_id: str) -> Callable:
             task_id="slack_success",
             channel="#monthly_bureau_pulls",
             http_conn_id=conn_id,
-            message=f"✅ DAG run successful. Equifax Data has been uploaded.\n"
+            message=f"✅ DAG run successful. Equifax batch data has been uploaded.\n"
             f'*DAG ID*:{context["task_instance"].dag_id}\n'
             f'*Execution Time*: {context["execution_date"]}',
         ).execute(context=context)
