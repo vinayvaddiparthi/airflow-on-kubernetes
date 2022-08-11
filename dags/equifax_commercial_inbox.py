@@ -21,8 +21,11 @@ from pyarrow._csv import ReadOptions
 from pyarrow.lib import ArrowInvalid, array
 from typing import List
 from utils.common_utils import get_utc_timestamp
+from datetime import timedelta
 
-from utils.failure_callbacks import slack_task
+from utils.failure_callbacks import slack_task, slack_dag_success
+from dbt_extras.dbt_operator import DbtOperator
+from dbt_extras.dbt_action import DbtAction
 from utils.gpg import init_gnupg
 from utils.equifax_helpers import get_import_month
 
@@ -35,6 +38,7 @@ default_args = {
     "retries": 0,
     "catchup": False,
     "on_failure_callback": slack_task("slack_data_alerts"),
+    "on_success_callback": slack_dag_success("slack_success_alerts_equifax"),
     "tags": ["equifax"],
     "description": "A workflow to download and process the commercial batch response file from Equifax",
     "default_view": "graph",
@@ -45,6 +49,7 @@ dag = DAG(
     schedule_interval="0 12 * * *",
     default_args=default_args,
     template_searchpath="dags/sql",
+    catchup=False
 )
 dag.doc_md = __doc__
 
@@ -337,10 +342,22 @@ for file, table in [("risk", "comm"), ("dv", "tcap")]:
         executor_config=EXECUTOR_CONFIG,
         dag=dag,
     )
+    refresh_dbt_model = DbtOperator(
+        task_id="dbt_run_last_commercial_bureau_pull",
+        execution_timeout=timedelta(hours=1),
+        action=DbtAction.run,
+        models=("last_commercial_bureau_pull"),
+        dag=dag,
+    )
+
 
     (
         convert_to_parquet
         >> create_staging_table
         >> load_from_stage
         >> insert_from_staging_table
+        >> refresh_dbt_model
     )
+
+
+
