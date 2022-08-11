@@ -49,7 +49,7 @@ dag = DAG(
     dag_id="equifax_consumer_inbox",
     schedule_interval="0 12 * * *",
     default_args=default_args,
-    catchup= False,
+    catchup=False,
 )
 dag.doc_md = __doc__
 
