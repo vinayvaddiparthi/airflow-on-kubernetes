@@ -19,11 +19,13 @@ import logging
 import boto3
 import pandas as pd
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 from helpers.aws_hack import hack_clear_aws_keys
-from utils.failure_callbacks import slack_task, sensor_timeout
+from dbt_extras.dbt_operator import DbtOperator
+from dbt_extras.dbt_action import DbtAction
+from utils.failure_callbacks import slack_task, sensor_timeout, slack_dag_success
 from utils.gpg import init_gnupg
 from utils.reference_data import result_dict, date_columns, personal_info
 from utils.equifax_helpers import get_import_month
@@ -38,6 +40,7 @@ default_args = {
     "retries": 0,
     "catchup": False,
     "on_failure_callback": slack_task("slack_data_alerts"),
+    "on_success_callback": slack_dag_success("slack_success_alerts_equifax"),
     "tags": ["equifax"],
     "description": "A workflow to download and process the consumer batch response file from Equifax",
 }
@@ -46,6 +49,7 @@ dag = DAG(
     dag_id="equifax_consumer_inbox",
     schedule_interval="0 12 * * *",
     default_args=default_args,
+    catchup=False,
 )
 dag.doc_md = __doc__
 
@@ -433,6 +437,14 @@ insert_snowflake_public = PythonOperator(
     dag=dag,
 )
 
+refresh_dbt_model = DbtOperator(
+    task_id="dbt_run_last_consumer_bureau_pull",
+    execution_timeout=timedelta(hours=1),
+    action=DbtAction.run,
+    models=("last_consumer_bureau_pull"),
+    dag=dag,
+)
+
 (
     check_if_file_downloaded
     >> check_if_response_available
@@ -444,4 +456,5 @@ insert_snowflake_public = PythonOperator(
     >> fix_date
     >> insert_snowflake_stage
     >> insert_snowflake_public
+    >> refresh_dbt_model
 )
