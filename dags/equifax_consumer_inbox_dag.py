@@ -40,7 +40,6 @@ default_args = {
     "retries": 0,
     "catchup": False,
     "on_failure_callback": slack_task("slack_data_alerts"),
-    "on_success_callback": slack_dag_success("slack_success_alerts_equifax"),
     "tags": ["equifax"],
     "description": "A workflow to download and process the consumer batch response file from Equifax",
 }
@@ -442,6 +441,7 @@ refresh_dbt_model = DbtOperator(
     execution_timeout=timedelta(hours=1),
     action=DbtAction.run,
     models=("last_consumer_bureau_pull"),
+    on_success_callback=slack_dag_success("slack_success_alerts_equifax"),
     dag=dag,
 )
 
