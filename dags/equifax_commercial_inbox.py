@@ -38,7 +38,6 @@ default_args = {
     "retries": 0,
     "catchup": False,
     "on_failure_callback": slack_task("slack_data_alerts"),
-    "on_success_callback": slack_dag_success("slack_success_alerts_equifax"),
     "tags": ["equifax"],
     "description": "A workflow to download and process the commercial batch response file from Equifax",
     "default_view": "graph",
@@ -347,6 +346,7 @@ for file, table in [("risk", "comm"), ("dv", "tcap")]:
         execution_timeout=timedelta(hours=1),
         action=DbtAction.run,
         models=("last_commercial_bureau_pull"),
+        on_success_callback=slack_dag_success("slack_success_alerts_equifax"),
         dag=dag,
     )
 
