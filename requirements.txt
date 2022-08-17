@@ -16,6 +16,7 @@ apache-airflow-backport-providers-ssh==2021.3.3
 apache-airflow-backport-providers-http==2021.4.10
 apache-airflow-backport-providers-postgres==2021.3.17
 apache-airflow-backport-providers-snowflake==2021.3.13
+apache-airflow-backport-providers-slack==2021.3.3
 Flask-Bcrypt==0.7.1
 fab-oidc==0.0.9
 salesforce-bulk==2.2.0
@@ -197,6 +198,7 @@ scikit-learn==1.0.2
 setproctitle==1.2.2
 simple-salesforce==1.11.4
 six==1.16.0
+slack-sdk==3.18.1
 SQLAlchemy-JSONField==0.9.0
 SQLAlchemy-Utils==0.38.2
 sqlparse==0.3.1
