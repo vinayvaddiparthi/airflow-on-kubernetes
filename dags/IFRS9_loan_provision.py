@@ -114,12 +114,12 @@ def create_dag() -> DAG:
         default_args={
             "retries": 2,
             "retry_delay": timedelta(minutes=5),
-            "on_failure_callback": slack_task("slack_data_alerts_test"),
+            "on_failure_callback": slack_task("slack_data_alerts"),
         },
         schedule_interval="0 10 * * 5",
         catchup=False,
         max_active_runs=1,
-        on_failure_callback=slack_dag("slack_data_alerts_test"),
+        on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag, open("dags/sql/IFRS9_provision_loss.sql") as provision_loss_sql:
 
         read_data_from_snowflake = PythonOperator(
