@@ -16,7 +16,7 @@ from datetime import timedelta
 from airflow.operators.python_operator import PythonOperator
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from pyporky.symmetric import SymmetricPorky
 from base64 import b64decode
 

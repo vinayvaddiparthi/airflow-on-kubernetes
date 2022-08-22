@@ -17,6 +17,7 @@ apache-airflow-backport-providers-http==2021.4.10
 apache-airflow-backport-providers-postgres==2021.3.17
 apache-airflow-backport-providers-snowflake==2021.3.13
 apache-airflow-backport-providers-slack==2021.3.3
+apache-airflow-backport-providers-google==2021.3.3
 Flask-Bcrypt==0.7.1
 fab-oidc==0.0.9
 salesforce-bulk==2.2.0
