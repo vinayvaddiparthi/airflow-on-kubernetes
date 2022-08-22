@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Any
 import logging
 import pendulum
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 import pandas as pd
 from airflow import DAG

@@ -12,7 +12,7 @@ import heroku3
 import pandas as pd
 import pendulum
 import psycopg2
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.operators.python_operator import PythonOperator

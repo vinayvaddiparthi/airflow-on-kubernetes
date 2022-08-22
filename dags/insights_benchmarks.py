@@ -7,7 +7,7 @@ import pandas as pd
 from sqlalchemy import Table, MetaData
 from sqlalchemy.sql import select, func, text
 from airflow import DAG
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator

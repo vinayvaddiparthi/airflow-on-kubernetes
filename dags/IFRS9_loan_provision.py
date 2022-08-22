@@ -1,5 +1,5 @@
 from airflow import DAG
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import Variable

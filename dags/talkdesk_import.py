@@ -7,7 +7,7 @@ from typing import Any, Optional, Dict
 
 import pendulum
 from airflow import DAG
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
 from airflow.operators.python_operator import PythonOperator
 from authlib.integrations.requests_client import OAuth2Session
