@@ -9,8 +9,8 @@ from pathlib import Path
 import pendulum
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.hooks.base_hook import BaseHook
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
@@ -30,7 +30,7 @@ def initialize_analytics_reporting() -> Any:
     Returns:
         An authorized Analytics Reporting API V4 service object.
     """
-    hook = GoogleCloudBaseHook(gcp_conn_id="google_analytics_default")
+    hook = GoogleBaseHook(gcp_conn_id="google_analytics_default")
     key = json.loads(hook._get_field("keyfile_dict"))
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(
         key, scopes=["https://www.googleapis.com/auth/analytics.readonly"]

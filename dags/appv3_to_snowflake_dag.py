@@ -1,6 +1,6 @@
 import pendulum
 from airflow import DAG
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.operators.python_operator import PythonOperator
 from sqlalchemy import create_engine, text
 from sqlalchemy.sql import Select

@@ -1,5 +1,5 @@
 from airflow import DAG
-from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import Variable
@@ -114,12 +114,12 @@ def create_dag() -> DAG:
         default_args={
             "retries": 2,
             "retry_delay": timedelta(minutes=5),
-            "on_failure_callback": slack_task("slack_data_alerts"),
+            "on_failure_callback": slack_task("slack_data_alerts_test"),
         },
         schedule_interval="0 10 * * 5",
         catchup=False,
         max_active_runs=1,
-        on_failure_callback=slack_dag("slack_data_alerts"),
+        on_failure_callback=slack_dag("slack_data_alerts_test"),
     ) as dag, open("dags/sql/IFRS9_provision_loss.sql") as provision_loss_sql:
 
         read_data_from_snowflake = PythonOperator(
