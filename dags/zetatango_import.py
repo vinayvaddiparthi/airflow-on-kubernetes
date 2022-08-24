@@ -147,11 +147,7 @@ def stage_table_in_snowflake(
         with csv_filepath.open("w+b") as csv_filedesc:
             logging.info(f"copy {source_schema}.{table}")
 
-            if table in (
-                "lending_adjudications",
-                "ledger_transactions",
-                "object_blobs",
-            ):
+            if table in ("lending_adjudications", "ledger_transactions"):
 
                 logging.info(f"Performing incremental export for {table} table")
 
@@ -168,11 +164,6 @@ def stage_table_in_snowflake(
                 logging.info(f"Fetching records with timestamp > {latest_ts}")
 
                 latest_ts_stmt = f"select *, '{utc_time_now}' as import_ts from {source_schema}.{table} where updated_at > '{latest_ts}'"
-
-                if table == "object_blobs":
-                    latest_ts_stmt += " and archived = 'f'"
-                elif table == "lending_adjudications":
-                    latest_ts_stmt += " and adjudication_inputs_blob_id is null and adjudication_results_blob_id is null and offer_results_blob_id is null"
 
                 cursor.copy_expert(
                     f"copy ({latest_ts_stmt}) to stdout "
@@ -202,11 +193,7 @@ def stage_table_in_snowflake(
             return f"❌ Failed to read table {table}: {exc}"
 
         if table_.num_rows == 0:
-            if table in (
-                "lending_adjudications",
-                "ledger_transactions",
-                "object_blobs",
-            ):
+            if table in ("lending_adjudications", "ledger_transactions"):
                 return f"📝️ No new records to insert for table: {table}"
             else:
                 return f"📝️ Skipping empty table {table}"
@@ -217,7 +204,7 @@ def stage_table_in_snowflake(
             f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
 
-        if table in ("lending_adjudications", "ledger_transactions", "object_blobs"):
+        if table in ("lending_adjudications", "ledger_transactions"):
 
             tx.execute(
                 f"insert into {destination_schema}.{table} "  # nosec
