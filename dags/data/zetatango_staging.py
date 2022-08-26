@@ -145,8 +145,8 @@ core_decryption_spec = [
     DecryptionSpec(
         schema="CORE_STAGING",
         table="OBJECT_BLOBS",
-        columns=["value"],
-        whereclause=literal_column("$1:key:type").in_(
+        columns=["blob_value"],
+        whereclause=literal_column("parse_json(replace($1:metadata, '\\\"', '\\\'')):type").in_(
             ["adjudication_results", "offer_results"]
         ),
         format=["yaml", "yaml"],
