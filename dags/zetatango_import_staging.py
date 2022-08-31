@@ -389,11 +389,14 @@ def decrypt_pii_columns(
                 from_obj=union_all(*select_froms),
             )
 
-            tx.execute(
-                f"create or replace transient table {dst_table} as {stmt} "  # nosec
-                f"qualify row_number() "
-                f"over (partition by fields:id::integer order by fields:updated_at::datetime desc) = 1"
-            ).fetchall()
+            create_stmt = (
+                f"create or replace transient table {dst_table} as {stmt}"  # nosec
+            )
+
+            if spec.table not in ("LENDING_ADJUDICATIONS", "OBJECT_BLOBS"):
+                create_stmt += " qualify row_number() over (partition by fields:id::integer order by fields:updated_at::datetime desc) = 1"
+
+            tx.execute(create_stmt).fetchall()
 
             logging.info(f"🔓 Successfully decrypted {spec}")
 
