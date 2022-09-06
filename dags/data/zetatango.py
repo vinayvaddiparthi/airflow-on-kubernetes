@@ -142,6 +142,15 @@ core_decryption_spec = [
         table="EMAILS",
         columns=["from", "html_body", "subject", "text_body", "to"],
     ),
+    DecryptionSpec(
+        schema="CORE_PRODUCTION",
+        table="OBJECT_BLOBS",
+        columns=["blob_value"],
+        whereclause=literal_column(
+            "parse_json(replace($1:metadata, '\\\"', '\\'')):type"
+        ).in_(["adjudication_results", "offer_results"]),
+        format=["yaml", "yaml"],
+    ),
 ]
 
 
