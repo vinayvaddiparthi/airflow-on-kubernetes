@@ -513,6 +513,7 @@ def create_dag() -> DAG:
             task_id="dbt_run",
             execution_timeout=timedelta(hours=1),
             action=DbtAction.run,
+            exclude="tag:monthly",
             retries=1,
         )
 
