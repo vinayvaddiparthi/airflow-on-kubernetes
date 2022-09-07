@@ -171,8 +171,6 @@ def stage_table_in_snowflake(
 
                 if table == "object_blobs":
                     latest_ts_stmt += " and archived = 'f'"
-                elif table == "lending_adjudications":
-                    latest_ts_stmt += " and adjudication_inputs_blob_id is null and adjudication_results_blob_id is null and offer_results_blob_id is null"
 
                 cursor.copy_expert(
                     f"copy ({latest_ts_stmt}) to stdout "
