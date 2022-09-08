@@ -241,6 +241,7 @@ kyc_decryption_spec = [
             [
                 "self_attested_average_monthly_sales",
                 "self_attested_date_established",
+                "random_group",
             ]
         ),
     ),
