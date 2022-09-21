@@ -90,16 +90,6 @@ core_decryption_spec = [
     ),
     DecryptionSpec(
         schema="CORE_STAGING",
-        table="LENDING_ADJUDICATIONS",
-        columns=[
-            "offer_results",
-            "adjudication_results",
-            "notes",
-        ],
-        format=["yaml", "yaml", None],
-    ),
-    DecryptionSpec(
-        schema="CORE_STAGING",
         table="LENDING_ADJUDICATION_DECISIONS",
         columns=["notes"],
     ),
