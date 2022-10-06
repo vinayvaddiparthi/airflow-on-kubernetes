@@ -348,30 +348,4 @@ def create_dag() -> DAG:
         return dag
 
 
-if __name__ == "__main__":
-    import os
-    from unittest.mock import patch
-    from snowflake.sqlalchemy import URL
-    from sqlalchemy import create_engine
-
-    with patch(
-        "process_flinks_transactions_dag.SnowflakeHook.get_sqlalchemy_engine",
-        return_value=create_engine(
-            URL(
-                account="thinkingcapital.ca-central-1.aws",
-                user=os.environ["SNOWFLAKE_USERNAME"],
-                password=os.environ["SNOWFLAKE_PASSWORD"],
-                database="ZETATANGO",
-                warehouse="ETL",
-            )
-        ),
-    ):
-        copy_transactions(
-            "abc",
-            "CORE_PRODUCTION",
-            "ario-documents-production",
-            10,
-        )
-
-else:
-    globals()["process_flinks_transactions"] = create_dag()
+globals()["process_flinks_transactions"] = create_dag()
