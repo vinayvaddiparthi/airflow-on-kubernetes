@@ -9,7 +9,16 @@ from airflow import DAG
 from typing import Any
 from helpers.aws_hack import hack_clear_aws_keys
 from sqlalchemy import Table, MetaData, VARCHAR
-from sqlalchemy.sql import select, func, text, literal_column, literal, join, union_all
+from sqlalchemy.sql import (
+    select,
+    func,
+    text,
+    literal_column,
+    literal,
+    join,
+    union_all,
+    case,
+)
 from concurrent.futures.thread import ThreadPoolExecutor
 from utils.failure_callbacks import slack_task
 from datetime import timedelta
@@ -24,6 +33,7 @@ from base64 import b64decode
 def store_flinks_response(
     merchant_guid: str,
     file_path: str,
+    doc_type: str,
     bucket_name: str,
     snowflake_connection: str,
     schema: str,
@@ -82,6 +92,19 @@ def store_flinks_response(
                     ),
                     literal_column(f"'{file_path}'").label("file_path"),
                     func.parse_json(json.dumps(data)).label("raw_response"),
+                    case(
+                        [
+                            (
+                                doc_type == literal("flinks_raw_response"),
+                                literal("flinks"),
+                            ),
+                            (
+                                doc_type == literal("plaid_transactions_response"),
+                                literal("plaid"),
+                            ),
+                        ],
+                        else_=literal("flinks"),
+                    ).label("source"),
                 ]
             )
 
@@ -91,6 +114,7 @@ def store_flinks_response(
                     "batch_timestamp",
                     "file_path",
                     "raw_response",
+                    "source",
                 ],
                 select_query,
             )
@@ -164,13 +188,17 @@ def copy_transactions(
                     func.get(documents.c.fields, "cloud_file_path"),
                     VARCHAR,
                 ).label("file_path"),
+                sqlalchemy.cast(
+                    func.get(documents.c.fields, "doc_type"), VARCHAR
+                ).label("doc_type"),
                 text("1"),
             ],
             from_obj=documents,
         )
         .where(
-            sqlalchemy.cast(func.get(documents.c.fields, "doc_type"), VARCHAR)
-            == literal("flinks_raw_response")
+            sqlalchemy.cast(func.get(documents.c.fields, "doc_type"), VARCHAR).in_(
+                [literal("flinks_raw_response"), literal("plaid_transactions_response")]
+            )
         )
         .where(
             sqlalchemy.cast(func.get(documents.c.fields, "type"), VARCHAR)
@@ -189,13 +217,17 @@ def copy_transactions(
                     func.get(documents.c.fields, "cloud_file_path"),
                     VARCHAR,
                 ).label("file_path"),
+                sqlalchemy.cast(
+                    func.get(documents.c.fields, "doc_type"), VARCHAR
+                ).label("doc_type"),
                 text("1"),
             ],
             from_obj=documents,
         )
         .where(
-            sqlalchemy.cast(func.get(documents.c.fields, "doc_type"), VARCHAR)
-            == literal("flinks_raw_response")
+            sqlalchemy.cast(func.get(documents.c.fields, "doc_type"), VARCHAR).in_(
+                [literal("flinks_raw_response"), literal("plaid_transactions_response")]
+            )
         )
         .where(
             sqlalchemy.cast(func.get(documents.c.fields, "type"), VARCHAR)
@@ -228,6 +260,7 @@ def copy_transactions(
         index_col=[
             "merchant_guid",
             "file_path",
+            "doc_type",
         ],
     )
 
@@ -258,6 +291,7 @@ def copy_transactions(
                     store_flinks_response,
                     row.name[0],
                     row.name[1],
+                    row.name[2],
                     bucket_name,
                     snowflake_connection,
                     schema,
