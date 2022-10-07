@@ -241,7 +241,7 @@ def create_dag() -> DAG:
     with DAG(
         dag_id="insights_benchmarks",
         max_active_runs=1,
-        schedule_interval="0 9 1 * *",
+        schedule_interval="0 9 6 * *",
         default_args={
             "retries": 2,
             "retry_delay": timedelta(minutes=5),
@@ -251,15 +251,11 @@ def create_dag() -> DAG:
         start_date=pendulum.datetime(
             2022, 3, 8, tzinfo=pendulum.timezone("America/Toronto")
         ),
-    ) as dag, open("dags/sql/benchmarking/sales_volume_benchmarks.sql") as sv, open(
-        "dags/sql/benchmarking/cashflow_benchmarks.sql"
-    ) as cf:
+    ) as dag, open("dags/sql/benchmarking/sales_volume_benchmarks.sql") as sv:
 
         is_prod = Variable.get(key="environment") == "production"
 
         sv_queries = [query.strip("\n") for query in sv.read().split(";")]
-
-        cf_queries = [query.strip("\n") for query in cf.read().split(";")]
 
         classify_transactions = PythonOperator(
             task_id="classify_transactions",
@@ -302,38 +298,7 @@ def create_dag() -> DAG:
             dag=dag,
         )
 
-        cashflow_benchmarks = SnowflakeOperator(
-            task_id="generate_cf_benchmarks",
-            sql=cf_queries,
-            params={
-                "trx_table": "dbt_ario.fct_bank_account_transaction",
-                "merchant_table": "dbt_ario.dim_merchant",
-                "sv_table": "dbt_reporting.fct_cashflow_industry_benchmarks",
-            },
-            database=f"{'analytics_production' if is_prod else 'analytics_development'}",
-            schema="dbt_reporting",
-            snowflake_conn_id="snowflake_dbt",
-            dag=dag,
-        )
-
-        upload_cf_benchmarks = PythonOperator(
-            task_id="upload_cf_benchmarks",
-            python_callable=_upload_benchmarks,
-            op_kwargs={
-                "snowflake_conn": "snowflake_dbt",
-                "s3_conn": "s3_dataops",
-                "s3_bucket": "tc-data-airflow-production",
-                "database": f"{'analytics_production' if is_prod else 'analytics_development'}",
-                "schema": "dbt_reporting",
-                "table": "fct_cashflow_industry_benchmarks",
-                "file": "cashflow_industry_benchmarks.json",
-            },
-            dag=dag,
-        )
-
         classify_transactions >> sales_volume_benchmarks >> upload_sv_benchmarks
-
-        cashflow_benchmarks >> upload_cf_benchmarks
 
         return dag
 
