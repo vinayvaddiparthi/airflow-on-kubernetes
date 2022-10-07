@@ -241,7 +241,7 @@ def create_dag() -> DAG:
     with DAG(
         dag_id="insights_benchmarks",
         max_active_runs=1,
-        schedule_interval="0 9 1 * *",
+        schedule_interval="0 9 6 * *",
         default_args={
             "retries": 2,
             "retry_delay": timedelta(minutes=5),
