@@ -85,6 +85,7 @@ core_decryption_spec = [
                 "merchant_on_hold_flag_date",
                 "desired_bank_account_balance",
                 "merchant_identified_accounts",
+                "home_based_business_type",
             ]
         ),
     ),
