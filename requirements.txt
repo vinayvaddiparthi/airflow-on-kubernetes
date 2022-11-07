@@ -46,7 +46,7 @@ heroku3==5.1.4
 google-api-python-client==2.36.0
 fs.sshfs==1.0.1
 python-gnupg==0.4.8
-safety==1.10.3
+safety==2.2.0
 fastparquet==0.5.0
 transliterate==1.10.2
 types-requests==2.27.8
