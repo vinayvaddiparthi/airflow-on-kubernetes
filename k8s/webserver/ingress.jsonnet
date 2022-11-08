@@ -1,7 +1,7 @@
 local params = import "../params.libsonnet";
 
 {
-  apiVersion: "extensions/v1beta1",
+  apiVersion: "networking.k8s.io/v1",
   kind: "Ingress",
   metadata: {
     name: params.app + "-" + params.env + "-" + "webserver",
