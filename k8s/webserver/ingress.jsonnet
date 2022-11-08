@@ -23,9 +23,14 @@ local params = import "../params.libsonnet";
           paths: [
             {
               path: params.webserver.path,
+              pathType: "ImplementationSpecific",
               backend: {
-                serviceName: params.app + "-" + params.env + "-" + "webserver",
-                servicePort: 8080
+                service: {
+                  name: params.app + "-" + params.env + "-" + "webserver",
+                  port: {
+                    number: 8080
+                  },
+                },
               },
             },
           ],
