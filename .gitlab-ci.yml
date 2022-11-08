@@ -142,57 +142,57 @@ deploy_production:
   only:
     - master
 
-#deploy_review:
-#  stage: deploy
-#  tags:
-#    - k8s
-#  image:
-#    name: tcdata/kubectl-jsonnet
-#    entrypoint: [""]
-#  script:
-#    - |
-#      jsonnet -J /ksonnet-lib k8s/app.jsonnet \
-#        -V APP_NAME \
-#        -V KUBE_NAMESPACE \
-#        -V DOCKER_REPOSITORY \
-#        -V DOCKER_IMAGE_TAG \
-#        -V FERNET_KEY \
-#        -V WEBSERVER_SECRET_KEY \
-#        -V AWS_SES_USERNAME \
-#        -V AWS_SES_PASSWORD \
-#        -V OIDC_CLIENT_ID \
-#        -V OIDC_CLIENT_SECRET \
-#        -V BACKUPS_AWS_ACCESS_KEY_ID \
-#        -V BACKUPS_AWS_SECRET_ACCESS_KEY \
-#        -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
-#  environment:
-#    name: review/$CI_COMMIT_REF_NAME
-#    url: https://airflow.tcdata.co/${CI_ENVIRONMENT_SLUG}
-#    on_stop: stop_review
-#  only:
-#    - branches
-#  except:
-#    - master
-#
-#stop_review:
-#  stage: cleanup
-#  tags:
-#    - k8s
-#  variables:
-#    GIT_STRATEGY: none
-#  image:
-#    name: tcdata/kubectl-jsonnet
-#    entrypoint: [""]
-#  script:
-#    - |
-#      kubectl --token=${KUBE_TOKEN} -n ${KUBE_NAMESPACE} \
-#      delete deploy,service,ingress,secret,postgres,serviceinstance,servicebinding \
-#      -l app=${APP_NAME},env=${CI_ENVIRONMENT_SLUG}
-#  environment:
-#    name: review/$CI_COMMIT_REF_NAME
-#    action: stop
-#  when: manual
-#  only:
-#    - branches
-#  except:
-#    - master
+deploy_review:
+ stage: deploy
+ tags:
+   - k8s
+ image:
+   name: tcdata/kubectl-jsonnet
+   entrypoint: [""]
+ script:
+   - |
+     jsonnet -J /ksonnet-lib k8s/app.jsonnet \
+       -V APP_NAME \
+       -V KUBE_NAMESPACE \
+       -V DOCKER_REPOSITORY \
+       -V DOCKER_IMAGE_TAG \
+       -V FERNET_KEY \
+       -V WEBSERVER_SECRET_KEY \
+       -V AWS_SES_USERNAME \
+       -V AWS_SES_PASSWORD \
+       -V OIDC_CLIENT_ID \
+       -V OIDC_CLIENT_SECRET \
+       -V BACKUPS_AWS_ACCESS_KEY_ID \
+       -V BACKUPS_AWS_SECRET_ACCESS_KEY \
+       -V CI_ENVIRONMENT_SLUG | kubectl --token=${KUBE_TOKEN} apply -f -
+ environment:
+   name: review/$CI_COMMIT_REF_NAME
+   url: https://airflow.tcdata.co/${CI_ENVIRONMENT_SLUG}
+   on_stop: stop_review
+ only:
+   - branches
+ except:
+   - master
+
+stop_review:
+ stage: cleanup
+ tags:
+   - k8s
+ variables:
+   GIT_STRATEGY: none
+ image:
+   name: tcdata/kubectl-jsonnet
+   entrypoint: [""]
+ script:
+   - |
+     kubectl --token=${KUBE_TOKEN} -n ${KUBE_NAMESPACE} \
+     delete deploy,service,ingress,secret,postgres,serviceinstance,servicebinding \
+     -l app=${APP_NAME},env=${CI_ENVIRONMENT_SLUG}
+ environment:
+   name: review/$CI_COMMIT_REF_NAME
+   action: stop
+ when: manual
+ only:
+   - branches
+ except:
+   - master
