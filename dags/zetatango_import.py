@@ -130,6 +130,14 @@ def stage_table_in_snowflake(
 ) -> str:
     if table in ("versions", "job_reports", "job_statuses"):
         return f"⏭️️ Skipping table {table}"
+    if table in ("lending_adjudications"):
+        return _process_large_table_incrementally(
+            source_raw_conn,
+            snowflake_engine,
+            source_schema,
+            destination_schema,
+            table,
+        )
     logging.info(f"start syncing table: {table}")
     stage_guid = random_identifier()
     with snowflake_engine.begin() as tx, cast(
@@ -227,6 +235,86 @@ def stage_table_in_snowflake(
                 f"create or replace transient table {destination_schema}.{table} as "  # nosec
                 f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
             ).fetchall()
+
+    return f"✔️ Successfully loaded table {table}"
+
+
+def _process_large_table_incrementally(
+    source_raw_conn: connection,
+    snowflake_engine: Engine,
+    source_schema: str,
+    destination_schema: str,
+    table: str,
+) -> str:
+    logging.info(f"start syncing table: {table}")
+    stage_guid = random_identifier()
+    with snowflake_engine.begin() as tx, cast(
+        psycopg2.extensions.cursor, source_raw_conn.cursor()
+    ) as cursor, tempfile.TemporaryDirectory() as tempdir:
+
+        tx.execute(
+            f"create or replace temporary stage {destination_schema}.{stage_guid} "
+            f"file_format=(type=parquet)"
+        ).fetchall()
+
+        csv_filepath = Path(tempdir, table).with_suffix(".csv")
+        pq_filepath = Path(tempdir, table).with_suffix(".pq")
+
+        with csv_filepath.open("w+b") as csv_filedesc:
+            logging.info(f"copy {source_schema}.{table}")
+
+            # instead of coping the whole table, we select only new records
+            copy_query = f"copy (select * from {source_schema}.{table} where updated_at > '2022-04-12') to stdout "  # nosec
+            copy_query += "with csv header delimiter ',' quote '\"'"  # nosec
+            cursor.copy_expert(
+                copy_query,
+                csv_filedesc,
+            )
+
+        try:
+            logging.info(f"read {csv_filepath} for {table}")
+            table_ = pv.read_csv(
+                f"{csv_filepath}",
+                read_options=ReadOptions(block_size=8388608),
+                parse_options=ParseOptions(newlines_in_values=True),
+            )
+            logging.info(f"read {csv_filepath} for {table}: Done")
+        except ArrowInvalid as exc:
+            return f"❌ Failed to read table {table}: {exc}"
+
+        if table_.num_rows == 0:
+            return f"📝️ Skipping empty table {table}"
+
+        pq.write_table(table_, f"{pq_filepath}")
+
+        tx.execute(
+            f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
+        ).fetchall()
+
+        # store new records in the stage table
+        logging.info(f"creating {destination_schema}.{table}_stage")
+        tx.execute(
+            f"create or replace transient table {destination_schema}.{table}_stage as "  # nosec
+            f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
+        ).fetchall()
+
+        # remove records in existing table if they are in the new stage table
+        logging.info(f"removing dup records from {destination_schema}.{table}")
+        dedup_query = f"merge info transient table {destination_schema}.{table} t1 using {destination_schema}.{table}_stage t2 on t1.guid = t2.guid "
+        dedup_query += "when matched then delete "
+        tx.execute(dedup_query)
+
+        logging.info(f"insert new records from {destination_schema}.{table}_stage")
+        tx.execute(
+            f"insert into {destination_schema}.{table} "  # nosec
+            f"select * from {destination_schema}.{table}_stage"  # nosec
+        )
+
+        # no need to keep stage table, drop it
+        logging.info(
+            f"dropping {destination_schema}.{table}_stage after merging into {destination_schema}.{table} "
+        )
+        tx.execute(f"drop table {destination_schema}.{table}_stage")
 
     return f"✔️ Successfully loaded table {table}"
 
