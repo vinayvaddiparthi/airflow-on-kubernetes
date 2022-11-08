@@ -142,7 +142,7 @@ deploy_production:
   only:
     - master
 
-# deploy_review:
+#deploy_review:
 #  stage: deploy
 #  tags:
 #    - k8s
@@ -173,8 +173,8 @@ deploy_production:
 #    - branches
 #  except:
 #    - master
-
-# stop_review:
+#
+#stop_review:
 #  stage: cleanup
 #  tags:
 #    - k8s
