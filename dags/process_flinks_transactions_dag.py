@@ -313,8 +313,7 @@ def create_dag() -> DAG:
         },
     ) as dag:
         (
-            dag
-            << PythonOperator(
+            PythonOperator(
                 task_id="copy_transactions",
                 python_callable=copy_transactions,
                 provide_context=True,

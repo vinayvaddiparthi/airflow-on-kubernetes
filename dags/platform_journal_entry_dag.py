@@ -225,7 +225,7 @@ with DAG(
     },
     description="Exports ledger transactions (originally from Ario) from Snowflake to Netsuite, Finance team's ERP application.",
 ) as dag:
-    dag << PythonOperator(
+    PythonOperator(
         task_id="get_transactions_by_created_date",
         python_callable=create_journal_entry_for_transaction,
         provide_context=True,

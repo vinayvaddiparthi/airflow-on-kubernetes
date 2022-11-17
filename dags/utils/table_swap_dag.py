@@ -54,8 +54,7 @@ def create_table_swap_dag(
     ) as dag:
         for table in tables:
             (
-                dag
-                << PythonOperator(
+                PythonOperator(
                     task_id=f'ctas__{table["src"]["schema"]}__{table["dst"]["table"]}',
                     python_callable=ctas,
                     op_kwargs={

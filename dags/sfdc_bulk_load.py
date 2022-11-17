@@ -421,7 +421,7 @@ def create_dag(instances: List[str]) -> DAG:
         max_active_runs=1,
     ) as dag:
         for instance in instances:
-            dag << PythonOperator(
+            PythonOperator(
                 task_id=f"import_{instance}",
                 python_callable=import_sfdc,
                 op_kwargs={

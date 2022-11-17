@@ -243,7 +243,7 @@ with DAG(
             logging.info(f"✔️ Successfully loaded table {table} for {ds}")
 
     for report in reports:
-        dag << PythonOperator(
+        PythonOperator(
             task_id=f"task_{report}",
             python_callable=process,
             op_kwargs={

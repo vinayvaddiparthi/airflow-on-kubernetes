@@ -537,9 +537,9 @@ def create_dag() -> DAG:
             retries=1,
         )
 
-        dag << import_core_prod >> decrypt_core_prod
-        dag << import_idp_prod >> decrypt_idp_prod
-        dag << import_kyc_prod >> decrypt_kyc_prod
+        import_core_prod >> decrypt_core_prod
+        import_idp_prod >> decrypt_idp_prod
+        import_kyc_prod >> decrypt_kyc_prod
         (
             [
                 decrypt_core_prod,
