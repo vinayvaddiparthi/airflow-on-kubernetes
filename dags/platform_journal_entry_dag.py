@@ -216,7 +216,7 @@ with DAG(
     catchup=True,
     schedule_interval="0 2 * * *",
     start_date=pendulum.datetime(
-        2020, 8, 29, tzinfo=pendulum.timezone("America/Toronto")
+        2020, 8, 29, tz=pendulum.timezone("America/Toronto")
     ),
     default_args={
         "retries": 5,

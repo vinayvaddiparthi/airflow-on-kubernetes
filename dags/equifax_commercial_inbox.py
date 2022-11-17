@@ -33,7 +33,7 @@ default_args = {
     "owner": "airflow",
     "depends_on_past": False,
     "start_date": pendulum.datetime(
-        2020, 11, 15, tzinfo=pendulum.timezone("America/Toronto")
+        2020, 11, 15, tz=pendulum.timezone("America/Toronto")
     ),
     "retries": 0,
     "catchup": False,

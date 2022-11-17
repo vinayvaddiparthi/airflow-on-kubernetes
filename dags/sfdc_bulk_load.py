@@ -413,7 +413,7 @@ def create_dag(instances: List[str]) -> DAG:
     with DAG(
         "salesforce_bulk_import",
         start_date=pendulum.datetime(
-            2020, 6, 21, tzinfo=pendulum.timezone("America/Toronto")
+            2020, 6, 21, tz=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="0 0 * * *",
         catchup=False,

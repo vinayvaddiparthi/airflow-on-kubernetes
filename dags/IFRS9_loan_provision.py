@@ -109,7 +109,7 @@ def create_dag() -> DAG:
         dag_id="IFRS9",
         description="This DAG will give IFRS9 Loan provision for credit loss report: when a customer does not repay the loan on time",
         start_date=pendulum.datetime(
-            2022, 8, 4, tzinfo=pendulum.timezone("America/Toronto")
+            2022, 8, 4, tz=pendulum.timezone("America/Toronto")
         ),
         default_args={
             "retries": 2,

@@ -428,7 +428,7 @@ def create_dag() -> DAG:
     with DAG(
         dag_id="zetatango_import",
         start_date=pendulum.datetime(
-            2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
+            2020, 4, 1, tz=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="0 */3 * * *",
         default_args={

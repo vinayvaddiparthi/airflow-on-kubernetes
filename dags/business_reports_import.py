@@ -27,7 +27,7 @@ default_args = {
     "retry_delay": timedelta(minutes=5),
     "on_failure_callback": slack_task("slack_data_alerts"),
     "start_date": pendulum.datetime(
-        2021, 11, 12, tzinfo=pendulum.timezone("America/Toronto")
+        2021, 11, 12, tz=pendulum.timezone("America/Toronto")
     ),
     "catchup": False,
     "tags": ["business reports"],

@@ -249,7 +249,7 @@ def create_dag() -> DAG:
         },
         catchup=False,
         start_date=pendulum.datetime(
-            2022, 3, 8, tzinfo=pendulum.timezone("America/Toronto")
+            2022, 3, 8, tz=pendulum.timezone("America/Toronto")
         ),
     ) as dag, open("dags/sql/benchmarking/sales_volume_benchmarks.sql") as sv:
 

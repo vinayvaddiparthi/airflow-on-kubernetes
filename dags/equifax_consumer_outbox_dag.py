@@ -25,7 +25,7 @@ default_args = {
     "retry_delay": timedelta(minutes=5),
     "on_failure_callback": slack_task("slack_data_alerts"),
     "start_date": pendulum.datetime(
-        2021, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+        2021, 1, 1, tz=pendulum.timezone("America/Toronto")
     ),
     "catchup": False,
     "tags": ["equifax"],

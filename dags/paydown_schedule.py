@@ -194,7 +194,7 @@ def create_dag() -> DAG:
     with DAG(
         dag_id="paydown_schedule",
         start_date=pendulum.datetime(
-            2022, 6, 10, tzinfo=pendulum.timezone("America/Toronto")
+            2022, 6, 10, tz=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="30 4 * * 0",
         default_args={

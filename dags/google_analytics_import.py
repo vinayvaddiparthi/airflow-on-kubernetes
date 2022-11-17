@@ -128,7 +128,7 @@ with DAG(
     },
     catchup=True,
     start_date=pendulum.datetime(
-        2020, 8, 24, tzinfo=pendulum.timezone("America/Toronto")
+        2020, 8, 24, tz=pendulum.timezone("America/Toronto")
     ),
 ) as dag:
 
