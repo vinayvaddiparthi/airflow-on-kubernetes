@@ -2,7 +2,7 @@ from typing import Any
 
 import pysftp
 import gnupg
-from airflow.hooks.base_hook import BaseHook
+from airflow.hooks.base import BaseHook
 
 
 def encrypt(filename: str) -> Any:

@@ -11,9 +11,9 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from airflow.hooks.base_hook import BaseHook
+from airflow.hooks.base import BaseHook
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from googleapiclient.discovery import build as AnalyticsBuild
 from oauth2client.service_account import ServiceAccountCredentials
 from dateutil import tz

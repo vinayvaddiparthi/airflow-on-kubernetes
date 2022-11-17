@@ -14,7 +14,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from base64 import b64decode
 from airflow import DAG
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from helpers.aws_hack import hack_clear_aws_keys
 from pyporky.symmetric import SymmetricPorky

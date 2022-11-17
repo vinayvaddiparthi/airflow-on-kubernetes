@@ -22,7 +22,7 @@ from sqlalchemy.sql import (
 from concurrent.futures.thread import ThreadPoolExecutor
 from utils.failure_callbacks import slack_task
 from datetime import timedelta
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook

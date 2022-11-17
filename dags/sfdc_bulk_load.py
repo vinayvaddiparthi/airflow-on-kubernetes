@@ -17,9 +17,9 @@ import urllib.parse as urlparse
 from airflow import DAG
 
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from airflow.hooks.base_hook import BaseHook
+from airflow.hooks.base import BaseHook
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from pyarrow._csv import ParseOptions
 from salesforce_bulk.bulk_states import NOT_PROCESSED
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed

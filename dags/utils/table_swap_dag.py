@@ -3,7 +3,7 @@ from typing import List, Dict
 import pendulum
 from airflow import DAG
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from sqlalchemy import create_engine, text
 from sqlalchemy.sql import Select
 from utils.failure_callbacks import slack_dag

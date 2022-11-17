@@ -12,7 +12,7 @@ import psycopg2
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 from airflow import DAG
 from psycopg2._psycopg import connection

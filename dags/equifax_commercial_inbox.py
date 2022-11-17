@@ -6,7 +6,7 @@ response file will be processed and uploaded to Snowflake.
 from airflow import DAG
 from airflow.models import Variable
 from airflow.models.taskinstance import TaskInstance
-from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.sftp.hooks.sftp import SFTPHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook

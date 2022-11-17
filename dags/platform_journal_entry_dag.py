@@ -3,10 +3,10 @@ from typing import Any
 import logging
 import pendulum
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 import pandas as pd
 from airflow import DAG
-from airflow.hooks.base_hook import BaseHook
+from airflow.hooks.base import BaseHook
 from numpy import datetime64
 from sqlalchemy import text, cast, column, Date
 from sqlalchemy.sql import Select

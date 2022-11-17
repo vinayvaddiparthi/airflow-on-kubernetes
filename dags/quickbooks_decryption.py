@@ -2,7 +2,7 @@ from datetime import timedelta
 import pendulum
 
 from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 
 from utils.failure_callbacks import slack_task
