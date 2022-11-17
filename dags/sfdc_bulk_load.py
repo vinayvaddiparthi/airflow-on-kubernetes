@@ -171,7 +171,7 @@ def put_resps_on_snowflake(
     resps: Iterator[requests.Response],
     utc_time_now: str,
 ) -> None:
-    dt_suffix = slugify(pendulum.datetime.now().isoformat(), separator="_")
+    dt_suffix = slugify(pendulum.now().isoformat(), separator="_")
     with engine_.begin() as tx:
         for i, resp in enumerate(resps):
             with TemporaryDirectory() as tempdir:
