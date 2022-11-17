@@ -130,7 +130,6 @@ def create_dag() -> DAG:
                 "database": f"{'analytics_production' if is_prod else 'analytics_development'}",
                 "schema": "dbt_ario",
             },
-            provide_context=False,
         )
 
         write_to_snowflake = SnowflakeOperator(
