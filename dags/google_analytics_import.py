@@ -126,7 +126,7 @@ with DAG(
         "retry_delay": timedelta(minutes=5),
         "on_failure_callback": slack_task("slack_data_alerts"),
     },
-    catchup=True,
+    catchup=False,
     start_date=pendulum.datetime(
         2020, 8, 24, tz=pendulum.timezone("America/Toronto")
     ),
