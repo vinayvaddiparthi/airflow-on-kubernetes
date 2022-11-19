@@ -196,7 +196,17 @@ def put_resps_on_snowflake(
                     "import_ts", pa.array([f"{utc_time_now}"] * len(table), pa.string())
                 )
 
-                pq.write_table(table, f"{pq_filepath}")
+                # convert to dataframe to cast all timestamp columns to string to prevent them 
+                # from being loaded as epoch times from parquet
+                df = table.to_pandas()
+
+                for col in df.select_dtypes('datetime').columns.tolist():
+                    df[col] = df[col].astype(str)
+
+                table_with_str_ts = pa.Table.from_pandas(df)
+
+                pq.write_table(table_with_str_ts, f"{pq_filepath}")
+
                 load_data_stmts = [
                     f"create or replace temporary stage {destination_schema}.{destination_table} "  # nosec
                     f"  file_format=(type=parquet)",
