@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Optional, Dict, Any
 
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
-from airflow.hooks.base_hook import BaseHook
+from airflow.hooks.base import BaseHook
 from airflow.operators.bash_operator import BashOperator
 from airflow.utils.decorators import apply_defaults
 

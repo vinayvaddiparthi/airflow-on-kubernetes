@@ -8,7 +8,7 @@ from airflow.models import Variable
 from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.exceptions import AirflowFailException
 
@@ -31,7 +31,7 @@ from utils.failure_callbacks import slack_task
 default_args = {
     "owner": "airflow",
     "start_date": pendulum.datetime(
-        2020, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+        2020, 1, 1, tz=pendulum.timezone("America/Toronto")
     ),
     "concurrency": 1,
     "retries": 3,

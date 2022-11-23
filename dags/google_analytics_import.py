@@ -11,9 +11,9 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from airflow.hooks.base_hook import BaseHook
+from airflow.hooks.base import BaseHook
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from googleapiclient.discovery import build as AnalyticsBuild
 from oauth2client.service_account import ServiceAccountCredentials
 from dateutil import tz
@@ -126,10 +126,8 @@ with DAG(
         "retry_delay": timedelta(minutes=5),
         "on_failure_callback": slack_task("slack_data_alerts"),
     },
-    catchup=True,
-    start_date=pendulum.datetime(
-        2020, 8, 24, tzinfo=pendulum.timezone("America/Toronto")
-    ),
+    catchup=False,
+    start_date=pendulum.datetime(2020, 8, 24, tz=pendulum.timezone("America/Toronto")),
 ) as dag:
 
     def build_deduplicate_query(dest_db: str, dest_schema: str, table: str) -> str:
@@ -243,7 +241,7 @@ with DAG(
             logging.info(f"✔️ Successfully loaded table {table} for {ds}")
 
     for report in reports:
-        dag << PythonOperator(
+        PythonOperator(
             task_id=f"task_{report}",
             python_callable=process,
             op_kwargs={

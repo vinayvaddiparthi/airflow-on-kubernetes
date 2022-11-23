@@ -10,7 +10,7 @@ from typing import Tuple
 from airflow import DAG
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 
 from sqlalchemy.sql import select
@@ -194,7 +194,7 @@ def create_dag() -> DAG:
     with DAG(
         dag_id="paydown_schedule",
         start_date=pendulum.datetime(
-            2022, 6, 10, tzinfo=pendulum.timezone("America/Toronto")
+            2022, 6, 10, tz=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="30 4 * * 0",
         default_args={

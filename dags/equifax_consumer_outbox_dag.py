@@ -5,7 +5,7 @@ Equifax on a monthly basis for recertification purposes.
 """
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.providers.amazon.aws.sensors.s3_key import S3KeySensor
 from airflow.providers.amazon.aws.transfers.s3_to_sftp import S3ToSFTPOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
@@ -25,7 +25,7 @@ default_args = {
     "retry_delay": timedelta(minutes=5),
     "on_failure_callback": slack_task("slack_data_alerts"),
     "start_date": pendulum.datetime(
-        2021, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+        2021, 1, 1, tz=pendulum.timezone("America/Toronto")
     ),
     "catchup": False,
     "tags": ["equifax"],
