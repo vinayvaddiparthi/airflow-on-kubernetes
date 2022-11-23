@@ -2,7 +2,7 @@ from datetime import timedelta
 import pendulum
 
 from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 
 from utils.failure_callbacks import slack_task
@@ -15,9 +15,7 @@ from data.zetatango import (
 
 with DAG(
     dag_id="quickbooks_decryption",
-    start_date=pendulum.datetime(
-        2022, 2, 23, tzinfo=pendulum.timezone("America/Toronto")
-    ),
+    start_date=pendulum.datetime(2022, 2, 23, tz=pendulum.timezone("America/Toronto")),
     schedule_interval="0 2 * * *",
     default_args={
         "retries": 3,

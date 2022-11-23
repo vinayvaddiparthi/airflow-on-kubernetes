@@ -6,7 +6,7 @@ response file will be processed and uploaded to Snowflake.
 from airflow import DAG
 from airflow.models import Variable
 from airflow.models.taskinstance import TaskInstance
-from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.providers.amazon.aws.transfers.sftp_to_s3 import SFTPToS3Operator
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
@@ -35,7 +35,7 @@ default_args = {
     "owner": "airflow",
     "depends_on_past": False,
     "start_date": pendulum.datetime(
-        2021, 1, 1, tzinfo=pendulum.timezone("America/Toronto")
+        2021, 1, 1, tz=pendulum.timezone("America/Toronto")
     ),
     "retries": 0,
     "catchup": False,

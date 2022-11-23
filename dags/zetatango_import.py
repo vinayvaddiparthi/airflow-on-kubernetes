@@ -12,7 +12,7 @@ import psycopg2
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 from airflow import DAG
 from psycopg2._psycopg import connection
@@ -428,7 +428,7 @@ def create_dag() -> DAG:
     with DAG(
         dag_id="zetatango_import",
         start_date=pendulum.datetime(
-            2020, 4, 1, tzinfo=pendulum.timezone("America/Toronto")
+            2020, 4, 1, tz=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="0 */3 * * *",
         default_args={
@@ -537,9 +537,9 @@ def create_dag() -> DAG:
             retries=1,
         )
 
-        dag << import_core_prod >> decrypt_core_prod
-        dag << import_idp_prod >> decrypt_idp_prod
-        dag << import_kyc_prod >> decrypt_kyc_prod
+        import_core_prod >> decrypt_core_prod
+        import_idp_prod >> decrypt_idp_prod
+        import_kyc_prod >> decrypt_kyc_prod
         (
             [
                 decrypt_core_prod,

@@ -1,7 +1,7 @@
 from airflow import DAG
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 from datetime import timedelta
 
@@ -109,7 +109,7 @@ def create_dag() -> DAG:
         dag_id="IFRS9",
         description="This DAG will give IFRS9 Loan provision for credit loss report: when a customer does not repay the loan on time",
         start_date=pendulum.datetime(
-            2022, 8, 4, tzinfo=pendulum.timezone("America/Toronto")
+            2022, 8, 4, tz=pendulum.timezone("America/Toronto")
         ),
         default_args={
             "retries": 2,
@@ -130,7 +130,6 @@ def create_dag() -> DAG:
                 "database": f"{'analytics_production' if is_prod else 'analytics_development'}",
                 "schema": "dbt_ario",
             },
-            provide_context=False,
         )
 
         write_to_snowflake = SnowflakeOperator(

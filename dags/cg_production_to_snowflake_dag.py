@@ -6,7 +6,7 @@ DAG_PARSE_WORKAROUND = "airflow DAG"
 
 globals()["cg_production_to_snowflake"] = create_table_swap_dag(
     "cg_production_to_snowflake",
-    pendulum.datetime(2020, 2, 4, tzinfo=pendulum.timezone("America/Toronto")),
+    pendulum.datetime(2020, 2, 4, tz=pendulum.timezone("America/Toronto")),
     "cg_lms_prod",
     "sf_creditgenie",
     "creditgenie",

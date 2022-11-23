@@ -17,9 +17,9 @@ import urllib.parse as urlparse
 from airflow import DAG
 
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from airflow.hooks.base_hook import BaseHook
+from airflow.hooks.base import BaseHook
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from pyarrow._csv import ParseOptions
 from salesforce_bulk.bulk_states import NOT_PROCESSED
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
@@ -171,7 +171,7 @@ def put_resps_on_snowflake(
     resps: Iterator[requests.Response],
     utc_time_now: str,
 ) -> None:
-    dt_suffix = slugify(pendulum.datetime.now().isoformat(), separator="_")
+    dt_suffix = slugify(pendulum.now().isoformat(), separator="_")
     with engine_.begin() as tx:
         for i, resp in enumerate(resps):
             with TemporaryDirectory() as tempdir:
@@ -196,7 +196,17 @@ def put_resps_on_snowflake(
                     "import_ts", pa.array([f"{utc_time_now}"] * len(table), pa.string())
                 )
 
-                pq.write_table(table, f"{pq_filepath}")
+                # convert to dataframe to cast all timestamp columns to string to prevent them
+                # from being loaded as epoch times from parquet
+                df = table.to_pandas()
+
+                for col in df.select_dtypes("datetime").columns.tolist():
+                    df[col] = df[col].astype(str)
+
+                table_with_str_ts = pa.Table.from_pandas(df)
+
+                pq.write_table(table_with_str_ts, f"{pq_filepath}")
+
                 load_data_stmts = [
                     f"create or replace temporary stage {destination_schema}.{destination_table} "  # nosec
                     f"  file_format=(type=parquet)",
@@ -413,7 +423,7 @@ def create_dag(instances: List[str]) -> DAG:
     with DAG(
         "salesforce_bulk_import",
         start_date=pendulum.datetime(
-            2020, 6, 21, tzinfo=pendulum.timezone("America/Toronto")
+            2020, 6, 21, tz=pendulum.timezone("America/Toronto")
         ),
         schedule_interval="0 0 * * *",
         catchup=False,
@@ -421,7 +431,7 @@ def create_dag(instances: List[str]) -> DAG:
         max_active_runs=1,
     ) as dag:
         for instance in instances:
-            dag << PythonOperator(
+            PythonOperator(
                 task_id=f"import_{instance}",
                 python_callable=import_sfdc,
                 op_kwargs={
