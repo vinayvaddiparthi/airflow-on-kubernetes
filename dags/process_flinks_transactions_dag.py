@@ -2,12 +2,10 @@ import logging
 import json
 import pendulum
 import pandas as pd
-import boto3
 import sqlalchemy
 
 from airflow import DAG
 from typing import Any
-from helpers.aws_hack import hack_clear_aws_keys
 from sqlalchemy import Table, MetaData, VARCHAR
 from sqlalchemy.sql import (
     select,
@@ -22,36 +20,36 @@ from sqlalchemy.sql import (
 from concurrent.futures.thread import ThreadPoolExecutor
 from utils.failure_callbacks import slack_task
 from datetime import timedelta
-from airflow.operators.python import PythonOperator
-from dbt_extras.dbt_operator import DbtOperator
-from dbt_extras.dbt_action import DbtAction
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from pyporky.symmetric import SymmetricPorky
 from base64 import b64decode
+from custom_operators.rbac_python_operator import RBACPythonOperator
+from functools import partial
 
 
 def store_flinks_response(
-    merchant_guid: str,
-    file_path: str,
-    doc_type: str,
     bucket_name: str,
     snowflake_connection: str,
     schema: str,
+    s3_client,
+    kms_client,
+    merchant_guid: str,
+    file_path: str,
+    doc_type: str,
 ) -> None:
-    hack_clear_aws_keys()
+
     metadata = MetaData()
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
 
     logging.info(f"Processing Flinks response for {merchant_guid} in {file_path}")
 
-    s3 = boto3.client("s3")
-    response = s3.get_object(Bucket=bucket_name, Key=file_path)
+    response = s3_client.get_object(Bucket=bucket_name, Key=file_path)
 
     # This will read the whole file into memory
     encrypted_contents = json.loads(response["Body"].read())
 
     data = str(
-        SymmetricPorky(aws_region="ca-central-1").decrypt(
+        SymmetricPorky(kms_client).decrypt(
             enciphered_dek=b64decode(encrypted_contents["key"], b"-_"),
             enciphered_data=b64decode(encrypted_contents["data"], b"-_"),
             nonce=b64decode(encrypted_contents["nonce"], b"-_"),
@@ -133,6 +131,11 @@ def copy_transactions(
     num_threads: int = 4,
     **kwargs: Any,
 ) -> None:
+
+    boto_session = kwargs["task_session"]
+    s3_client = boto_session.client('s3')
+    kms_client = boto_session.client('kms')
+
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     metadata = MetaData()
 
@@ -274,6 +277,9 @@ def copy_transactions(
         ],
     )
 
+    store_response_func = partial(store_flinks_response, bucket_name, snowflake_connection, schema,
+                                  s3_client, kms_client)
+
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         for _index, row in all_flinks_responses.iterrows():
             try:
@@ -288,13 +294,10 @@ def copy_transactions(
             except KeyError:
                 # We don't have it
                 executor.submit(
-                    store_flinks_response,
+                    store_response_func,
                     row.name[0],
                     row.name[1],
                     row.name[2],
-                    bucket_name,
-                    snowflake_connection,
-                    schema,
                 )
 
 
@@ -302,6 +305,7 @@ def create_dag() -> DAG:
     with DAG(
         "process_flinks_transactions",
         max_active_runs=1,
+        catchup=False,
         schedule_interval="0 */4 * * *",
         start_date=pendulum.datetime(
             2020, 8, 1, tz=pendulum.timezone("America/Toronto")
@@ -313,7 +317,7 @@ def create_dag() -> DAG:
         },
     ) as dag:
         (
-            PythonOperator(
+            RBACPythonOperator(
                 task_id="copy_transactions",
                 python_callable=copy_transactions,
                 provide_context=True,
@@ -323,24 +327,7 @@ def create_dag() -> DAG:
                     "bucket_name": "ario-documents-production",
                     "num_threads": 10,
                 },
-                executor_config={
-                    "KubernetesExecutor": {
-                        "annotations": {
-                            "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                            "KubernetesAirflowProductionFlinksRole"
-                        }
-                    }
-                },
-            )
-            >> DbtOperator(
-                task_id="dbt_run_process_transactions",
-                execution_timeout=timedelta(hours=1),
-                action=DbtAction.run,
-                models=(
-                    "fct_bank_account_transaction fct_daily_bank_account_balance "
-                    "fct_weekly_bank_account_balance fct_monthly_bank_account_balance "
-                    "fct_bank_account_balance_week_over_week fct_bank_account_balance_month_over_month"
-                ),
+                task_iam_role_arn="arn:aws:iam::810110616880:role/KubernetesAirflowProductionFlinksRole",
             )
         )
 
