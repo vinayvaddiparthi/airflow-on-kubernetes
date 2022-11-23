@@ -9,7 +9,7 @@ from sqlalchemy.sql import select, func, text
 from airflow import DAG
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.models import Variable
 
@@ -249,7 +249,7 @@ def create_dag() -> DAG:
         },
         catchup=False,
         start_date=pendulum.datetime(
-            2022, 3, 8, tzinfo=pendulum.timezone("America/Toronto")
+            2022, 3, 8, tz=pendulum.timezone("America/Toronto")
         ),
     ) as dag, open("dags/sql/benchmarking/sales_volume_benchmarks.sql") as sv:
 

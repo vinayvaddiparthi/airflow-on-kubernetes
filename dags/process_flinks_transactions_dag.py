@@ -22,7 +22,7 @@ from sqlalchemy.sql import (
 from concurrent.futures.thread import ThreadPoolExecutor
 from utils.failure_callbacks import slack_task
 from datetime import timedelta
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from dbt_extras.dbt_operator import DbtOperator
 from dbt_extras.dbt_action import DbtAction
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
@@ -304,7 +304,7 @@ def create_dag() -> DAG:
         max_active_runs=1,
         schedule_interval="0 */4 * * *",
         start_date=pendulum.datetime(
-            2020, 8, 1, tzinfo=pendulum.timezone("America/Toronto")
+            2020, 8, 1, tz=pendulum.timezone("America/Toronto")
         ),
         default_args={
             "retries": 5,
@@ -313,8 +313,7 @@ def create_dag() -> DAG:
         },
     ) as dag:
         (
-            dag
-            << PythonOperator(
+            PythonOperator(
                 task_id="copy_transactions",
                 python_callable=copy_transactions,
                 provide_context=True,
