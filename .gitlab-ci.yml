@@ -14,8 +14,6 @@ variables:
 
 black:
   stage: pre-test
-  tags:
-    - k8s
   image: python:${PYTHON_VERSION}
   script:
     - pip install black
@@ -23,8 +21,6 @@ black:
 
 mypy:
   stage: test
-  tags:
-    - k8s
   image: python:${PYTHON_VERSION}
   script:
     - pip install -r requirements.txt --use-deprecated=legacy-resolver
@@ -40,8 +36,6 @@ mypy:
 
 flakes:
   stage: test
-  tags:
-    - k8s
   image: python:${PYTHON_VERSION}
   script:
     - pip install -r requirements.txt --use-deprecated=legacy-resolver
@@ -75,8 +69,6 @@ test:
 
 sast:
   stage: test
-  tags:
-    - k8s
   image: python:${PYTHON_VERSION}
   script:
     - pip install bandit
@@ -90,8 +82,6 @@ sast:
 
 check_dependencies:
   stage: test
-  tags:
-    - k8s
   image: python:${PYTHON_VERSION}
   script:
     - pip install -r requirements.txt --use-deprecated=legacy-resolver
