@@ -15,9 +15,7 @@ from data.zetatango import (
 
 with DAG(
     dag_id="quickbooks_decryption",
-    start_date=pendulum.datetime(
-        2022, 2, 23, tz=pendulum.timezone("America/Toronto")
-    ),
+    start_date=pendulum.datetime(2022, 2, 23, tz=pendulum.timezone("America/Toronto")),
     schedule_interval="0 2 * * *",
     default_args={
         "retries": 3,
