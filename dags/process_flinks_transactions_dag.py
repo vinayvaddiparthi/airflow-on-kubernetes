@@ -133,8 +133,8 @@ def copy_transactions(
 ) -> None:
 
     boto_session = kwargs["task_session"]
-    s3_client = boto_session.client('s3')
-    kms_client = boto_session.client('kms')
+    s3_client = boto_session.client("s3")
+    kms_client = boto_session.client("kms")
 
     snowflake_engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     metadata = MetaData()
@@ -277,8 +277,14 @@ def copy_transactions(
         ],
     )
 
-    store_response_func = partial(store_flinks_response, bucket_name, snowflake_connection, schema,
-                                  s3_client, kms_client)
+    store_response_func = partial(
+        store_flinks_response,
+        bucket_name,
+        snowflake_connection,
+        schema,
+        s3_client,
+        kms_client,
+    )
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         for _index, row in all_flinks_responses.iterrows():
