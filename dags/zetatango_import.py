@@ -17,7 +17,9 @@ from airflow.models import Variable
 from airflow import DAG
 from psycopg2._psycopg import connection
 from psycopg2.extensions import ISOLATION_LEVEL_REPEATABLE_READ
-import pyarrow.csv as pv, pyarrow.parquet as pq
+import pyarrow as pa
+import pyarrow.csv as pv
+import pyarrow.parquet as pq
 from pyarrow._csv import ParseOptions, ReadOptions
 from pyarrow.lib import ArrowInvalid
 from json import dumps as json_dumps
@@ -41,23 +43,19 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.sql import Select, ClauseElement
 
-from helpers.suspend_aws_env import SuspendAwsEnvVar
 from utils import random_identifier
-from dbt_extras.dbt_operator import DbtOperator
-from dbt_extras.dbt_action import DbtAction
 from utils.failure_callbacks import slack_dag, slack_task
 from utils.common_utils import get_utc_timestamp
 import requests
 
 from data.zetatango import (
     DecryptionSpec,
-    generic_import_executor_config,
-    core_import_executor_config,
-    decryption_executor_config,
     core_decryption_spec,
     idp_decryption_spec,
     kyc_decryption_spec,
 )
+
+from custom_operators.rbac_python_operator import RBACPythonOperator
 
 
 def export_to_snowflake(
@@ -114,7 +112,7 @@ def export_to_snowflake(
                 snowflake_schema,
                 table,
             )
-            for table in tables
+            for table in tables if table != 'debug_traces'
         ]
         print(*output, sep="\n")
     finally:
@@ -151,6 +149,10 @@ def stage_table_in_snowflake(
                 "lending_adjudications",
                 "ledger_transactions",
                 "object_blobs",
+                "emails",
+                "agreements",
+                "quickbooks_accounting_transactions",
+                "versions",
             ):
 
                 logging.info(f"Performing incremental export for {table} table")
@@ -194,6 +196,15 @@ def stage_table_in_snowflake(
                 read_options=ReadOptions(block_size=8388608),
                 parse_options=ParseOptions(newlines_in_values=True),
             )
+
+            df = table_.to_pandas()
+
+            for col in df.select_dtypes('datetime').columns.tolist():
+                if 'epoch' not in col:
+                    df[col] = df[col].astype(str)
+
+            table_with_str_ts = pa.Table.from_pandas(df)
+
             logging.info(f"read {csv_filepath} for {table}: Done")
 
         except ArrowInvalid as exc:
@@ -204,28 +215,33 @@ def stage_table_in_snowflake(
                 "lending_adjudications",
                 "ledger_transactions",
                 "object_blobs",
+                "emails",
+                "agreements",
+                "quickbooks_accounting_transactions",
+                "versions",
             ):
                 return f"📝️ No new records to insert for table: {table}"
             else:
                 return f"📝️ Skipping empty table {table}"
 
-        pq.write_table(table_, f"{pq_filepath}")
+        pq.write_table(table_with_str_ts, f"{pq_filepath}")
 
         tx.execute(
             f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
 
-        if table in ("lending_adjudications", "ledger_transactions", "object_blobs"):
+        if table in ("lending_adjudications", "ledger_transactions", "object_blobs", "emails", "agreements",
+                     "quickbooks_accounting_transactions", "versions",):
 
             tx.execute(
                 f"insert into {destination_schema}.{table} "  # nosec
-                f"select $1 as fields from @{destination_schema}.{stage_guid}",  # nosec
+                f"select object_insert($1, 'encryption_epoch', ($1:encryption_epoch/1000)::integer, true)::variant as fields from @{destination_schema}.{stage_guid}",  # nosec
             )
 
         else:
             tx.execute(
                 f"create or replace transient table {destination_schema}.{table} as "  # nosec
-                f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
+                f"select object_insert($1, 'encryption_epoch', ($1:encryption_epoch/1000)::integer, true)::variant as fields from @{destination_schema}.{stage_guid}"  # nosec
             ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
@@ -242,6 +258,7 @@ def decrypt_pii_columns(
     snowflake_connection: str,
     decryption_specs: List[DecryptionSpec],
     target_schema: str,
+    **kwargs
 ) -> None:
     yaml.add_constructor(
         "!ruby/object:BigDecimal",
@@ -294,7 +311,7 @@ def decrypt_pii_columns(
 
             crypto_material = json_loads(field)
             list_.append(
-                SymmetricPorky(aws_region="ca-central-1").decrypt(
+                SymmetricPorky(kms_client).decrypt(
                     enciphered_dek=b64decode(crypto_material["key"]),
                     enciphered_data=b64decode(crypto_material["data"]),
                     nonce=b64decode(crypto_material["nonce"]),
@@ -303,6 +320,7 @@ def decrypt_pii_columns(
 
         return row[0:3].tolist() + (_postprocess(list_, format) if format else list_)
 
+    boto_session = kwargs["task_session"]
     engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     for spec in decryption_specs:
         dst_stage = random_identifier()
@@ -353,10 +371,12 @@ def decrypt_pii_columns(
                     )
                 )
 
+                date_whereclause: ClauseElement = literal_column("updated_at").__ge__(text("'2022-11-18 00:00:00.000'"))
+
                 whereclause: ClauseElement = (
-                    and_(spec.whereclause, unknown_hashes_whereclause)
+                    and_(spec.whereclause, unknown_hashes_whereclause, date_whereclause)
                     if spec.whereclause is not None
-                    else unknown_hashes_whereclause
+                    else and_(unknown_hashes_whereclause, date_whereclause)
                 )
                 dfs = pd.read_sql(stmt.where(whereclause), con=tx, chunksize=500)
             except ProgrammingError:
@@ -370,23 +390,23 @@ def decrypt_pii_columns(
 
                 select_froms = select_froms[:1]  # don't union if table doesn't exist.
 
-            with SuspendAwsEnvVar():
-                for df in dfs:
-                    with tempfile.NamedTemporaryFile() as tempfile_:
-                        df = df.apply(
-                            axis=1,
-                            func=_decrypt,
-                            result_type="broadcast",
-                            args=(spec.format,),
+            for df in dfs:
+                kms_client = boto_session.client('kms')
+                with tempfile.NamedTemporaryFile() as tempfile_:
+                    df = df.apply(
+                        axis=1,
+                        func=_decrypt,
+                        result_type="broadcast",
+                        args=(spec.format,),
+                    )
+                    df.to_parquet(
+                        tempfile_.name, engine="fastparquet", compression="gzip"
+                    )
+                    tx.execute(
+                        text(
+                            f"put file://{tempfile_.name} @{target_schema}.{dst_stage}"
                         )
-                        df.to_parquet(
-                            tempfile_.name, engine="fastparquet", compression="gzip"
-                        )
-                        tx.execute(
-                            text(
-                                f"put file://{tempfile_.name} @{target_schema}.{dst_stage}"
-                            )
-                        ).fetchall()
+                    ).fetchall()
             stmt = Select(
                 [literal_column("*")],
                 from_obj=union_all(*select_froms),
@@ -406,7 +426,7 @@ def decrypt_pii_columns(
 
 def trigger_dbt_job() -> None:
     res = requests.post(
-        url="https://cloud.getdbt.com/api/v2/accounts/20518/jobs/72347/run/",
+        url="https://cloud.getdbt.com/api/v2/accounts/20518/jobs/162182/run/",
         headers={"Authorization": "Token " + Variable.get("DBT_API_KEY")},
         json={
             # Optionally pass a description that can be viewed within the dbt Cloud API.
@@ -430,7 +450,7 @@ def create_dag() -> DAG:
         start_date=pendulum.datetime(
             2020, 4, 1, tz=pendulum.timezone("America/Toronto")
         ),
-        schedule_interval="0 */3 * * *",
+        schedule_interval="0 */6 * * *",
         default_args={
             "retries": 3,
             "retry_delay": timedelta(minutes=5),
@@ -440,6 +460,9 @@ def create_dag() -> DAG:
         max_active_runs=1,
         on_failure_callback=slack_dag("slack_data_alerts"),
     ) as dag:
+
+        decryption_role = Variable.get("zetatango_decryption_role")
+
         import_core_prod = PythonOperator(
             task_id="zt-production-elt-core__import",
             python_callable=export_to_snowflake,
@@ -449,10 +472,9 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.CORE_PRODUCTION",
             },
-            executor_config=core_import_executor_config,
         )
 
-        decrypt_core_prod = PythonOperator(
+        decrypt_core_prod = RBACPythonOperator(
             task_id="zt-production-elt-core__pii_decryption",
             python_callable=decrypt_pii_columns,
             op_kwargs={
@@ -460,7 +482,8 @@ def create_dag() -> DAG:
                 "decryption_specs": core_decryption_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
-            executor_config=decryption_executor_config,
+            task_iam_role_arn=decryption_role,
+            provide_context=True,
         )
 
         import_idp_prod = PythonOperator(
@@ -472,10 +495,9 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.IDP_PRODUCTION",
             },
-            executor_config=generic_import_executor_config,
         )
 
-        decrypt_idp_prod = PythonOperator(
+        decrypt_idp_prod = RBACPythonOperator(
             task_id="zt-production-elt-idp__pii_decryption",
             python_callable=decrypt_pii_columns,
             op_kwargs={
@@ -483,7 +505,8 @@ def create_dag() -> DAG:
                 "decryption_specs": idp_decryption_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
-            executor_config=decryption_executor_config,
+            task_iam_role_arn=decryption_role,
+            provide_context=True,
         )
 
         import_kyc_prod = PythonOperator(
@@ -495,10 +518,9 @@ def create_dag() -> DAG:
                 "snowflake_connection": "snowflake_production",
                 "snowflake_schema": "ZETATANGO.KYC_PRODUCTION",
             },
-            executor_config=generic_import_executor_config,
         )
 
-        decrypt_kyc_prod = PythonOperator(
+        decrypt_kyc_prod = RBACPythonOperator(
             task_id="zt-production-elt-kyc__pii_decryption",
             python_callable=decrypt_pii_columns,
             op_kwargs={
@@ -506,29 +528,8 @@ def create_dag() -> DAG:
                 "decryption_specs": kyc_decryption_spec,
                 "target_schema": "ZETATANGO.PII_PRODUCTION",
             },
-            executor_config=decryption_executor_config,
-        )
-
-        dbt_run = DbtOperator(
-            task_id="dbt_run",
-            execution_timeout=timedelta(hours=1),
-            action=DbtAction.run,
-            exclude="tag:monthly",
-            retries=1,
-        )
-
-        dbt_snapshot = DbtOperator(
-            task_id="dbt_snapshot",
-            execution_timeout=timedelta(hours=1),
-            action=DbtAction.snapshot,
-            retries=1,
-        )
-
-        dbt_test = DbtOperator(
-            task_id="dbt_test",
-            execution_timeout=timedelta(hours=1),
-            action=DbtAction.test,
-            retries=1,
+            task_iam_role_arn=decryption_role,
+            provide_context=True,
         )
 
         dbt_refresh_job_trigger = PythonOperator(
@@ -547,9 +548,6 @@ def create_dag() -> DAG:
                 decrypt_idp_prod,
             ]
             >> dbt_refresh_job_trigger
-            >> dbt_run
-            >> dbt_snapshot
-            >> dbt_test
         )
 
     return dag
