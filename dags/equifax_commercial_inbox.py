@@ -36,7 +36,6 @@ default_args = {
         2020, 11, 15, tz=pendulum.timezone("America/Toronto")
     ),
     "retries": 0,
-    "catchup": False,
     "on_failure_callback": slack_task("slack_data_alerts"),
     "tags": ["equifax"],
     "description": "A workflow to download and process the commercial batch response file from Equifax",
@@ -49,6 +48,7 @@ dag = DAG(
     default_args=default_args,
     template_searchpath="dags/sql",
     catchup=False,
+    max_active_runs=1
 )
 dag.doc_md = __doc__
 
@@ -60,17 +60,6 @@ S3_BUCKET = f"tc-data-airflow-{'production' if IS_PROD else 'staging'}"
 DIR_PATH = "equifax/commercial"
 RISK_STAGE_NAME = f"equifax.{'public' if IS_PROD else 'test'}.equifax_comm_stage"
 DV_STAGE_NAME = f"equifax.{'public' if IS_PROD else 'test'}.equifax_tcap_stage"
-EXECUTOR_CONFIG = {
-    "KubernetesExecutor": {
-        "annotations": {
-            "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-            "KubernetesAirflowProductionEquifaxCommercialRole"
-        },
-    },
-    "resources": {
-        "requests": {"memory": "512Mi"},
-    },
-}
 
 
 def _check_if_file_downloaded() -> bool:
@@ -260,7 +249,6 @@ download_response_files = PythonOperator(
         "s3_bucket": S3_BUCKET,
     },
     provide_context=True,
-    executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
 
@@ -273,7 +261,6 @@ decrypt_response_files = PythonOperator(
         "dir_path": DIR_PATH,
     },
     provide_context=True,
-    executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
 
@@ -290,7 +277,6 @@ convert_to_parquet = PythonOperator(
         },
     },
     provide_context=True,
-    executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
 
@@ -310,7 +296,6 @@ for file, table in [("risk", "comm"), ("dv", "tcap")]:
         schema=f"{'public' if IS_PROD else 'test'}",
         database="equifax",
         snowflake_conn_id=SNOWFLAKE_CONN,
-        executor_config=EXECUTOR_CONFIG,
         dag=dag,
     )
 
@@ -324,7 +309,6 @@ for file, table in [("risk", "comm"), ("dv", "tcap")]:
         schema=f"{'public' if IS_PROD else 'test'}",
         database="equifax",
         snowflake_conn_id=SNOWFLAKE_CONN,
-        executor_config=EXECUTOR_CONFIG,
         dag=dag,
     )
 
@@ -338,7 +322,6 @@ for file, table in [("risk", "comm"), ("dv", "tcap")]:
         schema=f"{'public' if IS_PROD else 'test'}",
         database="equifax",
         snowflake_conn_id=SNOWFLAKE_CONN,
-        executor_config=EXECUTOR_CONFIG,
         dag=dag,
     )
     refresh_dbt_model = DbtOperator(

@@ -27,7 +27,6 @@ default_args = {
     "start_date": pendulum.datetime(
         2021, 9, 1, tz=pendulum.timezone("America/Toronto")
     ),
-    "catchup": False,
     "tags": ["equifax"],
     "description": "A workflow to send the commercial batch request file to Equifax",
 }
@@ -35,6 +34,8 @@ default_args = {
 dag = DAG(
     dag_id="equifax_commercial_outbox",
     schedule_interval="0 8 * * *",
+    catchup=False,
+    max_active_runs=1,
     default_args=default_args,
 )
 dag.doc_md = __doc__
@@ -43,16 +44,6 @@ S3_CONN = "s3_dataops"
 S3_BUCKET = f"tc-data-airflow-{'production' if Variable.get('environment') == 'production' else 'staging'}"
 DIR_PATH = "equifax/commercial"
 SFTP_CONN = "equifax_sftp"
-EXECUTOR_CONFIG = {
-    "KubernetesExecutor": {
-        "annotations": {
-            "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/KubernetesAirflowProductionEquifaxCommercialRole"
-        },
-    },
-    "resources": {
-        "requests": {"memory": "512Mi"},
-    },
-}
 
 
 def _check_if_file_sent() -> bool:
@@ -119,7 +110,6 @@ encrypt_request_file = PythonOperator(
         "download_key": f"{DIR_PATH}/request/{{{{ var.value.equifax_commercial_request_filename }}}}",
         "upload_key": f"{DIR_PATH}/outbox/{{{{ var.value.equifax_commercial_request_filename }}}}.pgp",
     },
-    executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
 
@@ -131,7 +121,6 @@ create_s3_to_sftp_job = S3ToSFTPOperator(
     s3_bucket=S3_BUCKET,
     s3_key=f"{DIR_PATH}/outbox/{{{{ var.value.equifax_commercial_request_filename }}}}.pgp",
     on_success_callback=_mark_request_as_sent,
-    executor_config=EXECUTOR_CONFIG,
     dag=dag,
 )
 

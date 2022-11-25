@@ -8,6 +8,7 @@ from typing import List
 def init_gnupg() -> gnupg.GPG:
     path_ = Path("~/.gnupg")
     path_.mkdir(parents=True, exist_ok=True)
+    path_ = str(path_)
     gpg = gnupg.GPG(gnupghome=path_)
 
     keys: List[str] = Variable.get("equifax_pgp_keys", deserialize_json=True)

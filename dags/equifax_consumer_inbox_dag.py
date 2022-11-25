@@ -38,7 +38,6 @@ default_args = {
         2021, 1, 1, tz=pendulum.timezone("America/Toronto")
     ),
     "retries": 0,
-    "catchup": False,
     "on_failure_callback": slack_task("slack_data_alerts"),
     "tags": ["equifax"],
     "description": "A workflow to download and process the consumer batch response file from Equifax",
@@ -49,6 +48,7 @@ dag = DAG(
     schedule_interval="0 12 * * *",
     default_args=default_args,
     catchup=False,
+    max_active_runs=1,
 )
 dag.doc_md = __doc__
 
