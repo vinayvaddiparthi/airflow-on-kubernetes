@@ -11,6 +11,7 @@ from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.providers.sftp.hooks.sftp import SFTPHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
+from airflow.utils.task_group import TaskGroup
 
 import logging
 import pendulum
@@ -288,55 +289,53 @@ convert_to_parquet = PythonOperator(
     >> convert_to_parquet
 )
 
-for file, table in [("risk", "comm"), ("dv", "tcap")]:
-    create_staging_table = SnowflakeOperator(
-        task_id=f"create_staging_table_{file}",
-        sql=f"equifax/staging/create_staging_table_{file}.sql",
-        params={"table_name": f"equifax_{table}_staging"},
-        schema=f"{'public' if IS_PROD else 'test'}",
-        database="equifax",
-        snowflake_conn_id=SNOWFLAKE_CONN,
-        dag=dag,
-    )
+with TaskGroup(group_id="snowflake_tasks", dag=dag) as snowflake_tasks:
+    for file, table in [("risk", "comm"), ("dv", "tcap")]:
+        create_staging_table = SnowflakeOperator(
+            task_id=f"create_staging_table_{file}",
+            sql=f"equifax/staging/create_staging_table_{file}.sql",
+            params={"table_name": f"equifax_{table}_staging"},
+            schema=f"{'public' if IS_PROD else 'test'}",
+            database="equifax",
+            snowflake_conn_id=SNOWFLAKE_CONN,
+            dag=dag,
+        )
 
-    load_from_stage = SnowflakeOperator(
-        task_id=f"load_from_stage_{file}",
-        sql=f"equifax/load/load_from_stage_{file}.sql",
-        params={
-            "table_name": f"equifax_{table}_staging",
-            "stage_name": f"equifax_{table}_stage",
-        },
-        schema=f"{'public' if IS_PROD else 'test'}",
-        database="equifax",
-        snowflake_conn_id=SNOWFLAKE_CONN,
-        dag=dag,
-    )
+        load_from_stage = SnowflakeOperator(
+            task_id=f"load_from_stage_{file}",
+            sql=f"equifax/load/load_from_stage_{file}.sql",
+            params={
+                "table_name": f"equifax_{table}_staging",
+                "stage_name": f"equifax_{table}_stage",
+            },
+            schema=f"{'public' if IS_PROD else 'test'}",
+            database="equifax",
+            snowflake_conn_id=SNOWFLAKE_CONN,
+            dag=dag,
+        )
 
-    insert_from_staging_table = SnowflakeOperator(
-        task_id=f"insert_from_staging_table_{file}",
-        sql="snowflake/common/insert_into_table.sql",
-        params={
-            "table_name": f"equifax_{table}",
-            "source_table_name": f"equifax_{table}_staging",
-        },
-        schema=f"{'public' if IS_PROD else 'test'}",
-        database="equifax",
-        snowflake_conn_id=SNOWFLAKE_CONN,
-        dag=dag,
-    )
-    refresh_dbt_model = DbtOperator(
-        task_id="dbt_run_last_commercial_bureau_pull",
-        execution_timeout=timedelta(hours=1),
-        action=DbtAction.run,
-        models=("last_commercial_bureau_pull"),
-        on_success_callback=slack_dag_success("slack_success_alerts_equifax"),
-        dag=dag,
-    )
+        insert_from_staging_table = SnowflakeOperator(
+            task_id=f"insert_from_staging_table_{file}",
+            sql="snowflake/common/insert_into_table.sql",
+            params={
+                "table_name": f"equifax_{table}",
+                "source_table_name": f"equifax_{table}_staging",
+            },
+            schema=f"{'public' if IS_PROD else 'test'}",
+            database="equifax",
+            snowflake_conn_id=SNOWFLAKE_CONN,
+            dag=dag,
+        )
 
-    (
-        convert_to_parquet
-        >> create_staging_table
-        >> load_from_stage
-        >> insert_from_staging_table
-        >> refresh_dbt_model
-    )
+        create_staging_table >> load_from_stage >> insert_from_staging_table
+
+refresh_dbt_model = DbtOperator(
+    task_id="dbt_run_last_commercial_bureau_pull",
+    execution_timeout=timedelta(hours=1),
+    action=DbtAction.run,
+    models=("last_commercial_bureau_pull"),
+    on_success_callback=slack_dag_success("slack_success_alerts_equifax"),
+    dag=dag,
+)
+
+convert_to_parquet >> snowflake_tasks >> refresh_dbt_model
