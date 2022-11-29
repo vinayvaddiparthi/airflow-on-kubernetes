@@ -5,6 +5,7 @@ import pandas as pd
 import sqlalchemy
 
 from airflow import DAG
+from airflow.models import Variable
 from typing import Any
 from sqlalchemy import Table, MetaData, VARCHAR
 from sqlalchemy.sql import (
@@ -333,7 +334,7 @@ def create_dag() -> DAG:
                     "bucket_name": "ario-documents-production",
                     "num_threads": 10,
                 },
-                task_iam_role_arn="arn:aws:iam::810110616880:role/KubernetesAirflowProductionFlinksRole",
+                task_iam_role_arn=Variable.get("flinks_decryption_role"),
             )
         )
 

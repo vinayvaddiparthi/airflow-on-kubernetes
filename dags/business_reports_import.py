@@ -15,6 +15,7 @@ from sqlalchemy.sql import select, func, cast
 from concurrent.futures.thread import ThreadPoolExecutor
 from base64 import b64decode
 from airflow import DAG
+from airflow.models import Variable
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from pyporky.symmetric import SymmetricPorky
@@ -178,7 +179,7 @@ download_business_reports = RBACPythonOperator(
     python_callable=_download_all_business_reports,
     provide_context=True,
     op_kwargs=default_args,
-    task_iam_role_arn="arn:aws:iam::810110616880:role/Access-ZtPortalUploadProduction-S3-Bucket-In-Zetatango-Prod-AWS",
+    task_iam_role_arn=Variable.get("equifax_reports_decryption_role"),
     dag=dag,
 )
 
