@@ -23,8 +23,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 from helpers.aws_hack import hack_clear_aws_keys
-from dbt_extras.dbt_operator import DbtOperator
-from dbt_extras.dbt_action import DbtAction
+from dbt_extras.dbt_cloud_trigger import trigger_dbt_job
 from utils.failure_callbacks import slack_task, sensor_timeout, slack_dag_success
 from utils.gpg import init_gnupg
 from utils.reference_data import result_dict, date_columns, personal_info
@@ -436,11 +435,14 @@ insert_snowflake_public = PythonOperator(
     dag=dag,
 )
 
-refresh_dbt_model = DbtOperator(
-    task_id="dbt_run_last_consumer_bureau_pull",
+refresh_dbt_model = PythonOperator(
+    task_id="dbt_refresh",
     execution_timeout=timedelta(hours=1),
-    action=DbtAction.run,
-    models=("last_consumer_bureau_pull"),
+    python_callable=trigger_dbt_job,
+    op_kwargs={
+        "message": "Triggered from equifax_consumer_inbox dag",
+        "steps": ["dbt run --model last_consumer_bureau_pull"]
+    },
     on_success_callback=slack_dag_success("slack_success_alerts_equifax"),
     dag=dag,
 )

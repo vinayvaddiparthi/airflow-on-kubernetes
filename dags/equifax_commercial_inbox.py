@@ -25,8 +25,7 @@ from utils.common_utils import get_utc_timestamp
 from datetime import timedelta
 
 from utils.failure_callbacks import slack_task, slack_dag_success
-from dbt_extras.dbt_operator import DbtOperator
-from dbt_extras.dbt_action import DbtAction
+from dbt_extras.dbt_cloud_trigger import trigger_dbt_job
 from utils.gpg import init_gnupg
 from utils.equifax_helpers import get_import_month
 
@@ -329,11 +328,14 @@ with TaskGroup(group_id="snowflake_tasks", dag=dag) as snowflake_tasks:
 
         create_staging_table >> load_from_stage >> insert_from_staging_table
 
-refresh_dbt_model = DbtOperator(
-    task_id="dbt_run_last_commercial_bureau_pull",
+refresh_dbt_model = PythonOperator(
+    task_id="dbt_refresh",
     execution_timeout=timedelta(hours=1),
-    action=DbtAction.run,
-    models=("last_commercial_bureau_pull"),
+    python_callable=trigger_dbt_job,
+    op_kwargs={
+        "message": "Triggered from equifax_commercial_inbox dag",
+        "steps": ["dbt run --model last_commercial_bureau_pull"]
+    },
     on_success_callback=slack_dag_success("slack_success_alerts_equifax"),
     dag=dag,
 )
