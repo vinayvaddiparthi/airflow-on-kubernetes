@@ -213,7 +213,7 @@ def create_journal_entry_for_transaction(ds: str, **_: None) -> None:
 with DAG(
     dag_id="platform_journal_entry",
     max_active_runs=1,
-    catchup=True,
+    catchup=False,
     schedule_interval="0 2 * * *",
     start_date=pendulum.datetime(2020, 8, 29, tz=pendulum.timezone("America/Toronto")),
     default_args={
@@ -227,6 +227,5 @@ with DAG(
         task_id="get_transactions_by_created_date",
         python_callable=create_journal_entry_for_transaction,
         provide_context=True,
-        pool="netsuite_pool",
         dag=dag,
     )
