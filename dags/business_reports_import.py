@@ -5,20 +5,23 @@ This workflow imports various business reports stored in the ztportal-upload-pro
 import time
 import logging
 import json
+
 import pendulum
-import boto3
 from datetime import timedelta
+
+import sqlalchemy.engine
 from sqlalchemy import Table, MetaData, VARCHAR
 from sqlalchemy.sql import select, func, cast
 from concurrent.futures.thread import ThreadPoolExecutor
 from base64 import b64decode
 from airflow import DAG
+from airflow.models import Variable
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
-from airflow.operators.python import PythonOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from helpers.aws_hack import hack_clear_aws_keys
 from pyporky.symmetric import SymmetricPorky
 from utils.failure_callbacks import slack_task
+from custom_operators.rbac_python_operator import RBACPythonOperator
+from functools import partial
 
 default_args = {
     "owner": "airflow",
@@ -44,6 +47,7 @@ dag = DAG(
     description="A workflow to import business reports from s3 to snowflake",
     schedule_interval="0 */2 * * *",
     max_active_runs=1,
+    catchup=False,
     template_searchpath="dags/sql",
     default_args=default_args,
 )
@@ -51,20 +55,20 @@ dag.doc_md = __doc__
 
 
 def _download_business_report(
-    s3_file_key: str,
     s3_bucket: str,
-    file_number: int,
-    engine: SnowflakeHook,
+    engine: sqlalchemy.engine.Engine,
     target_table: Table,
     ts: str,
-    **_: None,
+    s3_client,
+    kms_client,
+    s3_file_key: str,
+    file_number: int,
 ) -> None:
-    hack_clear_aws_keys()
-    s3_client = boto3.client("s3")
+
     response = s3_client.get_object(Bucket=s3_bucket, Key=s3_file_key)
     body = json.loads(response["Body"].read())
     body_decrypted = str(
-        SymmetricPorky(aws_region="ca-central-1").decrypt(
+        SymmetricPorky(kms_client).decrypt(
             enciphered_dek=b64decode(body["key"], b"-_"),
             enciphered_data=b64decode(body["data"], b"-_"),
             nonce=b64decode(body["nonce"], b"-_"),
@@ -95,8 +99,13 @@ def _download_all_business_reports(
     schema: str,
     s3_bucket: str,
     ts: str,
-    **_: None,
+    **kwargs: None,
 ) -> None:
+
+    boto_session = kwargs["task_session"]
+    s3_client = boto_session.client("s3")
+    kms_client = boto_session.client("kms")
+
     engine = SnowflakeHook(snowflake_conn_id=snowflake_conn_id).get_sqlalchemy_engine()
     metadata_obj = MetaData()
     entities_business_reports = Table(
@@ -130,6 +139,17 @@ def _download_all_business_reports(
             ).notin_(select(columns=[raw_business_report_responses.c.lookup_key]))
         )
     )
+
+    download_business_report = partial(
+        _download_business_report,
+        s3_bucket,
+        engine,
+        raw_business_report_responses,
+        ts,
+        s3_client,
+        kms_client,
+    )
+
     with engine.connect() as conn:
         result = [r[0] for r in conn.execute(stmt)]
         logging.info(f"📂 Processing {len(result)} business_reports...")
@@ -137,13 +157,9 @@ def _download_all_business_reports(
         with ThreadPoolExecutor(max_workers=5) as executor:
             for i, file_key in enumerate(result):
                 executor.submit(
-                    _download_business_report,
+                    download_business_report,
                     s3_file_key=file_key,
-                    s3_bucket=s3_bucket,
                     file_number=i + 1,
-                    engine=engine,
-                    target_table=raw_business_report_responses,
-                    ts=ts,
                 )
         duration = time.time() - start_time
         logging.info(
@@ -158,21 +174,12 @@ create_target_table = SnowflakeOperator(
     dag=dag,
 )
 
-download_business_reports = PythonOperator(
+download_business_reports = RBACPythonOperator(
     task_id="download_business_reports",
     python_callable=_download_all_business_reports,
     provide_context=True,
     op_kwargs=default_args,
-    executor_config={
-        "KubernetesExecutor": {
-            "annotations": {
-                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/Access-ZtPortalUploadProduction-S3-Bucket-In-Zetatango-Prod-AWS"
-            }
-        },
-        "resources": {
-            "requests": {"memory": "8Gi"},
-        },
-    },
+    task_iam_role_arn=Variable.get("equifax_reports_decryption_role"),
     dag=dag,
 )
 

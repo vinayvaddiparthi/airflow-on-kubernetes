@@ -1,7 +1,6 @@
 from functools import lru_cache
 from typing import Dict, Optional, Tuple
 
-import boto3
 from nacl.secret import SecretBox
 
 
@@ -12,16 +11,9 @@ class SymmetricPorky:
 
     def __init__(
         self,
-        aws_region: str = "us-east-1",
-        aws_access_key_id: Optional[str] = None,
-        aws_secret_access_key: Optional[str] = None,
+        kms_client,
     ):
-        self.kms = boto3.client(
-            "kms",
-            region_name=aws_region,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-        )
+        self.kms = kms_client
 
     def decrypt(
         self,
