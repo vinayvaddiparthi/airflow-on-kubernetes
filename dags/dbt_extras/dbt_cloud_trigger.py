@@ -10,13 +10,15 @@ def trigger_dbt_job(message, steps=None, job_id="154605"):
 
     adhoc_job_endpoint = adhoc_job_endpoint.replace("{job_id}", job_id)
 
+    dbt_api_key = Variable.get("dbt_api_key")
+
     data = {"cause": message}
     if steps:
         data["steps_override"] = steps
 
     response = requests.post(
         adhoc_job_endpoint,
-        headers={"Authorization": "Token " + Variable.get("dbt_api_key")},
+        headers={"Authorization": "Token " + dbt_api_key},
         json=data,
     )
     try:
@@ -35,7 +37,7 @@ def trigger_dbt_job(message, steps=None, job_id="154605"):
 
         run_response = requests.get(
             get_run_endpoint,
-            headers={"Authorization": "Token " + Variable.get("DBT_API_KEY")},
+            headers={"Authorization": "Token " + dbt_api_key},
         )
 
         try:
