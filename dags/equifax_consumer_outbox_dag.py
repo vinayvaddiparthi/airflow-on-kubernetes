@@ -27,7 +27,6 @@ default_args = {
     "start_date": pendulum.datetime(
         2021, 1, 1, tz=pendulum.timezone("America/Toronto")
     ),
-    "catchup": False,
     "tags": ["equifax"],
     "description": "A workflow to send the consumer batch request file to Equifax",
 }
@@ -35,6 +34,8 @@ default_args = {
 dag = DAG(
     dag_id="equifax_consumer_outbox",
     default_args=default_args,
+    catchup=False,
+    max_active_runs=1,
     schedule_interval="0 8 * * *",
 )
 dag.doc_md = __doc__

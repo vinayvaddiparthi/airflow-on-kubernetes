@@ -28,7 +28,6 @@ default_args = {
     "concurrency": 1,
     "retries": 3,
     "on_failure_callback": slack_task("slack_data_alerts"),
-    "catchup": False,
     "tags": ["equifax"],
     "description": "A workflow to generate the commercial batch request file to send to Equifax.",
 }
@@ -36,6 +35,8 @@ default_args = {
 dag = DAG(
     dag_id="equifax_commercial_request",
     default_args=default_args,
+    catchup=False,
+    max_active_runs=1,
     schedule_interval="0 0 1 */2 *",
 )
 
@@ -250,12 +251,6 @@ generate_file = PythonOperator(
         "s3_conn": s3_connection,
         "bucket": output_bucket,
         "folder": output_folder,
-    },
-    executor_config={
-        "resources": {
-            "requests": {"memory": "512Mi"},
-            "limits": {"memory": "1Gi"},
-        },
     },
     execution_timeout=timedelta(hours=3),
     provide_context=True,
