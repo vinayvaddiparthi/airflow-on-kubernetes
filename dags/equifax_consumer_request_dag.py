@@ -42,6 +42,7 @@ dag = DAG(
     dag_id="equifax_consumer_request",
     catchup=False,
     default_args=default_args,
+    max_active_runs=1,
     schedule_interval="0 0 1 * *",  # Run once a month at midnight of the first day of the month
 )
 dag.doc_md = __doc__
@@ -328,18 +329,6 @@ generate_file = PythonOperator(
         "s3_conn": s3_connection,
         "bucket": output_bucket,
         "folder": output_folder,
-    },
-    executor_config={
-        "KubernetesExecutor": {
-            "annotations": {
-                "iam.amazonaws.com/role": "arn:aws:iam::810110616880:role/"
-                "KubernetesAirflowProductionZetatangoPiiRole"
-            }
-        },
-        "resources": {
-            "requests": {"memory": "512Mi"},
-            "limits": {"memory": "1Gi"},
-        },
     },
     execution_timeout=timedelta(hours=3),
     provide_context=True,
