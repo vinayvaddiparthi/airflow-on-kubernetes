@@ -48,7 +48,7 @@ dag = DAG(
     default_args=default_args,
     template_searchpath="dags/sql",
     catchup=False,
-    max_active_runs=1
+    max_active_runs=1,
 )
 dag.doc_md = __doc__
 
@@ -334,7 +334,7 @@ refresh_dbt_model = PythonOperator(
     python_callable=trigger_dbt_job,
     op_kwargs={
         "message": "Triggered from equifax_commercial_inbox dag",
-        "steps": ["dbt run --model last_commercial_bureau_pull"]
+        "steps": ["dbt run --model last_commercial_bureau_pull"],
     },
     on_success_callback=slack_dag_success("slack_success_alerts_equifax"),
     dag=dag,

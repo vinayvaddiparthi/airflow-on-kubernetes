@@ -17,7 +17,7 @@ task_session = boto3.session.Session(
     aws_session_token=assumed_role_object["Credentials"]["SessionToken"],
 )
 
-kms_client = task_session.client('kms')
+kms_client = task_session.client("kms")
 porky = SymmetricPorky(kms_client)
 
 

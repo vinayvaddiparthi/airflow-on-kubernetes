@@ -441,7 +441,7 @@ refresh_dbt_model = PythonOperator(
     python_callable=trigger_dbt_job,
     op_kwargs={
         "message": "Triggered from equifax_consumer_inbox dag",
-        "steps": ["dbt run --model last_consumer_bureau_pull"]
+        "steps": ["dbt run --model last_consumer_bureau_pull"],
     },
     on_success_callback=slack_dag_success("slack_success_alerts_equifax"),
     dag=dag,
