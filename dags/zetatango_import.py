@@ -56,6 +56,7 @@ from data.zetatango import (
 )
 
 from custom_operators.rbac_python_operator import RBACPythonOperator
+from dbt_extras.dbt_cloud_trigger import trigger_dbt_job
 
 
 def export_to_snowflake(
@@ -424,26 +425,6 @@ def decrypt_pii_columns(
             logging.info(f"🔓 Successfully decrypted {spec}")
 
 
-def trigger_dbt_job() -> None:
-    res = requests.post(
-        url="https://cloud.getdbt.com/api/v2/accounts/20518/jobs/162182/run/",
-        headers={"Authorization": "Token " + Variable.get("DBT_API_KEY")},
-        json={
-            # Optionally pass a description that can be viewed within the dbt Cloud API.
-            # See the API docs for additional parameters that can be passed in,
-            # including `schema_override`
-            "cause": "Triggered by Zetatango DAG.",
-        },
-    )
-    try:
-        res.raise_for_status()
-    except:
-        print("Error: Couldn't trigger the dbt cloud job.")
-        raise
-
-    return None
-
-
 def create_dag() -> DAG:
     with DAG(
         dag_id="zetatango_import",
@@ -532,10 +513,17 @@ def create_dag() -> DAG:
             provide_context=True,
         )
 
-        dbt_refresh_job_trigger = PythonOperator(
-            task_id="dbt_refresh_job_trigger",
+        refresh_dbt_models = PythonOperator(
+            task_id="dbt_refresh",
+            execution_timeout=timedelta(hours=1),
             python_callable=trigger_dbt_job,
             retries=1,
+            op_kwargs={
+                "message": "Triggered from zetatango_import dag",
+                "job_id": "162182",
+                "polling_frequency": 120,
+            },
+            dag=dag,
         )
 
         import_core_prod >> decrypt_core_prod
@@ -547,7 +535,7 @@ def create_dag() -> DAG:
                 decrypt_kyc_prod,
                 decrypt_idp_prod,
             ]
-            >> dbt_refresh_job_trigger
+            >>  refresh_dbt_models
         )
 
     return dag
