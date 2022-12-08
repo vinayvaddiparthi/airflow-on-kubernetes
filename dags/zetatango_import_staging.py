@@ -198,8 +198,8 @@ def stage_table_in_snowflake(
 
             df = table_.to_pandas()
 
-            for col in df.select_dtypes('datetime').columns.tolist():
-                if 'epoch' not in col:
+            for col in df.select_dtypes("datetime").columns.tolist():
+                if "epoch" not in col:
                     df[col] = df[col].astype(str)
 
             table_with_str_ts = pa.Table.from_pandas(df)
@@ -229,8 +229,15 @@ def stage_table_in_snowflake(
             f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
 
-        if table in ("lending_adjudications", "ledger_transactions", "object_blobs", "emails", "agreements",
-                     "quickbooks_accounting_transactions", "versions",):
+        if table in (
+            "lending_adjudications",
+            "ledger_transactions",
+            "object_blobs",
+            "emails",
+            "agreements",
+            "quickbooks_accounting_transactions",
+            "versions",
+        ):
 
             tx.execute(
                 f"insert into {destination_schema}.{table} "  # nosec
@@ -257,7 +264,7 @@ def decrypt_pii_columns(
     snowflake_connection: str,
     decryption_specs: List[DecryptionSpec],
     target_schema: str,
-    **kwargs
+    **kwargs,
 ) -> None:
     yaml.add_constructor(
         "!ruby/object:BigDecimal",
@@ -320,7 +327,7 @@ def decrypt_pii_columns(
         return row[0:3].tolist() + (_postprocess(list_, format) if format else list_)
 
     boto_session = kwargs["task_session"]
-    kms_client = boto_session.client('kms')
+    kms_client = boto_session.client("kms")
     engine = SnowflakeHook(snowflake_connection).get_sqlalchemy_engine()
     for spec in decryption_specs:
         dst_stage = random_identifier()
@@ -371,7 +378,9 @@ def decrypt_pii_columns(
                     )
                 )
 
-                date_whereclause: ClauseElement = literal_column("updated_at").__ge__(text("'2022-11-18 00:00:00.000'"))
+                date_whereclause: ClauseElement = literal_column("updated_at").__ge__(
+                    text("'2022-11-18 00:00:00.000'")
+                )
 
                 whereclause: ClauseElement = (
                     and_(spec.whereclause, unknown_hashes_whereclause, date_whereclause)
@@ -416,8 +425,10 @@ def decrypt_pii_columns(
             )
 
             if spec.table not in ("OBJECT_BLOBS"):
-                create_stmt += " qualify row_number() over (partition by fields:id::integer order by " \
-                               "fields:updated_at::datetime desc) = 1"
+                create_stmt += (
+                    " qualify row_number() over (partition by fields:id::integer order by "
+                    "fields:updated_at::datetime desc) = 1"
+                )
 
             tx.execute(create_stmt).fetchall()
 

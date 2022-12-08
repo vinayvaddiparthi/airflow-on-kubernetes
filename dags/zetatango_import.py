@@ -113,7 +113,8 @@ def export_to_snowflake(
                 snowflake_schema,
                 table,
             )
-            for table in tables if table != 'debug_traces'
+            for table in tables
+            if table != "debug_traces"
         ]
         print(*output, sep="\n")
     finally:
@@ -200,8 +201,8 @@ def stage_table_in_snowflake(
 
             df = table_.to_pandas()
 
-            for col in df.select_dtypes('datetime').columns.tolist():
-                if 'epoch' not in col:
+            for col in df.select_dtypes("datetime").columns.tolist():
+                if "epoch" not in col:
                     df[col] = df[col].astype(str)
 
             table_with_str_ts = pa.Table.from_pandas(df)
@@ -231,8 +232,15 @@ def stage_table_in_snowflake(
             f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
 
-        if table in ("lending_adjudications", "ledger_transactions", "object_blobs", "emails", "agreements",
-                     "quickbooks_accounting_transactions", "versions",):
+        if table in (
+            "lending_adjudications",
+            "ledger_transactions",
+            "object_blobs",
+            "emails",
+            "agreements",
+            "quickbooks_accounting_transactions",
+            "versions",
+        ):
 
             tx.execute(
                 f"insert into {destination_schema}.{table} "  # nosec
@@ -259,7 +267,7 @@ def decrypt_pii_columns(
     snowflake_connection: str,
     decryption_specs: List[DecryptionSpec],
     target_schema: str,
-    **kwargs
+    **kwargs,
 ) -> None:
     yaml.add_constructor(
         "!ruby/object:BigDecimal",
@@ -372,7 +380,9 @@ def decrypt_pii_columns(
                     )
                 )
 
-                date_whereclause: ClauseElement = literal_column("updated_at").__ge__(text("'2022-11-18 00:00:00.000'"))
+                date_whereclause: ClauseElement = literal_column("updated_at").__ge__(
+                    text("'2022-11-18 00:00:00.000'")
+                )
 
                 whereclause: ClauseElement = (
                     and_(spec.whereclause, unknown_hashes_whereclause, date_whereclause)
@@ -392,7 +402,7 @@ def decrypt_pii_columns(
                 select_froms = select_froms[:1]  # don't union if table doesn't exist.
 
             for df in dfs:
-                kms_client = boto_session.client('kms')
+                kms_client = boto_session.client("kms")
                 with tempfile.NamedTemporaryFile() as tempfile_:
                     df = df.apply(
                         axis=1,
@@ -535,7 +545,7 @@ def create_dag() -> DAG:
                 decrypt_kyc_prod,
                 decrypt_idp_prod,
             ]
-            >>  refresh_dbt_models
+            >> refresh_dbt_models
         )
 
     return dag

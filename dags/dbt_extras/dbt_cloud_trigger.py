@@ -50,7 +50,9 @@ def trigger_dbt_job(message, steps=None, job_id="154605", polling_frequency=30):
         run_response = run_response.json()
 
         if run_response["data"]["in_progress"]:
-            logging.info(f"Job still in progress. Sleeping for {polling_frequency}s before next poll")
+            logging.info(
+                f"Job still in progress. Sleeping for {polling_frequency}s before next poll"
+            )
             sleep(polling_frequency)
         elif not run_response["data"]["is_success"]:
             raise Exception("dbt Cloud job failed")
