@@ -87,6 +87,28 @@ def export_to_snowflake(
         )
     )
 
+    excluded_tables = Variable.get("zetatango_excluded_tables")
+    incremental_tables = Variable.get("zetatango_incremental_tables")
+
+    required_incremental_tables = ["lending_adjudications", "object_blobs"]
+
+    logging.info(f"Tables to be excluded in the import: {excluded_tables}")
+    logging.info(f"Incremental tables: {incremental_tables}")
+
+    if not incremental_tables:
+        raise Exception(
+            "Incremental tables list is empty. Please add incremental tables to "
+            "zetatango_incremental_tables variable"
+        )
+
+    # precautionary check to make sure that we don't import complete data for lending_adjudication or object_blobs
+    # which will trigger decryption of the entire table
+    if not all(table in incremental_tables for table in required_incremental_tables):
+        raise Exception(
+            f"{' and/or '.join(required_incremental_tables)} are not included in the incremental tables "
+            f"list"
+        )
+
     with source_engine.begin() as tx:
         tables = (
             x[0]
@@ -112,9 +134,10 @@ def export_to_snowflake(
                 source_schema,
                 snowflake_schema,
                 table,
+                incremental_tables,
             )
             for table in tables
-            if table != "debug_traces"
+            if table not in excluded_tables
         ]
         print(*output, sep="\n")
     finally:
@@ -127,6 +150,7 @@ def stage_table_in_snowflake(
     source_schema: str,
     destination_schema: str,
     table: str,
+    incremental_tables: List[str],
 ) -> str:
     if table in ("versions", "job_reports", "job_statuses"):
         return f"⏭️️ Skipping table {table}"
@@ -147,15 +171,7 @@ def stage_table_in_snowflake(
         with csv_filepath.open("w+b") as csv_filedesc:
             logging.info(f"copy {source_schema}.{table}")
 
-            if table in (
-                "lending_adjudications",
-                "ledger_transactions",
-                "object_blobs",
-                "emails",
-                "agreements",
-                "quickbooks_accounting_transactions",
-                "versions",
-            ):
+            if table in incremental_tables:
 
                 logging.info(f"Performing incremental export for {table} table")
 
@@ -213,15 +229,7 @@ def stage_table_in_snowflake(
             return f"❌ Failed to read table {table}: {exc}"
 
         if table_.num_rows == 0:
-            if table in (
-                "lending_adjudications",
-                "ledger_transactions",
-                "object_blobs",
-                "emails",
-                "agreements",
-                "quickbooks_accounting_transactions",
-                "versions",
-            ):
+            if table in incremental_tables:
                 return f"📝️ No new records to insert for table: {table}"
             else:
                 return f"📝️ Skipping empty table {table}"
@@ -232,15 +240,7 @@ def stage_table_in_snowflake(
             f"put file://{pq_filepath} @{destination_schema}.{stage_guid}"
         ).fetchall()
 
-        if table in (
-            "lending_adjudications",
-            "ledger_transactions",
-            "object_blobs",
-            "emails",
-            "agreements",
-            "quickbooks_accounting_transactions",
-            "versions",
-        ):
+        if table in incremental_tables:
 
             tx.execute(
                 f"insert into {destination_schema}.{table} "  # nosec
