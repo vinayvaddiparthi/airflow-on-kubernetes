@@ -244,13 +244,13 @@ def stage_table_in_snowflake(
 
             tx.execute(
                 f"insert into {destination_schema}.{table} "  # nosec
-                f"select object_insert($1, 'encryption_epoch', ($1:encryption_epoch/1000)::integer, true)::variant as fields from @{destination_schema}.{stage_guid}",  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage_guid}",  # nosec
             )
 
         else:
             tx.execute(
                 f"create or replace transient table {destination_schema}.{table} as "  # nosec
-                f"select object_insert($1, 'encryption_epoch', ($1:encryption_epoch/1000)::integer, true)::variant as fields from @{destination_schema}.{stage_guid}"  # nosec
+                f"select $1 as fields from @{destination_schema}.{stage_guid}"  # nosec
             ).fetchall()
 
     return f"✔️ Successfully loaded table {table}"
