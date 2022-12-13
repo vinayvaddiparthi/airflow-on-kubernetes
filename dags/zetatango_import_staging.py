@@ -133,9 +133,9 @@ def export_to_snowflake(
                 snowflake_schema,
                 table,
                 incremental_tables,
+                excluded_tables,
             )
             for table in tables
-            if table not in excluded_tables
         ]
         print(*output, sep="\n")
     finally:
@@ -149,8 +149,9 @@ def stage_table_in_snowflake(
     destination_schema: str,
     table: str,
     incremental_tables: List[str],
+    excluded_tables: List[str],
 ) -> str:
-    if table in ("versions", "job_reports", "job_statuses"):
+    if table in excluded_tables:
         return f"⏭️️ Skipping table {table}"
     logging.info(f"start syncing table for staging: {table}")
     stage_guid = random_identifier()
