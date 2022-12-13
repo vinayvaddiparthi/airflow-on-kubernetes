@@ -2,15 +2,14 @@ from datetime import timedelta
 import pendulum
 
 from airflow import DAG
-from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 
 from utils.failure_callbacks import slack_task
 from zetatango_import import decrypt_pii_columns
 from data.zetatango import (
-    quickbooks_decryption_executor_config,
     qbo_decryption_spec,
 )
+from custom_operators.rbac_python_operator import RBACPythonOperator
 
 
 with DAG(
@@ -28,7 +27,9 @@ with DAG(
 
     is_prod = Variable.get(key="environment") == "production"
 
-    decrypt_qbo = PythonOperator(
+    decryption_role = Variable.get("zetatango_decryption_role")
+
+    decrypt_qbo = RBACPythonOperator(
         task_id="qbo_pii_decryption",
         python_callable=decrypt_pii_columns,
         op_kwargs={
@@ -36,5 +37,6 @@ with DAG(
             "decryption_specs": qbo_decryption_spec,
             "target_schema": f"ZETATANGO.PII_{'PRODUCTION' if is_prod else 'STAGING'}",
         },
-        executor_config=quickbooks_decryption_executor_config,
+        task_iam_role_arn=decryption_role,
+        provide_context=True,
     )

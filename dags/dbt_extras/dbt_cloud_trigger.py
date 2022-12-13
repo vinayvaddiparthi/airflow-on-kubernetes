@@ -4,7 +4,7 @@ from time import sleep
 from airflow.models import Variable
 
 
-def trigger_dbt_job(message, steps=None, job_id="154605"):
+def trigger_dbt_job(message, steps=None, job_id="154605", polling_frequency=30):
 
     adhoc_job_endpoint = Variable.get("dbt_cloud_job_trigger_endpoint")
 
@@ -23,11 +23,13 @@ def trigger_dbt_job(message, steps=None, job_id="154605"):
     )
     try:
         response.raise_for_status()
-        logging.info("Triggered dbt Cloud job")
+        response = response.json()
+        trigged_job_url = response["data"]["href"]
+        logging.info(f"Triggered dbt Cloud job: {trigged_job_url}")
     except Exception as e:
         raise Exception(f"Error triggering dbt Cloud job: {e}")
 
-    run_id = response.json()["data"]["id"]
+    run_id = response["data"]["id"]
     get_run_endpoint = Variable.get("dbt_cloud_get_run_endpoint")
 
     get_run_endpoint = f"{get_run_endpoint}/{run_id}/"
@@ -48,8 +50,10 @@ def trigger_dbt_job(message, steps=None, job_id="154605"):
         run_response = run_response.json()
 
         if run_response["data"]["in_progress"]:
-            logging.info("Job still in progress. Sleeping for 30s before next poll")
-            sleep(30)
+            logging.info(
+                f"Job still in progress. Sleeping for {polling_frequency}s before next poll"
+            )
+            sleep(polling_frequency)
         elif not run_response["data"]["is_success"]:
             raise Exception("dbt Cloud job failed")
         else:
